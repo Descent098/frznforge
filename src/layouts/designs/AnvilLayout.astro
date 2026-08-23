@@ -1,0 +1,147 @@
+---
+import '../../styles/designs/anvil.css';
+
+interface Props {
+  title: string;
+  active: 'profile' | 'repo';
+}
+const { title, active } = Astro.props;
+
+const globalNav = [
+  { idx: '01', label: 'Overview', href: '/designs/anvil/', key: 'profile', count: '' },
+  { idx: '02', label: 'Repositories', href: '#', key: 'repos', count: '42' },
+  { idx: '03', label: 'Notes', href: '#', key: 'notes', count: '17' },
+  { idx: '04', label: 'Organizations', href: '#', key: 'orgs', count: '2' },
+];
+const repoNav = [
+  { idx: '01', label: 'Code', href: '/designs/anvil/repo', key: 'code', count: '' },
+  { idx: '02', label: 'Commits', href: '#', key: 'commits', count: '81' },
+  { idx: '03', label: 'Branches', href: '#', key: 'branches', count: '3' },
+  { idx: '04', label: 'Tags', href: '#', key: 'tags', count: '12' },
+  { idx: '05', label: 'Releases', href: '#', key: 'releases', count: '9' },
+  { idx: '06', label: 'Insights', href: '#', key: 'insights', count: '' },
+];
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="color-scheme" content="dark light" />
+    <title>{title} · frznforge</title>
+    <script is:inline>
+      (function () {
+        try {
+          var t = localStorage.getItem('anvil-theme');
+          if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="side" aria-label="Site navigation">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><span>⚒</span></div>
+          <a class="brand-name" href="/designs/anvil/">frznforge</a>
+          <span class="brand-ver">v0.1.0</span>
+        </div>
+
+        <form class="prompt" role="search" onsubmit="return false">
+          <span class="prompt-chev" aria-hidden="true">&gt;</span>
+          <input type="search" placeholder="search…" aria-label="Search" />
+          <span class="prompt-hint" aria-hidden="true"><kbd>ctrl</kbd><kbd>k</kbd></span>
+        </form>
+
+        <nav class="nav" aria-label="Primary">
+          <div class="nav-label">kieran</div>
+          <ul>
+            {globalNav.map((n) => (
+              <li>
+                <a href={n.href} aria-current={active === 'profile' && n.key === 'profile' ? 'page' : undefined}>
+                  <span class="n-idx">{n.idx}</span>
+                  <span>{n.label}</span>
+                  {n.count && <span class="n-count">{n.count}</span>}
+                </a>
+              </li>
+            ))}
+          </ul>
+
+          {active === 'repo' && (
+            <>
+              <div class="nav-label">kieran / useful</div>
+              <ul>
+                {repoNav.map((n) => (
+                  <li>
+                    <a href={n.href} aria-current={n.key === 'code' ? 'page' : undefined}>
+                      <span class="n-idx">{n.idx}</span>
+                      <span>{n.label}</span>
+                      {n.count && <span class="n-count">{n.count}</span>}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          <div class="nav-label">system</div>
+          <ul>
+            <li><a href="#"><span class="n-idx">··</span><span>Feed (atom)</span></a></li>
+            <li><a href="#"><span class="n-idx">··</span><span>Keyboard shortcuts</span><span class="n-count">?</span></a></li>
+          </ul>
+        </nav>
+
+        <div class="side-foot">
+          <span>built 2026-08-23 · static</span>
+          <button class="theme-btn" type="button" id="anvil-theme" aria-label="Toggle colour theme">
+            <span class="t-dark">◐ dark</span><span class="t-light">◑ light</span>
+          </button>
+        </div>
+      </aside>
+
+      <div class="main">
+        <header class="topbar">
+          <a class="back" href="/designs/">← All designs</a>
+          <span class="crumb">
+            <span class="sep">/</span>
+            <b>anvil</b>
+            <span class="sep">/</span>
+            <span>{active === 'profile' ? 'profile overview' : 'repo overview'}</span>
+          </span>
+          <span class="tb-right">
+            <span>heat:</span>
+            <span class="heat-legend" aria-label="Heat legend, hot to cold">
+              <span>hot</span><i class="hl-1"></i><i class="hl-2"></i><i class="hl-3"></i><i class="hl-4"></i><i class="hl-5"></i><i class="hl-6"></i><span>cold</span>
+            </span>
+          </span>
+        </header>
+
+        <main class="content">
+          <slot />
+        </main>
+
+        <footer class="foot">
+          <span>frznforge · read-only static forge</span>
+          <span>design exploration: anvil</span>
+          <span>no accounts · no issues · no stars</span>
+        </footer>
+      </div>
+    </div>
+
+    <script is:inline>
+      (function () {
+        var btn = document.getElementById('anvil-theme');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          var root = document.documentElement;
+          var cur = root.getAttribute('data-theme');
+          if (!cur) cur = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          var next = cur === 'dark' ? 'light' : 'dark';
+          root.setAttribute('data-theme', next);
+          try { localStorage.setItem('anvil-theme', next); } catch (e) {}
+        });
+      })();
+    </script>
+  </body>
+</html>

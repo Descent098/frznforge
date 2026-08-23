@@ -1,10 +1,10 @@
-This project is meant to be a static-site generator that is a **read-only** replacement for something like github for a single user. The intention being as a place for you to showcase your projects, and make them accessible to others, without allowing the other, more social interactions of platforms like github or codeberg. It's meant to be able to ingest from other sources to build as well, which also makes it handy for people who self-host services like forgejo, but don't want to make that accessible to the world.
+This project is meant to be a static-site generator that is a **read-only** replacement for something like github for a single user. The intention being as a place for you to showcase your projects, and make them accessible to others, without allowing the other, more social interactions of platforms like github or codeberg. It's meant to be able to ingest from other sources to build as well, which also makes it handy for people who self-host services like forgejo, but don't want to make that accessible to the world. Essentially it's for source-available projects, not open-source community-driven projects. 
 
 There are NO accounts, each instance is for 1 person's account and usage. 
 
 ## Process
 
-- concurrently scans git repos and produces a JSON file with the git contents to be parsed. Uses that and the info from it to generate a read only site
+Concurrently scans git repos and produces a JSON file with the git contents to be parsed. Uses that and the info from it to generate a read only site that can be publicly shared without risking having to share a private forge instance, or worrying about a host pulling the plug. The tradeoff is needing to manually rebuild to see changes, and no social-media style interactions like github. 
 
 ## Features Not Needed from similar sites
 

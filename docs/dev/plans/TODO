@@ -1,6 +1,7 @@
-- [ ] Review `plan.md`
-  - [ ] Write a file called `plan-phases.md` which phases out the delivery of the project
-  - [ ] Work on 4 designs, for now just design the profile page, and repo page for each design to see the direction you're going
+- [x] Review `plan.md`
+  - [x] Write a file called `plan-phases.md` which phases out the delivery of the project
+  - [x] Work on 4 designs, for now just design the profile page, and repo page for each design to see the direction you're going and I'll decide which I like so far
+    - [x] All content can be static for it, this is strictly to see the designs, it doesn't need to be wired into anything, and is better if it isn't
 
 Ensure for each change:
 

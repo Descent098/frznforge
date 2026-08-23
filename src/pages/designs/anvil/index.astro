@@ -1,0 +1,290 @@
+---
+import AnvilLayout from '../../../layouts/designs/AnvilLayout.astro';
+
+// Deterministic contribution grid: 52 weeks x 7 days (column-major).
+function hash(i: number) {
+  return ((i * 2654435761) >>> 0) % 100;
+}
+const weeks = 52;
+const cells: { level: number; heat: number; week: number; day: number }[] = [];
+for (let w = 0; w < weeks; w++) {
+  // heat by recency: rightmost weeks are hottest
+  const heat = w >= 48 ? 1 : w >= 42 ? 2 : w >= 34 ? 3 : w >= 22 ? 4 : w >= 10 ? 5 : 6;
+  for (let d = 0; d < 7; d++) {
+    const i = w * 7 + d;
+    const h = hash(i);
+    // busier lately, quieter on weekends
+    const bias = w > 40 ? 28 : w > 30 ? 14 : 0;
+    const weekend = d === 0 || d === 6 ? -18 : 0;
+    const v = h + bias + weekend;
+    const level = v < 38 ? 0 : v < 62 ? 1 : v < 80 ? 2 : v < 94 ? 3 : 4;
+    cells.push({ level, heat, week: w, day: d });
+  }
+}
+const months = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
+
+const repos = [
+  { name: 'useful', desc: 'An offline-first, local-first app: timers, notes, generators and a SQL playground with no server.', langs: [['l-ts', 'TypeScript', 81], ['l-sv', 'Svelte', 12], ['l-js', 'JavaScript', 5]], age: '2 hours ago', heat: 1, tags: ['pwa', 'offline'], href: '/designs/anvil/repo' },
+  { name: 'frznforge', desc: 'Read-only static forge generator. Showcase your repos without running a forge.', langs: [['l-ts', 'TypeScript', 100]], age: '1 day ago', heat: 1, tags: ['astro', 'ssg'], href: '#' },
+  { name: 'ezcv', desc: 'Create a CV/resume site from a YAML file and a theme.', langs: [['l-py', 'Python', 94], ['l-html', 'HTML', 4]], age: '3 weeks ago', heat: 3, tags: [], template: true, href: '#' },
+  { name: 'sdu', desc: 'Script deployment utility for pushing scripts to servers.', langs: [['l-go', 'Go', 88], ['l-sh', 'Shell', 12]], age: '4 months ago', heat: 4, tags: [], href: '#' },
+  { name: 'ahd', desc: 'Ad-hoc dispatcher: register shell one-liners as commands.', langs: [['l-py', 'Python', 100]], age: '1 year ago', heat: 5, tags: [], href: '#' },
+  { name: 'kuws', desc: 'Keyword extraction and summarisation utilities.', langs: [['l-py', 'Python', 100]], age: '2 years ago', heat: 6, tags: [], href: '#' },
+] as const;
+
+const activity = [
+  { kind: 'push', heat: 1, time: '2h', html: '<b>Pushed 3 commits</b> to <a class="path" href="/designs/anvil/repo">useful</a>/<span class="ref">main</span>' },
+  { kind: 'tag', heat: 1, time: '1d', html: '<b>Tagged</b> <span class="ref">v0.3.0</span> in <a class="path" href="#">frznforge</a>' },
+  { kind: 'push', heat: 3, time: '3w', html: '<b>Pushed 1 commit</b> to <a class="path" href="#">ezcv</a>/<span class="ref">main</span>' },
+  { kind: 'branch', heat: 3, time: '3w', html: '<b>Created branch</b> <span class="ref">feat/zip-export</span> in <a class="path" href="/designs/anvil/repo">useful</a>' },
+  { kind: 'tag', heat: 4, time: '4mo', html: '<b>Tagged</b> <span class="ref">v2.1.0</span> in <a class="path" href="#">sdu</a>' },
+  { kind: 'push', heat: 5, time: '1y', html: '<b>Pushed 2 commits</b> to <a class="path" href="#">ahd</a>/<span class="ref">main</span>' },
+];
+---
+<AnvilLayout title="Kieran Wood" active="profile">
+  <div class="profile-grid">
+    <!-- ================= left: owner card ================= -->
+    <aside class="owner" aria-label="Owner">
+      <div class="avatar" aria-hidden="true">KW</div>
+      <div class="owner-body">
+        <h1>Kieran Wood</h1>
+        <div class="handle"><b>@</b>kieran <span class="muted">· owner</span></div>
+        <p class="bio">Builds offline-first tools, static site generators and things that run without a server.</p>
+
+        <ul class="meta">
+          <li>
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14.5s-4.5-4-4.5-7.5a4.5 4.5 0 0 1 9 0c0 3.5-4.5 7.5-4.5 7.5Z"/><circle cx="8" cy="7" r="1.6"/></svg>
+            <span><span class="k">loc</span>Calgary, AB</span>
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="5" width="12" height="9"/><path d="M5.5 5V2.5h5V5"/></svg>
+            <span><span class="k">work</span>Canadian Coding</span>
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6 8 3l6.5 3L8 9 1.5 6Z"/><path d="M4 7.5V11c0 1 2 2 4 2s4-1 4-2V7.5"/></svg>
+            <span><span class="k">edu</span>University of Calgary</span>
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3.5" width="13" height="9"/><path d="m1.5 4 6.5 5 6.5-5"/></svg>
+            <span><span class="k">mail</span><a href="mailto:kieran@canadiancoding.ca">kieran@canadiancoding.ca</a></span>
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5a3 3 0 0 0 4.2 0l2-2a3 3 0 0 0-4.2-4.2L7.5 4.3"/><path d="M9.5 6.5a3 3 0 0 0-4.2 0l-2 2a3 3 0 0 0 4.2 4.2l1-1"/></svg>
+            <span><span class="k">www</span><a href="https://kieranwood.ca">kieranwood.ca</a> · <a href="https://canadiancoding.ca">canadiancoding.ca</a></span>
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12"/><path d="M5 7v4M5 5v.01M8 11V9a1.5 1.5 0 0 1 3 0v2M8 7v4"/></svg>
+            <span><span class="k">in</span><a href="#">linkedin.com/in/kieranwood</a></span>
+          </li>
+        </ul>
+
+        <div class="label" style="margin-top:12px">Elsewhere</div>
+        <div class="forges">
+          <a class="chip" href="#">GitHub ↗</a>
+          <a class="chip" href="#">Codeberg ↗</a>
+          <a class="chip" href="#">Forgejo <span class="muted">(self-hosted)</span> ↗</a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ================= right: main column ================= -->
+    <div>
+      <div class="stats" aria-label="Profile statistics">
+        <div class="stat">
+          <span class="label">Repositories</span>
+          <div class="v">42<small>public</small></div>
+        </div>
+        <div class="stat" data-heat="1">
+          <span class="label">Commits this year</span>
+          <div class="v">1,204<small class="age">+3 today</small></div>
+        </div>
+        <div class="stat">
+          <span class="label">Top languages</span>
+          <div class="lang-bar" aria-hidden="true">
+            <span class="l-py" style="width:41%;background:var(--lc)"></span>
+            <span class="l-ts" style="width:33%;background:var(--lc)"></span>
+            <span class="l-go" style="width:11%;background:var(--lc)"></span>
+            <span class="l-sv" style="width:8%;background:var(--lc)"></span>
+            <span class="l-other" style="width:7%;background:var(--lc)"></span>
+          </div>
+          <ul class="lang-list">
+            <li class="l-py"><b>Python</b> <span class="pct">41%</span></li>
+            <li class="l-ts"><b>TypeScript</b> <span class="pct">33%</span></li>
+            <li class="l-go"><b>Go</b> <span class="pct">11%</span></li>
+            <li class="l-sv"><b>Svelte</b> <span class="pct">8%</span></li>
+            <li class="l-other"><b>Other</b> <span class="pct">7%</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- README -->
+      <section class="sec">
+        <div class="sec-head">
+          <h2>README</h2>
+          <span class="sec-meta">kieran / kieran / README.md</span>
+          <a class="sec-act" href="#">view source →</a>
+        </div>
+        <div class="panel">
+          <article class="readme">
+            <h1>Hi, I'm Kieran 👋</h1>
+            <p>I make small, sturdy software that keeps working when the network doesn't. Most of what's here is either a CLI, a static site generator, or a local-first web app — and all of it is built to be cloned, read, and run without asking anyone for permission.</p>
+            <h2>What I'm working on</h2>
+            <ul>
+              <li><strong>useful</strong> — an offline-first toolbox (timers, notes, generators, SQL playground) that installs as a PWA.</li>
+              <li><strong>frznforge</strong> — this site: a read-only forge you rebuild instead of host.</li>
+              <li>Writing up notes on <em>SQLite in the browser</em> and shipping them under <a href="#">/notes</a>.</li>
+            </ul>
+            <h2>Stack</h2>
+            <p><code>Python</code> <code>TypeScript</code> <code>Astro</code> <code>Svelte</code> <code>Go</code> <code>SQLite</code></p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Pinned -->
+      <section class="sec">
+        <div class="sec-head">
+          <h2>Pinned</h2>
+          <span class="sec-meta">6 of 42 · left rule = heat</span>
+          <a class="sec-act" href="#">all repositories →</a>
+        </div>
+        <div class="repos">
+          {repos.map((r) => (
+            <article class="repo-card" data-heat={r.heat}>
+              <div class="rc-top">
+                <span class="rc-name"><a href={r.href}>{r.name}</a></span>
+                {'template' in r && r.template && <span class="chip chip-tpl">template</span>}
+                <span class="rc-age age">{r.age}</span>
+              </div>
+              <p class="rc-desc">{r.desc}</p>
+              <div class="lang-bar" aria-hidden="true">
+                {r.langs.map((l) => <span class={l[0]} style={`width:${l[2]}%;background:var(--lc)`}></span>)}
+              </div>
+              <div class="rc-foot">
+                <ul class="lang-list">
+                  {r.langs.map((l) => <li class={l[0]}><b>{l[1]}</b> <span class="pct">{l[2]}%</span></li>)}
+                </ul>
+                {r.tags.length > 0 && (
+                  <span class="rc-tags">
+                    {r.tags.map((t) => <a class="chip chip-tag" href="#">{t}</a>)}
+                  </span>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <!-- Contributions -->
+      <section class="sec">
+        <div class="sec-head">
+          <h2>Contributions</h2>
+          <span class="sec-meta">1,204 commits · Sep 2025 → Aug 2026</span>
+          <a class="sec-act" href="#">insights →</a>
+        </div>
+        <div class="panel contrib">
+          <div class="cg-months" aria-hidden="true">
+            {months.map((m) => <span>{m}</span>)}
+          </div>
+          <div class="cg-wrap">
+            <div class="cg-days" aria-hidden="true">
+              <span></span><span>mon</span><span></span><span>wed</span><span></span><span>fri</span><span></span>
+            </div>
+            <div class="cg" role="img" aria-label="Contribution graph, 52 weeks by 7 days, coloured hot to cold by recency">
+              {cells.map((c) => (
+                <span class={`cg-cell l${c.level}`} data-heat={c.heat} title={`week ${c.week + 1}, day ${c.day + 1}: level ${c.level}`}></span>
+              ))}
+            </div>
+          </div>
+          <div class="cg-foot">
+            <span>intensity: less</span>
+            <span class="cg" style="grid-template-columns:repeat(5,12px);grid-template-rows:12px" aria-hidden="true" data-heat="2">
+              <span class="cg-cell l0"></span><span class="cg-cell l1"></span><span class="cg-cell l2"></span><span class="cg-cell l3"></span><span class="cg-cell l4"></span>
+            </span>
+            <span>more</span>
+            <span class="heat-legend"><span>hot</span><i class="hl-1"></i><i class="hl-2"></i><i class="hl-3"></i><i class="hl-4"></i><i class="hl-5"></i><i class="hl-6"></i><span>cold</span></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Activity -->
+      <section class="sec">
+        <div class="sec-head">
+          <h2>Recent activity</h2>
+          <span class="sec-meta">event log · newest first</span>
+          <a class="sec-act" href="#">atom feed →</a>
+        </div>
+        <div class="panel">
+          <table class="log">
+            <tbody>
+              {activity.map((a) => (
+                <tr data-heat={a.heat}>
+                  <td class="lg-heat"></td>
+                  <td class="lg-kind">{a.kind}</td>
+                  <td class="lg-msg" set:html={a.html}></td>
+                  <td class="lg-time"><span class="age">{a.time}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Command palette preview (static) -->
+      <section class="sec">
+        <div class="sec-head">
+          <h2>Command palette</h2>
+          <span class="sec-meta">preview · opens with <kbd>ctrl</kbd>+<kbd>k</kbd></span>
+        </div>
+        <p class="palette-note">Static mockup of the palette as it would appear over the page. Same prompt as the sidebar search; results are grouped and carry key hints.</p>
+        <div class="palette" role="img" aria-label="Command palette mockup">
+          <div class="palette-prompt">
+            <span class="pp-chev">&gt;</span>
+            <span class="pp-q">use<span class="caret"></span></span>
+            <kbd>esc</kbd>
+          </div>
+          <ul>
+            <li class="pal-group">Repositories</li>
+            <li class="item sel" data-heat="1">
+              <span class="pi-ic">▣</span>
+              <span class="pi-t"><mark>use</mark>ful<span class="pi-sub">TypeScript · <span class="age">2h</span></span></span>
+              <span class="pi-k"><kbd>↵</kbd></span>
+            </li>
+            <li class="item" data-heat="4">
+              <span class="pi-ic">▣</span>
+              <span class="pi-t"><mark>use</mark>r-agent-tools<span class="pi-sub">Python · <span class="age">5mo</span></span></span>
+              <span class="pi-k"><kbd>↵</kbd></span>
+            </li>
+            <li class="pal-group">Files in useful</li>
+            <li class="item">
+              <span class="pi-ic">▫</span>
+              <span class="pi-t">src/lib/<mark>use</mark>Timer.ts<span class="pi-sub">main</span></span>
+              <span class="pi-k"><kbd>↵</kbd></span>
+            </li>
+            <li class="item">
+              <span class="pi-ic">▫</span>
+              <span class="pi-t">docs/<mark>use</mark>-cases.md<span class="pi-sub">main</span></span>
+              <span class="pi-k"><kbd>↵</kbd></span>
+            </li>
+            <li class="pal-group">Commands</li>
+            <li class="item">
+              <span class="pi-ic">›</span>
+              <span class="pi-t">Toggle theme<span class="pi-sub">dark ⇄ light</span></span>
+              <span class="pi-k"><kbd>ctrl</kbd><kbd>shift</kbd><kbd>t</kbd></span>
+            </li>
+            <li class="item">
+              <span class="pi-ic">›</span>
+              <span class="pi-t">Go to Notes</span>
+              <span class="pi-k"><kbd>g</kbd><kbd>n</kbd></span>
+            </li>
+          </ul>
+          <div class="palette-foot">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>tab</kbd> next group</span>
+            <span><kbd>esc</kbd> close</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</AnvilLayout>

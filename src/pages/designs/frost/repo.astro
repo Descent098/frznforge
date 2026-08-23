@@ -1,0 +1,217 @@
+---
+import FrostLayout from '../../../layouts/designs/FrostLayout.astro';
+
+const s = 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"';
+const I = {
+  repo: `<svg ${s}><path d="M4 19.5V5a2 2 0 0 1 2-2h13v17H6a2 2 0 0 0-2 2z"/><path d="M4 19.5A2 2 0 0 1 6 17.5h13"/><path d="M9 7h6"/></svg>`,
+  folder: `<svg ${s}><path d="M3 7a2 2 0 0 1 2-2h4.5l2 2H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`,
+  file: `<svg ${s}><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>`,
+  code: `<svg ${s}><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 4l-4 16"/></svg>`,
+  commit: `<svg ${s}><circle cx="12" cy="12" r="3.5"/><path d="M2.5 12h6M15.5 12h6"/></svg>`,
+  branch: `<svg ${s}><circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="8" r="2.2"/><path d="M6 7.2v9.6M18 10.2c0 4-4 5-12 5.8"/></svg>`,
+  tag: `<svg ${s}><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3" fill="currentColor"/></svg>`,
+  release: `<svg ${s}><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.3 6.8 19.1l1-5.8-4.3-4.1 5.9-.9z"/></svg>`,
+  insights: `<svg ${s}><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>`,
+  scale: `<svg ${s}><path d="M12 3v18M5 21h14M3 7h18M6 7l-3 7a3 3 0 0 0 6 0zM18 7l-3 7a3 3 0 0 0 6 0z"/></svg>`,
+  users: `<svg ${s}><circle cx="9" cy="8" r="3.2"/><path d="M2.5 19c.6-3.3 3.2-5 6.5-5s5.9 1.7 6.5 5"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6M18.5 14.4c2 .6 3 2.2 3.3 4.6"/></svg>`,
+  search: `<svg ${s}><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.3-4.3"/></svg>`,
+  chev: `<svg ${s}><path d="m6 9 6 6 6-6"/></svg>`,
+  download: `<svg ${s}><path d="M12 4v11M7 10l5 5 5-5M4 19h16"/></svg>`,
+  copy: `<svg ${s}><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>`,
+  history: `<svg ${s}><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3 4v4.5h4.5M12 7.5V12l3 2"/></svg>`,
+  link: `<svg ${s}><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.2 1.2"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.2-1.2"/></svg>`,
+  bug: `<svg ${s}><path d="M8 9a4 4 0 0 1 8 0v6a4 4 0 0 1-8 0z"/><path d="M3 13h5M16 13h5M5 6l3 3M19 6l-3 3M5 20l3-3M19 20l-3-3"/></svg>`,
+  heart: `<svg ${s}><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`,
+  upstream: `<svg ${s}><path d="M12 20V7M6 13l6-6 6 6M5 3h14"/></svg>`,
+  info: `<svg ${s}><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>`,
+  flame: `<svg ${s}><path d="M12 3c1 3 4 4.5 4 9a4 4 0 0 1-8 0c0-2 1-3 1-3s.5 1.5 2 1.5c0-3-1-4.5 1-7.5z"/></svg>`,
+};
+
+type Temp = 'hot' | 'warm' | 'neutral' | 'cold';
+const tempText: Record<Temp, string> = { hot: 't-hot', warm: 't-warm', neutral: 't-neutral', cold: 't-cold' };
+
+const files: { name: string; dir?: boolean; msg: string; age: string; temp: Temp }[] = [
+  { name: '.claude', dir: true, msg: 'Add project instructions for agents', age: '13 hours ago', temp: 'hot' },
+  { name: '.github/workflows', dir: true, msg: 'ci: run Playwright on pull requests', age: 'last week', temp: 'warm' },
+  { name: 'docs', dir: true, msg: 'docs: architecture notes for the SQL playground', age: '2 hours ago', temp: 'hot' },
+  { name: 'public', dir: true, msg: 'Add maskable PWA icons', age: '3 weeks ago', temp: 'warm' },
+  { name: 'src', dir: true, msg: 'Release 0.3.0', age: '2 hours ago', temp: 'hot' },
+  { name: 'tests/local', dir: true, msg: 'test: cover timers across DST boundaries', age: 'yesterday', temp: 'hot' },
+  { name: 'tools', dir: true, msg: 'tools: script to regenerate generator fixtures', age: '2 months ago', temp: 'neutral' },
+  { name: '.gitattributes', msg: 'Normalise line endings', age: '2 years ago', temp: 'cold' },
+  { name: '.gitignore', msg: 'Ignore local sqlite snapshots', age: '4 months ago', temp: 'neutral' },
+  { name: 'CHANGELOG.md', msg: 'Release 0.3.0', age: '2 hours ago', temp: 'hot' },
+  { name: 'README.md', msg: 'docs: quickstart + screenshots', age: 'yesterday', temp: 'hot' },
+  { name: 'VERSION', msg: 'Release 0.3.0', age: '2 hours ago', temp: 'hot' },
+  { name: 'astro.config.mjs', msg: 'Enable view transitions', age: '3 weeks ago', temp: 'warm' },
+  { name: 'package.json', msg: 'chore(deps): bump svelte to 5.56', age: '13 hours ago', temp: 'hot' },
+  { name: 'playwright.config.ts', msg: 'ci: run Playwright on pull requests', age: 'last week', temp: 'warm' },
+];
+---
+<FrostLayout title="kieran / useful" active="repo">
+  <header class="repo-head">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="/designs/frost/">kieran</a>
+      <span class="sep">/</span>
+      <span>useful</span>
+    </nav>
+    <div class="repo-title">
+      <span class="ico" set:html={I.repo} />
+      <h1>useful</h1>
+      <span class="chip chip-ember"><span class="ico" set:html={I.flame} />Updated 2 hours ago</span>
+    </div>
+    <p class="repo-subtitle">An offline-first, local-first app: timers, notes, generators and a SQL playground with no server.</p>
+    <div class="badges">
+      <span class="badge"><span class="ico" set:html={I.scale} /><b>MIT</b> license</span>
+      <span class="badge"><span class="ico" set:html={I.branch} />default <code>main</code></span>
+      <span class="badge"><span class="ico" set:html={I.branch} /><b>3</b> branches</span>
+      <span class="badge"><span class="ico" set:html={I.tag} /><b>12</b> tags</span>
+      <span class="badge"><span class="ico" set:html={I.users} /><b>2</b> contributors</span>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Repository sections">
+    <a class="tab" href="#" aria-current="page"><span class="ico" set:html={I.code} />Code</a>
+    <a class="tab" href="#"><span class="ico" set:html={I.commit} />Commits <span class="count">81</span></a>
+    <a class="tab" href="#"><span class="ico" set:html={I.branch} />Branches <span class="count">3</span></a>
+    <a class="tab" href="#"><span class="ico" set:html={I.tag} />Tags <span class="count">12</span></a>
+    <a class="tab" href="#"><span class="ico" set:html={I.release} />Releases</a>
+    <a class="tab" href="#"><span class="ico" set:html={I.insights} />Insights</a>
+  </nav>
+
+  <div class="repo-grid">
+    <div class="repo-main">
+      <!-- toolbar -->
+      <div class="toolbar">
+        <button class="btn" type="button" aria-haspopup="listbox">
+          <span class="ico" set:html={I.branch} /><code style="background:transparent;padding:0;font-size:13px">main</code>
+          <span class="ico" set:html={I.chev} />
+        </button>
+        <label class="filefind">
+          <span class="ico" set:html={I.search} />
+          <input type="search" placeholder="Go to file" aria-label="Go to file" />
+          <kbd>t</kbd>
+        </label>
+        <span class="grow"></span>
+        <a class="btn" href="#"><span class="ico" set:html={I.history} />History</a>
+        <div class="clone-wrap">
+          <button class="btn btn-primary" type="button" aria-haspopup="menu" aria-expanded="true">
+            <span class="ico" set:html={I.code} />Clone <span class="ico" set:html={I.chev} />
+          </button>
+        </div>
+      </div>
+
+      <!-- clone dropdown (rendered open, static) -->
+      <div class="clone-row">
+        <div class="clone-menu" role="menu">
+          <h4>Clone with HTTPS</h4>
+          <div class="clone-url">
+            <span>https://forge.kieranwood.ca/useful.git</span>
+            <button type="button" aria-label="Copy clone URL"><span class="ico" set:html={I.copy} /></button>
+          </div>
+          <p class="hint">Served as a static dumb-HTTP remote — works with <code>git clone</code>, no server process needed.</p>
+          <a class="clone-item" href="#"><span class="ico" set:html={I.download} />Download ZIP <span class="faint" style="margin-left:auto;font-weight:400">main · 1.2 MB</span></a>
+        </div>
+      </div>
+
+      <!-- latest commit + file table -->
+      <div>
+        <div class="commit-bar">
+          <span class="mini-avatar" aria-hidden="true">KW</span>
+          <span class="who">Kieran Wood</span>
+          <span class="msg">Release 0.3.0</span>
+          <span class="sep">·</span>
+          <a class="sha" href="#">a1b9f2e</a>
+          <span class="sep">·</span>
+          <span class="t-hot">2 hours ago</span>
+          <span class="right">
+            <a href="#"><span class="ico" set:html={I.history} /><b>81</b> commits</a>
+          </span>
+        </div>
+        <table class="filetable">
+          <thead>
+            <tr><th>Name</th><th class="th-msg">Last commit</th><th style="text-align:right">Updated</th></tr>
+          </thead>
+          <tbody>
+            {files.map((f) => (
+              <tr class={f.dir ? 'dir' : undefined}>
+                <td><a class="name" href="#"><span class="ico" set:html={f.dir ? I.folder : I.file} />{f.name}</a></td>
+                <td class="msg"><a href="#">{f.msg}</a></td>
+                <td class={`age ${tempText[f.temp]}`}>{f.temp === 'hot' && <span class="dot"></span>}{f.age}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- README -->
+      <section class="card">
+        <div class="card-head">
+          <span class="ico" set:html={I.file} />
+          <h2><span class="readme-file">README.md</span></h2>
+          <span class="spacer"></span>
+          <a class="link" href="#">View source</a>
+        </div>
+        <div class="card-body readme">
+          <h1>useful</h1>
+          <p>A small collection of everyday utilities — timers, notes, text and data generators, and a SQL playground — that run entirely in the browser. Install it as a PWA and it keeps working with no network and no server.</p>
+          <h2>What's in it</h2>
+          <ul>
+            <li><strong>Timers &amp; stopwatches</strong> that survive reloads and tab sleeps.</li>
+            <li><strong>Notes</strong> with markdown preview, stored locally and exportable as a ZIP.</li>
+            <li><strong>Generators</strong> for UUIDs, lorem ipsum, passwords and fake data.</li>
+            <li><strong>SQL playground</strong> backed by SQLite compiled to WebAssembly.</li>
+          </ul>
+          <h2>Quickstart</h2>
+          <pre><code>npm install
+npm run dev</code></pre>
+        </div>
+      </section>
+    </div>
+
+    <!-- About panel -->
+    <aside class="about">
+      <div class="card">
+        <div class="card-head"><span class="ico" set:html={I.info} /><h3>About</h3></div>
+        <div class="card-body">
+          <p class="about-desc">An offline-first, local-first app: timers, notes, generators and a SQL playground with no server.</p>
+          <ul class="about-links">
+            <li><span class="ico" set:html={I.link} /><a href="#">kieranwood.ca/useful</a></li>
+            <li><span class="ico" set:html={I.bug} /><a href="#">github.com/Descent098/useful/issues</a></li>
+            <li><span class="ico" set:html={I.heart} /><a href="#">Donations</a></li>
+            <li><span class="ico" set:html={I.upstream} /><a href="#">github.com/Descent098/useful</a> <span class="muted">upstream</span></li>
+          </ul>
+          <div>
+            <h3>Tags</h3>
+            <div class="tag-cloud">
+              <span class="chip">pwa</span><span class="chip">offline</span><span class="chip">svelte</span><span class="chip">sqlite</span>
+            </div>
+          </div>
+          <div>
+            <h3>License</h3>
+            <span class="badge"><span class="ico" set:html={I.scale} /><b>MIT</b></span>
+          </div>
+          <div>
+            <h3>Languages</h3>
+            <div class="langbar langbar-lg" role="img" aria-label="TypeScript 81.2%, Svelte 12.1%, JavaScript 4.9%, Other 1.8%">
+              <span class="l-1" style="width:81.2%"></span><span class="l-2" style="width:12.1%"></span><span class="l-3" style="width:4.9%"></span><span class="l-5" style="width:1.8%"></span>
+            </div>
+            <ul class="lang-legend">
+              <li><i class="l-1"></i>TypeScript <b>81.2%</b></li>
+              <li><i class="l-2"></i>Svelte <b>12.1%</b></li>
+              <li><i class="l-3"></i>JavaScript <b>4.9%</b></li>
+              <li><i class="l-5"></i>Other <b>1.8%</b></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Contributors</h3>
+            <ul class="contributors">
+              <li><span class="mini-avatar">KW</span><b>Kieran Wood</b><small>76 commits</small></li>
+              <li><span class="mini-avatar bot">C</span><b>claude</b><small>5 commits</small></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</FrostLayout>

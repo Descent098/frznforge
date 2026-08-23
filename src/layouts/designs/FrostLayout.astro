@@ -1,0 +1,138 @@
+---
+/**
+ * FrostLayout — design exploration "frost".
+ * Light-first, airy shell with a narrow icon rail on the left.
+ * All styling lives in src/styles/designs/frost.css.
+ */
+import '../../styles/designs/frost.css';
+
+interface Props {
+  title: string;
+  active: 'profile' | 'repo';
+}
+const { title, active } = Astro.props;
+
+const s = 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"';
+const icons = {
+  logo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M4 6l8 4 8-4M4 18l8-4 8 4M6 3.5 5 7l-3 .5M18 3.5 19 7l3 .5M6 20.5 5 17l-3-.5M18 20.5l1-3.5 3-.5"/></svg>`,
+  user: `<svg ${s}><circle cx="12" cy="8.5" r="3.6"/><path d="M4.5 20c.7-3.8 3.8-5.8 7.5-5.8s6.8 2 7.5 5.8"/></svg>`,
+  repos: `<svg ${s}><path d="M4 19.5V5a2 2 0 0 1 2-2h13v17H6a2 2 0 0 0-2 2z"/><path d="M4 19.5A2 2 0 0 1 6 17.5h13"/><path d="M9 7h6"/></svg>`,
+  notes: `<svg ${s}><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h6M10 17h6"/></svg>`,
+  activity: `<svg ${s}><path d="M3 12h4l2.5-7 4 14 2.5-7H21"/></svg>`,
+  search: `<svg ${s}><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.3-4.3"/></svg>`,
+  sun: `<svg ${s}><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2.5 12h2M19.5 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`,
+  moon: `<svg ${s}><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>`,
+  chevrons: `<svg ${s}><path d="m7 6 6 6-6 6M13 6l6 6-6 6"/></svg>`,
+  rss: `<svg ${s}><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.3" fill="currentColor"/></svg>`,
+};
+---
+<!doctype html>
+<html lang="en" data-design="frost">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="color-scheme" content="light dark" />
+    <title>{title} · frznforge</title>
+    <script is:inline>
+      (function () {
+        try {
+          var t = localStorage.getItem('frost-theme');
+          if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+          if (localStorage.getItem('frost-rail') === 'open') document.documentElement.setAttribute('data-rail', 'open');
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="shell">
+      <nav class="rail" aria-label="Primary">
+        <a class="rail-brand" href="/designs/frost/" title="frznforge">
+          <span class="rail-logo" set:html={icons.logo} />
+          <span class="rail-label">frznforge</span>
+        </a>
+
+        <a class="rail-item" href="/designs/frost/" data-label="Profile" aria-current={active === 'profile' ? 'page' : undefined}>
+          <span class="ico" set:html={icons.user} /><span class="rail-label">Profile</span>
+        </a>
+        <a class="rail-item rail-hot" href="/designs/frost/repo" data-label="Repositories" aria-current={active === 'repo' ? 'page' : undefined}>
+          <span class="ico" set:html={icons.repos} /><span class="rail-label">Repositories</span>
+        </a>
+        <a class="rail-item" href="#" data-label="Notes">
+          <span class="ico" set:html={icons.notes} /><span class="rail-label">Notes</span>
+        </a>
+        <a class="rail-item" href="#" data-label="Activity">
+          <span class="ico" set:html={icons.activity} /><span class="rail-label">Activity</span>
+        </a>
+
+        <div class="rail-sep" role="presentation"></div>
+        <div class="rail-head">Recent</div>
+        <a class="rail-item" href="/designs/frost/repo" data-label="useful">
+          <span class="ico" set:html={icons.repos} /><span class="rail-label">useful</span>
+        </a>
+        <a class="rail-item" href="#" data-label="frznforge">
+          <span class="ico" set:html={icons.repos} /><span class="rail-label">frznforge</span>
+        </a>
+
+        <div class="rail-spacer"></div>
+        <a class="rail-item" href="#" data-label="Feed (RSS)">
+          <span class="ico" set:html={icons.rss} /><span class="rail-label">Feed</span>
+        </a>
+        <button class="rail-item rail-toggle" type="button" data-label="Expand sidebar" id="frost-rail-toggle" aria-expanded="false">
+          <span class="ico" set:html={icons.chevrons} /><span class="rail-label">Collapse</span>
+        </button>
+      </nav>
+
+      <div class="main">
+        <header class="topbar">
+          <a class="topbar-back" href="/designs/">← <span>All designs</span></a>
+          <label class="search">
+            <span class="ico" set:html={icons.search} />
+            <input type="search" placeholder="Search repos, files, commits, notes…" aria-label="Search" />
+            <span class="kbd-hint" aria-hidden="true"><kbd>⌘</kbd><kbd>K</kbd></span>
+          </label>
+          <div class="topbar-actions">
+            <button class="icon-btn" type="button" id="frost-theme-toggle" aria-label="Toggle colour theme" title="Toggle theme">
+              <span class="ico only-light" set:html={icons.moon} />
+              <span class="ico only-dark" set:html={icons.sun} />
+            </button>
+          </div>
+        </header>
+
+        <main class="content">
+          <slot />
+          <footer class="foot">
+            <span>Generated by <a href="#">frznforge</a> · static, read-only, yours.</span>
+            <a href="#">Feed</a>
+            <a href="#">Source</a>
+            <span style="margin-left:auto">Built 2026-08-23 14:02 MDT</span>
+          </footer>
+        </main>
+      </div>
+    </div>
+
+    <script is:inline>
+      (function () {
+        var root = document.documentElement;
+        var t = document.getElementById('frost-theme-toggle');
+        if (t) t.addEventListener('click', function () {
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var cur = root.getAttribute('data-theme') || (prefersDark ? 'dark' : 'light');
+          var next = cur === 'dark' ? 'light' : 'dark';
+          root.setAttribute('data-theme', next);
+          try { localStorage.setItem('frost-theme', next); } catch (e) {}
+        });
+        var r = document.getElementById('frost-rail-toggle');
+        if (r) {
+          r.setAttribute('aria-expanded', root.getAttribute('data-rail') === 'open' ? 'true' : 'false');
+          r.addEventListener('click', function () {
+            var open = root.getAttribute('data-rail') === 'open';
+            if (open) root.removeAttribute('data-rail'); else root.setAttribute('data-rail', 'open');
+            r.setAttribute('aria-expanded', open ? 'false' : 'true');
+            try { localStorage.setItem('frost-rail', open ? 'closed' : 'open'); } catch (e) {}
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

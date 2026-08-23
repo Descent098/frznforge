@@ -1,0 +1,292 @@
+---
+import FrostLayout from '../../../layouts/designs/FrostLayout.astro';
+
+const s = 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"';
+const I = {
+  pin: `<svg ${s}><path d="M15 4v6l2 3H7l2-3V4M12 13v7M9 4h6"/></svg>`,
+  repo: `<svg ${s}><path d="M4 19.5V5a2 2 0 0 1 2-2h13v17H6a2 2 0 0 0-2 2z"/><path d="M4 19.5A2 2 0 0 1 6 17.5h13"/><path d="M9 7h6"/></svg>`,
+  pin2: `<svg ${s}><path d="M4 19.5V5a2 2 0 0 1 2-2h13v17H6a2 2 0 0 0-2 2z"/><path d="M4 19.5A2 2 0 0 1 6 17.5h13"/><path d="M9 7h6"/></svg>`,
+  loc: `<svg ${s}><path d="M12 21s-6-5.3-6-10.5a6 6 0 0 1 12 0C18 15.7 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/></svg>`,
+  work: `<svg ${s}><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 12h18"/></svg>`,
+  school: `<svg ${s}><path d="m2 9 10-5 10 5-10 5z"/><path d="M6 11.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-4.5M22 9v6"/></svg>`,
+  mail: `<svg ${s}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>`,
+  link: `<svg ${s}><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.2 1.2"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.2-1.2"/></svg>`,
+  linkedin: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 9H3.5v12h3zM5 4a1.8 1.8 0 1 0 0 3.6A1.8 1.8 0 0 0 5 4zM21 21h-3v-6c0-1.6-.6-2.6-2-2.6-1.1 0-1.7.7-2 1.5-.1.2-.1.6-.1.9V21h-3V9h3v1.5c.4-.7 1.3-1.8 3.2-1.8 2.4 0 3.9 1.5 3.9 4.8z"/></svg>`,
+  github: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.8c-2.8.6-3.4-1.2-3.4-1.2-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.2-.2-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.8-2.3 4.7-4.6 4.9.4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg>`,
+  codeberg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.4 15.4l8.2-10.6.2-.3.2.3 8.2 10.6A10 10 0 0 0 12 2zm.1 6.3L8 21.4c1.2.4 2.6.6 4 .6s2.8-.2 4-.6z"/></svg>`,
+  forgejo: `<svg ${s}><circle cx="7" cy="18" r="2.2"/><circle cx="7" cy="6" r="2.2"/><circle cx="17" cy="6" r="2.2"/><path d="M7 8.2v7.6M17 8.2c0 4-3 6-8 6"/></svg>`,
+  flame: `<svg ${s}><path d="M12 3c1 3 4 4.5 4 9a4 4 0 0 1-8 0c0-2 1-3 1-3s.5 1.5 2 1.5c0-3-1-4.5 1-7.5z"/></svg>`,
+  commit: `<svg ${s}><circle cx="12" cy="12" r="3.5"/><path d="M2.5 12h6M15.5 12h6"/></svg>`,
+  tag: `<svg ${s}><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3" fill="currentColor"/></svg>`,
+  branch: `<svg ${s}><circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="8" r="2.2"/><path d="M6 7.2v9.6M18 10.2c0 4-4 5-12 5.8"/></svg>`,
+  push: `<svg ${s}><path d="M12 19V6M6 12l6-6 6 6"/></svg>`,
+  search: `<svg ${s}><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.3-4.3"/></svg>`,
+  file: `<svg ${s}><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>`,
+  bolt: `<svg ${s}><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>`,
+  moon: `<svg ${s}><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>`,
+  grid: `<svg ${s}><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`,
+  template: `<svg ${s}><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 10v10"/></svg>`,
+};
+
+type Temp = 'hot' | 'warm' | 'neutral' | 'cold';
+const tempText: Record<Temp, string> = { hot: 't-hot', warm: 't-warm', neutral: 't-neutral', cold: 't-cold' };
+
+const pinned: {
+  name: string; desc: string; langs: { n: string; p: number; c: string }[];
+  updated: string; temp: Temp; tags?: string[]; template?: boolean; href?: string;
+}[] = [
+  { name: 'useful', desc: 'An offline-first, local-first app: timers, notes, generators and a SQL playground with no server.', langs: [{ n: 'TypeScript', p: 81, c: 'l-1' }, { n: 'Svelte', p: 12, c: 'l-2' }, { n: 'JavaScript', p: 5, c: 'l-3' }], updated: '2 hours ago', temp: 'hot', tags: ['pwa', 'offline'], href: '/designs/frost/repo' },
+  { name: 'frznforge', desc: 'Read-only static forge generator. Showcase your repos without running a forge.', langs: [{ n: 'TypeScript', p: 100, c: 'l-1' }], updated: '1 day ago', temp: 'hot', tags: ['astro', 'ssg'] },
+  { name: 'ezcv', desc: 'Create a CV/resume site from a YAML file and a theme.', langs: [{ n: 'Python', p: 94, c: 'l-1' }, { n: 'HTML', p: 4, c: 'l-3' }], updated: '3 weeks ago', temp: 'warm', template: true },
+  { name: 'sdu', desc: 'Script deployment utility for pushing scripts to servers.', langs: [{ n: 'Go', p: 88, c: 'l-1' }, { n: 'Shell', p: 12, c: 'l-3' }], updated: '4 months ago', temp: 'neutral' },
+  { name: 'ahd', desc: 'Ad-hoc dispatcher: register shell one-liners as commands.', langs: [{ n: 'Python', p: 100, c: 'l-1' }], updated: '1 year ago', temp: 'cold' },
+  { name: 'kuws', desc: 'Keyword extraction and summarisation utilities.', langs: [{ n: 'Python', p: 100, c: 'l-1' }], updated: '2 years ago', temp: 'cold' },
+];
+
+const activity: { icon: string; html: string; age: string; temp: Temp }[] = [
+  { icon: I.push, html: 'Pushed <b>3 commits</b> to <a href="/designs/frost/repo">useful</a>/<code>main</code>', age: '2h', temp: 'hot' },
+  { icon: I.tag, html: 'Tagged <b>v0.3.0</b> in <a href="#">frznforge</a>', age: '1d', temp: 'hot' },
+  { icon: I.push, html: 'Pushed <b>1 commit</b> to <a href="#">ezcv</a>/<code>main</code>', age: '3w', temp: 'warm' },
+  { icon: I.branch, html: 'Created branch <code>feat/zip-export</code> in <a href="/designs/frost/repo">useful</a>', age: '3w', temp: 'warm' },
+  { icon: I.tag, html: 'Tagged <b>v2.1.0</b> in <a href="#">sdu</a>', age: '4mo', temp: 'neutral' },
+  { icon: I.push, html: 'Pushed <b>2 commits</b> to <a href="#">ahd</a>/<code>main</code>', age: '1y', temp: 'cold' },
+];
+
+// Contribution grid — 52 weeks × 7 days, deterministic pseudo-random heat.
+const cells: string[] = [];
+for (let i = 0; i < 52 * 7; i++) {
+  const week = Math.floor(i / 7);
+  const day = i % 7;
+  // cheap integer hash
+  let h = (i * 2654435761) ^ (i * 97 + 13);
+  h = (h >>> 0) % 1000;
+  const weekday = day >= 1 && day <= 5;
+  // base intensity: more activity on weekdays, plus a seasonal wave
+  const wave = Math.sin(week / 52 * Math.PI * 2.5 + 1) * 0.25 + 0.5;
+  let score = (h / 1000) * 0.7 + wave * 0.3 + (weekday ? 0.12 : -0.1);
+  // recent weeks run hot
+  if (week >= 47) score += 0.22;
+  let level = 0;
+  if (score > 0.52) level = 1;
+  if (score > 0.66) level = 2;
+  if (score > 0.78) level = 3;
+  if (score > 0.9) level = 4;
+  if (week === 51 && day >= 3 && level === 0) level = 2; // today is "hot"
+  let cls = '';
+  if (level > 0) {
+    const band = week >= 48 ? 'h' : week >= 42 ? 'w' : 'c';
+    cls = `${band}${level}`;
+  }
+  cells.push(cls);
+}
+const months = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
+---
+<FrostLayout title="Kieran Wood" active="profile">
+  <div class="profile">
+    <!-- ── Sidebar: identity ───────────────────────────────── -->
+    <aside class="profile-side">
+      <div class="card">
+        <div class="card-body">
+          <div class="avatar" aria-hidden="true">KW</div>
+          <h1 class="profile-name">Kieran Wood</h1>
+          <div class="profile-handle">@kieran</div>
+          <p class="profile-bio">Builds offline-first tools, static site generators and things that run without a server.</p>
+          <div class="side-divider" role="presentation"></div>
+          <ul class="detail-list">
+            <li><span class="ico" set:html={I.loc} />Calgary, AB</li>
+            <li><span class="ico" set:html={I.work} />Canadian Coding</li>
+            <li><span class="ico" set:html={I.school} />University of Calgary</li>
+            <li><span class="ico" set:html={I.mail} /><a href="mailto:kieran@canadiancoding.ca">kieran@canadiancoding.ca</a></li>
+            <li><span class="ico" set:html={I.link} /><a href="#">kieranwood.ca</a></li>
+            <li><span class="ico" set:html={I.link} /><a href="#">canadiancoding.ca</a></li>
+            <li><span class="ico" set:html={I.linkedin} /><a href="#">LinkedIn</a></li>
+          </ul>
+          <div class="side-divider" role="presentation"></div>
+          <div class="section-title">Also on</div>
+          <div class="forge-list">
+            <a href="#"><span class="ico" set:html={I.github} />GitHub</a>
+            <a href="#"><span class="ico" set:html={I.codeberg} />Codeberg</a>
+            <a href="#"><span class="ico" set:html={I.forgejo} />Forgejo <span class="faint">(self-hosted)</span></a>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── Main column ─────────────────────────────────────── -->
+    <div class="profile-main">
+      <!-- stats -->
+      <section class="stats" aria-label="Profile statistics">
+        <div class="card stat">
+          <span class="stat-label">Repositories</span>
+          <span class="stat-value">42</span>
+        </div>
+        <div class="card stat stat-ember">
+          <span class="stat-label">Commits this year</span>
+          <span class="stat-value">1,204 <small>▲ active this week</small></span>
+        </div>
+        <div class="card stat">
+          <span class="stat-label">Top languages</span>
+          <div class="langbar" role="img" aria-label="Python 41%, TypeScript 33%, Go 11%, Svelte 8%, Other 7%">
+            <span class="l-1" style="width:41%"></span><span class="l-2" style="width:33%"></span><span class="l-3" style="width:11%"></span><span class="l-4" style="width:8%"></span><span class="l-5" style="width:7%"></span>
+          </div>
+          <ul class="lang-legend">
+            <li><i class="l-1"></i>Python <b>41%</b></li>
+            <li><i class="l-2"></i>TypeScript <b>33%</b></li>
+            <li><i class="l-3"></i>Go <b>11%</b></li>
+            <li><i class="l-4"></i>Svelte <b>8%</b></li>
+            <li><i class="l-5"></i>Other <b>7%</b></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- README -->
+      <section class="card">
+        <div class="card-head">
+          <span class="ico" set:html={I.file} />
+          <h2><span class="readme-file">kieran / README.md</span></h2>
+        </div>
+        <div class="card-body readme">
+          <h1>Hi, I'm Kieran 👋</h1>
+          <p>I make small, sturdy tools for people who would rather own their software than rent it. Most of what I build works offline, ships as a static site, or both — this page included.</p>
+          <h2>What I'm working on</h2>
+          <ul>
+            <li><strong>useful</strong> — an offline-first utility app that lives entirely in your browser.</li>
+            <li><strong>frznforge</strong> — the read-only forge generator that produced this very page.</li>
+            <li>Writing about local-first architecture and why "no server" is a feature.</li>
+          </ul>
+          <h2>Stack</h2>
+          <ul class="inline-codes">
+            <li><code>Python</code></li><li><code>TypeScript</code></li><li><code>Astro</code></li><li><code>Svelte</code></li><li><code>Go</code></li><li><code>SQLite</code></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Pinned -->
+      <section>
+        <div class="card-head" style="border:0;padding:0 0 14px">
+          <span class="ico" set:html={I.pin} />
+          <h2>Pinned</h2>
+          <span class="spacer"></span>
+          <a class="link" href="/designs/frost/repo">All 42 repositories →</a>
+        </div>
+        <div class="pinned">
+          {pinned.map((r) => (
+            <article class={`card repo-card temp-${r.temp}`}>
+              <div class="repo-card-top">
+                <span class="ico" set:html={r.template ? I.template : I.repo} />
+                <a class="repo-name" href={r.href ?? '#'}>{r.name}</a>
+                {r.template && <span class="chip chip-outline">Template</span>}
+                {r.temp === 'hot' && !r.template && <span class="chip chip-ember"><span class="ico" set:html={I.flame} />Active</span>}
+              </div>
+              <p class="repo-desc">{r.desc}</p>
+              {r.tags && (
+                <div class="repo-tags">{r.tags.map((t) => <span class="chip">{t}</span>)}</div>
+              )}
+              {r.langs.length > 1 && (
+                <div class="langbar mini-langbar" aria-hidden="true">
+                  {r.langs.map((l) => <span class={l.c} style={`width:${l.p}%`}></span>)}
+                </div>
+              )}
+              <div class="repo-meta">
+                {r.langs.slice(0, 2).map((l) => (
+                  <span class="lang"><i class={l.c}></i>{l.n}{r.langs.length > 1 ? ` ${l.p}%` : ''}</span>
+                ))}
+                <span class={`age ${tempText[r.temp]}`}>
+                  <span class={`dot ${r.temp === 'hot' ? 'dot-hot' : ''}`}></span>Updated {r.updated}
+                </span>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <!-- Contributions -->
+      <section class="card">
+        <div class="card-head">
+          <span class="ico" set:html={I.grid} />
+          <h2>1,204 contributions in the last year</h2>
+          <span class="spacer"></span>
+          <span class="chip chip-ember"><span class="ico" set:html={I.flame} />14-day streak</span>
+        </div>
+        <div class="card-body">
+          <div class="contrib-wrap">
+            <div class="contrib-months" aria-hidden="true">{months.map((m) => <span>{m}</span>)}</div>
+            <div class="contrib" role="img" aria-label="Contribution heat map, 52 weeks by 7 days">
+              {cells.map((c) => <i class={c || undefined}></i>)}
+            </div>
+          </div>
+          <div class="contrib-legend">
+            <span>Colder</span>
+            <i></i><i style="background:var(--t-cold)"></i><i style="background:var(--t-cool)"></i><i style="background:var(--ice)"></i>
+            <span class="gap"></span>
+            <i style="background:var(--t-warm)"></i><i style="background:var(--t-hot)"></i><i style="background:var(--ember-strong)"></i>
+            <span>Hotter</span>
+            <span style="margin-left:auto">Older weeks freeze to ice; recent weeks glow ember.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Activity -->
+      <section class="card">
+        <div class="card-head">
+          <span class="ico" set:html={I.bolt} />
+          <h2>Recent activity</h2>
+          <span class="spacer"></span>
+          <a class="link" href="#">Full feed →</a>
+        </div>
+        <ul class="activity">
+          {activity.map((e) => (
+            <li class={`temp-${e.temp}`}>
+              <span class="evt-ico"><span class="ico" set:html={e.icon} /></span>
+              <span class="evt-text" set:html={e.html} />
+              <span class={`evt-age ${tempText[e.temp]}`}>{e.age}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <!-- Command palette preview (static mockup) -->
+      <section class="palette-preview" aria-label="Command palette preview (static mockup)">
+        <span class="palette-preview-label">Preview · ⌘K command palette</span>
+        <div class="palette" role="presentation">
+          <div class="palette-input">
+            <span class="ico" set:html={I.search} />
+            <span class="typed">use</span><span class="caret" aria-hidden="true"></span>
+            <span class="ghost">ful — jump to repo</span>
+            <kbd>esc</kbd>
+          </div>
+          <div class="palette-group"><span>Repositories</span></div>
+          <div class="palette-item active hot">
+            <span class="pi-ico"><span class="ico" set:html={I.repo} /></span>
+            <span class="pi-text"><span><mark>use</mark>ful</span><small>TypeScript · updated 2 hours ago</small></span>
+            <span class="pi-right"><kbd>↵</kbd></span>
+          </div>
+          <div class="palette-item">
+            <span class="pi-ico"><span class="ico" set:html={I.repo} /></span>
+            <span class="pi-text"><span>ho<mark>use</mark>keeping</span><small>Shell · updated 8 months ago</small></span>
+            <span class="pi-right"></span>
+          </div>
+          <div class="palette-group"><span>Files in useful</span></div>
+          <div class="palette-item">
+            <span class="pi-ico"><span class="ico" set:html={I.file} /></span>
+            <span class="pi-text"><span>src/lib/<mark>use</mark>Timer.ts</span><small>main</small></span>
+            <span class="pi-right"></span>
+          </div>
+          <div class="palette-group"><span>Actions</span></div>
+          <div class="palette-item">
+            <span class="pi-ico"><span class="ico" set:html={I.moon} /></span>
+            <span class="pi-text"><span>Toggle theme</span><small>Switch between frost and night</small></span>
+            <span class="pi-right"><kbd>T</kbd></span>
+          </div>
+          <div class="palette-foot">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>tab</kbd> accept suggestion</span>
+            <span class="spacer"></span>
+            <span>Static preview — not wired up</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</FrostLayout>

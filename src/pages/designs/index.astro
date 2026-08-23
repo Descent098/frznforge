@@ -1,0 +1,52 @@
+---
+// Throwaway design exploration hub (Phase 0). Static only — nothing here is wired to data.
+const designs = [
+  { slug: 'ember',  name: 'Ember',  blurb: 'GitHub-grade density, dark-first, GitLab-style sidebar. Heat gradient on timestamps, graph and language bars.' },
+  { slug: 'frost',  name: 'Frost',  blurb: 'Light, airy, Bitbucket-style icon rail. Ice is the base; ember is used sparingly for the hottest items.' },
+  { slug: 'anvil',  name: 'Anvil',  blurb: 'Editorial / terminal: monospace chrome, hard rules, square corners. Heat scale is the whole visual system.' },
+  { slug: 'hearth', name: 'Hearth', blurb: 'Warm showcase dashboard: hero band, roomy cards, docked floating sidebar, ember→ice gradients.' },
+];
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>frznforge · design explorations</title>
+    <style>
+      :root { color-scheme: light dark; --fg: #1f2328; --muted: #59636e; --bg: #fff; --card: #f6f8fa; --line: #d0d7de; --ember: #e8590c; --ice: #2f81f7; }
+      @media (prefers-color-scheme: dark) { :root { --fg: #e6edf3; --muted: #8b949e; --bg: #0d1117; --card: #161b22; --line: #30363d; } }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--fg); background: var(--bg); }
+      main { max-width: 960px; margin: 0 auto; padding: 48px 24px; }
+      h1 { font-size: 28px; margin: 0 0 4px; }
+      h1 span { background: linear-gradient(90deg, var(--ember), var(--ice)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      p.lead { color: var(--muted); margin: 0 0 32px; }
+      ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+      li { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 18px; }
+      li h2 { margin: 0 0 6px; font-size: 18px; }
+      li p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+      li a { display: inline-block; margin-right: 12px; font-weight: 600; color: var(--ice); text-decoration: none; }
+      li a:first-of-type { color: var(--ember); }
+      li a:hover { text-decoration: underline; }
+      footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1><span>frznforge</span> design explorations</h1>
+      <p class="lead">Four static directions, each with a profile page and a repo page. Same mock content everywhere so they compare fairly. Pick one (or a hybrid) and the rest get deleted.</p>
+      <ul>
+        {designs.map((d) => (
+          <li>
+            <h2>{d.name}</h2>
+            <p>{d.blurb}</p>
+            <a href={`/designs/${d.slug}/`}>Profile page →</a>
+            <a href={`/designs/${d.slug}/repo/`}>Repo page →</a>
+          </li>
+        ))}
+      </ul>
+      <footer>Phase 0 · see <code>docs/dev/plans/plan-phases.md</code>. Nothing on these pages is wired to data.</footer>
+    </main>
+  </body>
+</html>

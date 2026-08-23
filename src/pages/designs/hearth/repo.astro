@@ -1,0 +1,183 @@
+---
+import HearthLayout from '../../../layouts/designs/HearthLayout.astro';
+
+type Row = { name: string; dir: boolean; msg: string; age: string; temp: 'hot' | 'warm' | 'neutral' | 'cold' };
+const rows: Row[] = [
+  { name: '.claude', dir: true, msg: 'Add agent instructions for release checks', age: 'last week', temp: 'warm' },
+  { name: '.github/workflows', dir: true, msg: 'ci: run playwright on ubuntu + windows', age: '3 weeks ago', temp: 'warm' },
+  { name: 'docs', dir: true, msg: 'docs: document SQL playground export', age: 'yesterday', temp: 'hot' },
+  { name: 'public', dir: true, msg: 'Regenerate PWA icons at 512px', age: '2 months ago', temp: 'neutral' },
+  { name: 'src', dir: true, msg: 'Release 0.3.0', age: '2 hours ago', temp: 'hot' },
+  { name: 'tests/local', dir: true, msg: 'test: cover timer persistence across reloads', age: '13 hours ago', temp: 'hot' },
+  { name: 'tools', dir: true, msg: 'tools: zip-export script for offline bundles', age: '3 weeks ago', temp: 'warm' },
+  { name: '.gitattributes', dir: false, msg: 'Normalise line endings', age: '2 years ago', temp: 'cold' },
+  { name: '.gitignore', dir: false, msg: 'Ignore playwright report dir', age: '4 months ago', temp: 'neutral' },
+  { name: 'CHANGELOG.md', dir: false, msg: 'Release 0.3.0', age: '2 hours ago', temp: 'hot' },
+  { name: 'README.md', dir: false, msg: 'README: add quickstart + screenshots', age: 'yesterday', temp: 'hot' },
+  { name: 'VERSION', dir: false, msg: 'Release 0.3.0', age: '2 hours ago', temp: 'hot' },
+  { name: 'astro.config.mjs', dir: false, msg: 'Enable view transitions', age: 'last week', temp: 'warm' },
+  { name: 'package.json', dir: false, msg: 'Release 0.3.0', age: '2 hours ago', temp: 'hot' },
+  { name: 'playwright.config.ts', dir: false, msg: 'test: bump timeout for sql tests', age: '1 year ago', temp: 'cold' },
+];
+---
+<HearthLayout title="kieran / useful" active="repo">
+  <div class="hf-container">
+    <!-- ===== REPO HEADER ===== -->
+    <header class="hf-repo-head">
+      <div class="hf-repo-head-row">
+        <nav class="hf-crumb" aria-label="Breadcrumb">
+          <span class="hf-repo-icon"><svg class="hf-i"><use href="#i-repo" /></svg></span>
+          <a href="/designs/hearth/">kieran</a>
+          <span class="hf-sep">/</span>
+          <strong>useful</strong>
+        </nav>
+        <div class="hf-actions">
+          <a class="hf-btn" href="#"><svg class="hf-i"><use href="#i-ext" /></svg> Open on GitHub</a>
+        </div>
+      </div>
+      <p class="hf-repo-summary">An offline-first, local-first app: timers, notes, generators and a SQL playground with no server.</p>
+      <div class="hf-badges">
+        <span class="hf-badge"><svg class="hf-i"><use href="#i-scale" /></svg> <b>MIT</b> license</span>
+        <span class="hf-badge"><svg class="hf-i"><use href="#i-branch" /></svg> default <code>main</code></span>
+        <a class="hf-badge" href="#"><svg class="hf-i"><use href="#i-branch" /></svg> <b>3</b> branches</a>
+        <a class="hf-badge" href="#"><svg class="hf-i"><use href="#i-tag" /></svg> <b>12</b> tags</a>
+        <a class="hf-badge" href="#"><svg class="hf-i"><use href="#i-people" /></svg> <b>2</b> contributors</a>
+      </div>
+      <nav class="hf-tabs" aria-label="Repository sections">
+        <a href="#" aria-current="page"><svg class="hf-i"><use href="#i-code" /></svg> Code</a>
+        <a href="#"><svg class="hf-i"><use href="#i-history" /></svg> Commits <span class="hf-count">81</span></a>
+        <a href="#"><svg class="hf-i"><use href="#i-branch" /></svg> Branches <span class="hf-count">3</span></a>
+        <a href="#"><svg class="hf-i"><use href="#i-tag" /></svg> Tags <span class="hf-count">12</span></a>
+        <a href="#"><svg class="hf-i"><use href="#i-package" /></svg> Releases <span class="hf-count">9</span></a>
+        <a href="#"><svg class="hf-i"><use href="#i-chart" /></svg> Insights</a>
+      </nav>
+    </header>
+
+    <div class="hf-repo-body" style="margin-top:16px">
+      <div class="hf-repo-main">
+        <!-- ===== TOOLBAR ===== -->
+        <div class="hf-toolbar">
+          <button class="hf-btn hf-branch-btn" type="button"><svg class="hf-i"><use href="#i-branch" /></svg> <code>main</code> <svg class="hf-i hf-caret"><use href="#i-chev" /></svg></button>
+          <div class="hf-gotofile" role="button" tabindex="0"><svg class="hf-i"><use href="#i-search" /></svg><span>Go to file</span><kbd class="hf-kbd">T</kbd></div>
+          <div class="hf-toolbar-right">
+            <a class="hf-btn" href="#"><svg class="hf-i"><use href="#i-history" /></svg> History</a>
+            <button class="hf-btn hf-btn--ember" type="button" aria-expanded="true"><svg class="hf-i"><use href="#i-download" /></svg> Clone <svg class="hf-i hf-caret"><use href="#i-chev" /></svg></button>
+          </div>
+        </div>
+
+        <!-- static "open" clone dropdown -->
+        <div class="hf-clone-pop" role="region" aria-label="Clone options">
+          <h4>Clone <span class="hf-tabs-mini"><span class="is-on">HTTPS</span><span>SSH</span><span>CLI</span></span></h4>
+          <div class="hf-clone-url"><code>https://forge.kieranwood.ca/useful.git</code><button type="button" aria-label="Copy URL"><svg class="hf-i"><use href="#i-copy" /></svg></button></div>
+          <p>Read-only. Pushes go to the upstream on GitHub.</p>
+          <a class="hf-clone-item" href="#"><svg class="hf-i"><use href="#i-zip" /></svg> Download ZIP <small>main · 2.4 MB</small></a>
+        </div>
+
+        <!-- ===== LATEST COMMIT ===== -->
+        <div class="hf-commit-bar">
+          <span class="hf-author"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">KW</span> Kieran Wood</span>
+          <a class="hf-msg" href="#">Release 0.3.0</a>
+          <span class="hf-dot">·</span>
+          <a class="hf-sha" href="#">a1b9f2e</a>
+          <span class="hf-dot">·</span>
+          <span class="hf-age t-hot">2 hours ago</span>
+          <a class="hf-commits-link" href="#"><svg class="hf-i"><use href="#i-history" /></svg> <b>81</b> commits</a>
+        </div>
+
+        <!-- ===== FILE TABLE ===== -->
+        <div class="hf-card hf-files">
+          <table>
+            <thead>
+              <tr><th scope="col">Name</th><th scope="col">Last commit</th><th scope="col" style="text-align:right">Updated</th></tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr>
+                  <td><a class={`hf-fname${r.dir ? ' is-dir' : ''}`} href="#"><svg class="hf-i"><use href={r.dir ? '#i-folder' : '#i-file'} /></svg>{r.name}</a></td>
+                  <td class="hf-fmsg"><a href="#">{r.msg}</a></td>
+                  <td class="hf-fage"><span class={`hf-age t-${r.temp}`}>{r.age}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ===== README ===== -->
+        <article class="hf-card hf-readme-card">
+          <div class="hf-card-head">
+            <svg class="hf-i"><use href="#i-note" /></svg>
+            <h2>README</h2>
+            <code>README.md</code>
+            <a class="hf-more" href="#">View source</a>
+          </div>
+          <div class="hf-card-body hf-md">
+            <h1>useful</h1>
+            <p>A small toolbox of things that are handy to have open in a tab: timers, notes, generators and a SQL playground. Everything is stored locally in your browser, works offline as a PWA, and never phones home.</p>
+            <h2>What's in it</h2>
+            <ul>
+              <li><strong>Timers</strong> — pomodoro, countdowns and stopwatches that survive reloads.</li>
+              <li><strong>Notes</strong> — markdown notes with full-text search, stored in IndexedDB.</li>
+              <li><strong>Generators</strong> — UUIDs, passwords, lorem ipsum, colour palettes.</li>
+              <li><strong>SQL playground</strong> — SQLite compiled to WASM; import a CSV and query it.</li>
+            </ul>
+            <h2>Quickstart</h2>
+            <pre><code>npm install
+npm run dev</code></pre>
+            <p>Then open <code>http://localhost:4321</code>. Build a static bundle with <code>npm run build</code> and host the <code>dist/</code> folder anywhere.</p>
+          </div>
+        </article>
+      </div>
+
+      <!-- ===== ABOUT ===== -->
+      <aside class="hf-card hf-about" aria-labelledby="about-h">
+        <section class="hf-about-section">
+          <h3 id="about-h">About <svg class="hf-i hf-gear"><use href="#i-gear" /></svg></h3>
+          <p>An offline-first, local-first app: timers, notes, generators and a SQL playground with no server.</p>
+          <ul class="hf-about-links">
+            <li><svg class="hf-i"><use href="#i-globe" /></svg><span class="hf-lbl">Homepage</span><a href="#">kieranwood.ca/useful</a></li>
+            <li><svg class="hf-i"><use href="#i-bolt" /></svg><span class="hf-lbl">Issue tracker</span><a href="#">github.com/Descent098/useful/issues</a></li>
+            <li><svg class="hf-i"><use href="#i-heart" /></svg><span class="hf-lbl">Donations</span><a href="#">ko-fi.com/kieranwood</a></li>
+            <li><svg class="hf-i"><use href="#i-github" /></svg><span class="hf-lbl">Upstream</span><a href="#">github.com/Descent098/useful</a></li>
+          </ul>
+        </section>
+        <section class="hf-about-section">
+          <h3>Tags</h3>
+          <div class="hf-about-tags">
+            <a class="hf-tag" href="#">pwa</a><a class="hf-tag" href="#">offline</a><a class="hf-tag" href="#">svelte</a><a class="hf-tag" href="#">sqlite</a>
+          </div>
+        </section>
+        <section class="hf-about-section">
+          <ul class="hf-about-meta">
+            <li><svg class="hf-i"><use href="#i-scale" /></svg> <b>MIT</b>&nbsp;license</li>
+            <li><svg class="hf-i"><use href="#i-pulse" /></svg> <b>81</b>&nbsp;commits · last <span class="hf-age t-hot">2 hours ago</span></li>
+            <li><svg class="hf-i"><use href="#i-package" /></svg> <b>9</b>&nbsp;releases · latest <code>v0.3.0</code></li>
+          </ul>
+        </section>
+        <section class="hf-about-section">
+          <h3>Languages</h3>
+          <div class="hf-langbar" aria-hidden="true">
+            <span class="lang-ts" style="width:81.2%"></span>
+            <span class="lang-svelte" style="width:12.1%"></span>
+            <span class="lang-js" style="width:4.9%"></span>
+            <span class="lang-other" style="width:1.8%"></span>
+          </div>
+          <div class="hf-lang-legend">
+            <ul>
+              <li><span><i class="hf-lang-dot lang-ts"></i><b>TypeScript</b></span><i>81.2%</i></li>
+              <li><span><i class="hf-lang-dot lang-svelte"></i><b>Svelte</b></span><i>12.1%</i></li>
+              <li><span><i class="hf-lang-dot lang-js"></i><b>JavaScript</b></span><i>4.9%</i></li>
+              <li><span><i class="hf-lang-dot lang-other"></i><b>Other</b></span><i>1.8%</i></li>
+            </ul>
+          </div>
+        </section>
+        <section class="hf-about-section">
+          <h3>Contributors <span class="hf-count" style="font-size:11.5px;color:var(--hf-text-3);font-weight:500">2</span></h3>
+          <div class="hf-contributors">
+            <a class="hf-contributor" href="/designs/hearth/"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">KW</span><strong>Kieran Wood</strong><small>76 commits</small></a>
+            <a class="hf-contributor" href="#"><span class="hf-avatar hf-avatar--sm is-bot" aria-hidden="true">C</span><strong>claude</strong><small>5 commits</small></a>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</HearthLayout>
