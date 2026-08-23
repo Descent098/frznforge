@@ -878,7 +878,7 @@ code, kbd, pre { font-family: var(--hf-mono); }
 .hf-badge b { color: var(--hf-text); font-weight: 640; }
 .hf-badge code { font-size: 12px; }
 .hf-badge:hover { border-color: var(--hf-border-strong); }
-.hf-tabs { display: flex; gap: 4px; margin-top: 20px; overflow-x: auto; }
+.hf-tabs { display: flex; gap: 4px; margin-top: 20px; overflow-x: auto; overflow-y:hidden;}
 .hf-tabs a {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 10px 14px 12px;
