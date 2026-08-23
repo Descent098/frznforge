@@ -71,11 +71,19 @@ export function gitRaw(repo: string, args: string[], opts: GitRunOptions = {}): 
       }
     });
     child.stderr.on('data', (chunk: Buffer) => err.push(chunk));
-    child.on('error', (e) => {
+    const fail = (e: Error) => {
       if (settled) return;
       settled = true;
       reject(new Error(`failed to run git (is it installed and on PATH?): ${e.message}`));
+    };
+    // An 'error' on a stdio stream with no listener is an uncaught exception in Node, which
+    // would kill ingest instead of rejecting this promise. `stdout` is destroyed deliberately
+    // by the maxBytes path above, so that case must not be reported as a failure.
+    child.stdout.on('error', (e: Error) => {
+      if (!truncated) fail(e);
     });
+    child.stderr.on('error', fail);
+    child.on('error', fail);
     child.on('close', (code) => {
       if (settled) return;
       settled = true;

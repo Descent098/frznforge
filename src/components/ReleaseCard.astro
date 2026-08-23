@@ -1,0 +1,93 @@
+---
+/**
+ * One row of the releases index, for a release from either origin (provider import or
+ * annotated tag — see `resolveReleases`). The body is reduced to a plain-text summary here
+ * rather than rendered: release notes routinely open with a heading or a table and would
+ * dwarf the card. The full markdown lives on the release page.
+ */
+import { archiveUrl, commitUrl, releaseUrl, type SiteRelease } from '../lib/routes';
+import { heatFor, relativeTime } from '../lib/site';
+import type { Repo } from '../lib/data/schema';
+
+interface Props {
+  repo: Repo;
+  release: SiteRelease;
+  /** Newest non-prerelease. Only one card in the list gets the badge. */
+  isLatest: boolean;
+  /** "GitHub" / "GitLab" / "Gitea" / "Forgejo"; null for local sources. */
+  providerLabel: string | null;
+  /** Injected so every card on the page ages against the same instant. */
+  now: Date;
+}
+const { repo, release, isLatest, providerLabel, now } = Astro.props;
+
+const SUMMARY_CHARS = 200;
+
+/**
+ * Markdown → one line of prose. Deliberately a regex pass rather than render-then-strip:
+ * we want the *source* text minus its syntax, not the text content of rendered HTML.
+ */
+function summarize(md: string, max = SUMMARY_CHARS): string {
+  const text = md
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/~~~[\s\S]*?~~~/g, ' ')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/gm, '')
+    .replace(/^\s{0,3}(?:[-*_]\s*){3,}$/gm, ' ')
+    // emphasis markers only — a lone `_` is left alone so identifiers survive intact
+    .replace(/(^|\W)_([^_]+)_(?=\W|$)/g, '$1$2')
+    .replace(/\*\*|__|~~|\*/g, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text.length <= max) return text;
+  return text.slice(0, max).replace(/\s+\S*$/, '') + '…';
+}
+
+const summary = summarize(release.body);
+const archive = repo.archives.find((a) => a.kind === 'tag' && a.ref === release.tag) ?? null;
+const assetCount = release.assets.length + (archive ? 1 : 0);
+const commit = release.commit && repo.commits[release.commit] ? release.commit : null;
+const url = releaseUrl(repo.slug, release.tag);
+/** Providers often title a release ("Sunrise"); tag-derived ones just repeat the tag. */
+const titled = release.name.trim() !== '' && release.name !== release.tag;
+---
+<article class="hf-card hf-release-card">
+  <header class="hf-release-head">
+    <h2><a href={url}>{titled ? release.name : release.tag}</a></h2>
+    {titled && <code class="hf-release-tag">{release.tag}</code>}
+    {isLatest && <span class="hf-tag hf-release-latest">Latest</span>}
+    {release.prerelease && <span class="hf-tag hf-release-pre">Pre-release</span>}
+    <span class={`hf-age t-${heatFor(release.date, now)}`} title={release.date}>{relativeTime(release.date, now)}</span>
+  </header>
+
+  <div class="hf-release-meta">
+    {commit && (
+      <span><svg class="hf-i"><use href="#i-commit" /></svg> <a href={commitUrl(repo.slug, commit)}><code>{commit.slice(0, 7)}</code></a></span>
+    )}
+    {assetCount > 0 && (
+      <span><svg class="hf-i"><use href="#i-download" /></svg> {assetCount} download{assetCount === 1 ? '' : 's'}</span>
+    )}
+    <span class="hf-release-origin">
+      <svg class="hf-i"><use href={release.source === 'provider' ? '#i-package' : '#i-tag'} /></svg>
+      {release.source === 'provider' ? `source: ${providerLabel ?? 'provider'} release` : 'source: annotated tag'}
+    </span>
+  </div>
+
+  {summary && <p class="hf-release-summary">{summary}</p>}
+
+  <footer class="hf-release-more">
+    <a class="hf-btn hf-btn--sm" href={url}>
+      <svg class="hf-i"><use href="#i-package" /></svg> Release notes
+    </a>
+    {archive && (
+      <a class="hf-btn hf-btn--sm hf-btn--ghost" href={archiveUrl(repo.slug, release.tag)}>
+        <svg class="hf-i"><use href="#i-zip" /></svg> Source code (zip)
+      </a>
+    )}
+  </footer>
+</article>

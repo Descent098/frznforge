@@ -5,7 +5,7 @@ import CopyScript from '../../../../../components/CopyScript.astro';
 import { blobRoutes, blobUrl, findRef, rawUrl, treeUrl } from '../../../../../lib/routes';
 import { readBlob } from '../../../../../lib/data/load';
 import { countLines, highlightToHtml } from '../../../../../lib/highlight';
-import { isMarkdownPath, renderMarkdown } from '../../../../../lib/markdown';
+import { isMarkdownPath, isTrustedSource, renderMarkdown } from '../../../../../lib/markdown';
 import { formatInt, getConfig, getData } from '../../../../../lib/site';
 import type { Repo } from '../../../../../lib/data/schema';
 
@@ -60,7 +60,7 @@ const tooBigToHighlight = text !== null && (size > HIGHLIGHT_MAX_BYTES || (lineC
 
 /** Highlight only this page's own blob (cached per language inside highlightToHtml). */
 const codeHtml = text !== null && !tooBigToHighlight && !isMarkdown ? await highlightToHtml(text, info!.language, filePath) : null;
-const mdPreviewHtml = isMarkdown && text !== null ? renderMarkdown(text) : null;
+const mdPreviewHtml = isMarkdown && text !== null ? renderMarkdown(text, { trusted: isTrustedSource(repo.source) }) : null;
 const mdSourceHtml = isMarkdown && text !== null && !tooBigToHighlight ? await highlightToHtml(text, 'Markdown', filePath) : null;
 
 /** Breadcrumb. */

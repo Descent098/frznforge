@@ -311,3 +311,65 @@ a.hf-ref-name:hover code { text-decoration: underline; }
   .hf-blob-md { padding: 14px 18px 20px; }
   .hf-refsw-pop { max-width: calc(100vw - 48px); }
 }
+
+/* ==========================================================================
+   Phase 5 — provider releases (imported release notes + downloadable assets)
+   ========================================================================== */
+
+/* the release index is a real ordered list now (newest first) */
+.hf-release-list { list-style: none; margin: 0; padding: 0; }
+
+/* tag chip beside a titled release ("Sunrise" · v2.1.0) */
+.hf-release-tag {
+  font-family: var(--hf-mono); font-size: 12px; font-weight: 560;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--hf-code-bg); color: var(--hf-text-2);
+}
+.hf-release-pre { background: var(--hf-amber-soft); color: var(--hf-amber); font-weight: 640; }
+/* these badges are static labels, not links — cancel the .hf-tag link hover */
+.hf-release-latest:hover { background: var(--hf-ember-soft); color: var(--hf-ember); }
+.hf-release-pre:hover { background: var(--hf-amber-soft); color: var(--hf-amber); }
+
+/* "source: GitHub release" / "source: annotated tag" — where this data came from */
+.hf-release-origin { color: var(--hf-text-3); }
+.hf-release-origin a { display: inline-flex; align-items: center; gap: 5px; color: var(--hf-text-3); }
+.hf-release-origin a:hover { color: var(--hf-ice); text-decoration: underline; }
+
+/* plain-text preview of the notes on the index (full markdown lives on the release page) */
+.hf-release-summary { color: var(--hf-text-2); font-size: 13.5px; }
+.hf-release-more { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.hf-release-assets h2 { font-size: 13px; font-weight: 660; }
+.hf-release-assets .hf-asset-list { align-self: stretch; }
+
+.hf-asset-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.hf-asset {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--hf-border); border-radius: 10px;
+  background: var(--hf-surface-2);
+  font-size: 13.5px;
+  transition: border-color .12s, background .12s;
+}
+.hf-asset:hover { border-color: var(--hf-ice); background: var(--hf-surface); }
+.hf-asset > svg { color: var(--hf-text-3); }
+.hf-asset:hover > svg { color: var(--hf-ice); }
+.hf-asset-name { font-weight: 560; overflow-wrap: anywhere; }
+.hf-asset-type { color: var(--hf-text-3); font-size: 12px; font-family: var(--hf-mono); }
+.hf-asset-size { margin-left: auto; color: var(--hf-text-3); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hf-asset--local .hf-asset-type { font-family: var(--hf-font); font-style: italic; }
+.hf-ext-mark { width: 12px; height: 12px; opacity: 0.7; }
+.hf-asset .hf-ext-mark { margin-left: 2px; }
+
+/* visually hidden but announced (external-link warning on provider assets) */
+.hf-sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+@media (max-width: 900px) {
+  .hf-release-head .hf-age { margin-left: 0; }
+  .hf-release-meta { gap: 10px 14px; }
+  .hf-asset { flex-wrap: wrap; gap: 6px 10px; }
+  .hf-asset-type { display: none; }
+}

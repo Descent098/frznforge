@@ -1,0 +1,206 @@
+[
+  {
+    "id": 11594237,
+    "tag_name": "v16.0.3",
+    "target_commitish": "",
+    "name": "v16.0.3",
+    "body": "See https://codeberg.org/forgejo/forgejo/src/branch/forgejo/release-notes-published/16.0.3.md",
+    "url": "https://codeberg.org/api/v1/repos/forgejo/forgejo/releases/11594237",
+    "html_url": "https://codeberg.org/forgejo/forgejo/releases/tag/v16.0.3",
+    "tarball_url": "https://codeberg.org/forgejo/forgejo/archive/v16.0.3.tar.gz",
+    "zipball_url": "https://codeberg.org/forgejo/forgejo/archive/v16.0.3.zip",
+    "hide_archive_links": false,
+    "upload_url": "https://codeberg.org/api/v1/repos/forgejo/forgejo/releases/11594237/assets",
+    "draft": false,
+    "prerelease": false,
+    "created_at": "2026-08-20T10:49:50+02:00",
+    "published_at": "2026-08-20T10:49:50+02:00",
+    "author": {
+      "id": 70541,
+      "login": "release-team",
+      "login_name": "",
+      "full_name": "Forgejo Release Team",
+      "email": "release-team@noreply.codeberg.org",
+      "avatar_url": "https://codeberg.org/avatars/83623afe083e82955f79b2dfeea58bd9f34897fae0f6fd001bc282d3a40efc8b",
+      "html_url": "https://codeberg.org/release-team",
+      "is_admin": false,
+      "created": "2022-11-07T10:25:48+01:00",
+      "restricted": false,
+      "active": false,
+      "visibility": "public",
+      "username": "release-team"
+    },
+    "assets": [
+      {
+        "id": 1810208,
+        "name": "forgejo-16.0.3-linux-amd64",
+        "size": 120993448,
+        "download_count": 1357,
+        "created_at": "2026-08-20T10:49:54+02:00",
+        "uuid": "4f5b2695-892a-4bca-802a-6622934ff859",
+        "browser_download_url": "https://codeberg.org/forgejo/forgejo/releases/download/v16.0.3/forgejo-16.0.3-linux-amd64",
+        "type": "attachment"
+      },
+      {
+        "id": 1810211,
+        "name": "forgejo-16.0.3-linux-amd64.asc",
+        "size": 228,
+        "download_count": 170,
+        "created_at": "2026-08-20T10:49:54+02:00",
+        "uuid": "b0fb3ce7-0c55-4171-8486-34fad3eb56f9",
+        "browser_download_url": "https://codeberg.org/forgejo/forgejo/releases/download/v16.0.3/forgejo-16.0.3-linux-amd64.asc",
+        "type": "attachment"
+      },
+      {
+        "id": 1810214,
+        "name": "forgejo-16.0.3-linux-amd64.sha256",
+        "size": 93,
+        "download_count": 683,
+        "created_at": "2026-08-20T10:49:55+02:00",
+        "uuid": "d76e5279-a3a9-49ba-96a2-9056392496fa",
+        "browser_download_url": "https://codeberg.org/forgejo/forgejo/releases/download/v16.0.3/forgejo-16.0.3-linux-amd64.sha256",
+        "type": "attachment"
+      }
+    ],
+    "archive_download_count": {
+      "zip": 14,
+      "tar_gz": 80
+    }
+  },
+  {
+    "id": 11594228,
+    "tag_name": "v15.0.7",
+    "target_commitish": "",
+    "name": "v15.0.7",
+    "body": "See https://codeberg.org/forgejo/forgejo/src/branch/forgejo/release-notes-published/15.0.7.md",
+    "url": "https://codeberg.org/api/v1/repos/forgejo/forgejo/releases/11594228",
+    "html_url": "https://codeberg.org/forgejo/forgejo/releases/tag/v15.0.7",
+    "tarball_url": "https://codeberg.org/forgejo/forgejo/archive/v15.0.7.tar.gz",
+    "zipball_url": "https://codeberg.org/forgejo/forgejo/archive/v15.0.7.zip",
+    "hide_archive_links": false,
+    "upload_url": "https://codeberg.org/api/v1/repos/forgejo/forgejo/releases/11594228/assets",
+    "draft": false,
+    "prerelease": false,
+    "created_at": "2026-08-20T10:46:41+02:00",
+    "published_at": "2026-08-20T10:46:41+02:00",
+    "author": {
+      "id": 70541,
+      "login": "release-team",
+      "login_name": "",
+      "full_name": "Forgejo Release Team",
+      "email": "release-team@noreply.codeberg.org",
+      "avatar_url": "https://codeberg.org/avatars/83623afe083e82955f79b2dfeea58bd9f34897fae0f6fd001bc282d3a40efc8b",
+      "html_url": "https://codeberg.org/release-team",
+      "is_admin": false,
+      "created": "2022-11-07T10:25:48+01:00",
+      "restricted": false,
+      "active": false,
+      "visibility": "public",
+      "username": "release-team"
+    },
+    "assets": [
+      {
+        "id": 1810145,
+        "name": "forgejo-15.0.7-linux-amd64",
+        "size": 114923848,
+        "download_count": 288,
+        "created_at": "2026-08-20T10:46:44+02:00",
+        "uuid": "c0da0bb3-0a0f-4f81-8eac-fd99dee727a7",
+        "browser_download_url": "https://codeberg.org/forgejo/forgejo/releases/download/v15.0.7/forgejo-15.0.7-linux-amd64",
+        "type": "attachment"
+      },
+      {
+        "id": 1810148,
+        "name": "forgejo-15.0.7-linux-amd64.asc",
+        "size": 228,
+        "download_count": 66,
+        "created_at": "2026-08-20T10:46:45+02:00",
+        "uuid": "98af0c2e-b3f9-4ab6-8a98-f932372fc0eb",
+        "browser_download_url": "https://codeberg.org/forgejo/forgejo/releases/download/v15.0.7/forgejo-15.0.7-linux-amd64.asc",
+        "type": "attachment"
+      },
+      {
+        "id": 1810151,
+        "name": "forgejo-15.0.7-linux-amd64.sha256",
+        "size": 93,
+        "download_count": 161,
+        "created_at": "2026-08-20T10:46:45+02:00",
+        "uuid": "a2352d4d-d00f-44df-abb8-31f021fb29a6",
+        "browser_download_url": "https://codeberg.org/forgejo/forgejo/releases/download/v15.0.7/forgejo-15.0.7-linux-amd64.sha256",
+        "type": "attachment"
+      }
+    ],
+    "archive_download_count": {
+      "zip": 4,
+      "tar_gz": 85
+    }
+  },
+  {
+    "id": 11189746,
+    "tag_name": "v16.0.2",
+    "target_commitish": "",
+    "name": "v16.0.2",
+    "body": "See https://codeberg.org/forgejo/forgejo/src/branch/forgejo/release-notes-published/16.0.2.md",
+    "url": "https://codeberg.org/api/v1/repos/forgejo/forgejo/releases/11189746",
+    "html_url": "https://codeberg.org/forgejo/forgejo/releases/tag/v16.0.2",
+    "tarball_url": "https://codeberg.org/forgejo/forgejo/archive/v16.0.2.tar.gz",
+    "zipball_url": "https://codeberg.org/forgejo/forgejo/archive/v16.0.2.zip",
+    "hide_archive_links": false,
+    "upload_url": "https://codeberg.org/api/v1/repos/forgejo/forgejo/releases/11189746/assets",
+    "draft": false,
+    "prerelease": false,
+    "created_at": "2026-07-30T22:59:53+02:00",
+    "published_at": "2026-07-30T22:59:53+02:00",
+    "author": {
+      "id": 70541,
+      "login": "release-team",
+      "login_name": "",
+      "full_name": "Forgejo Release Team",
+      "email": "release-team@noreply.codeberg.org",
+      "avatar_url": "https://codeberg.org/avatars/83623afe083e82955f79b2dfeea58bd9f34897fae0f6fd001bc282d3a40efc8b",
+      "html_url": "https://codeberg.org/release-team",
+      "is_admin": false,
+      "created": "2022-11-07T10:25:48+01:00",
+      "restricted": false,
+      "active": false,
+      "visibility": "public",
+      "username": "release-team"
+    },
+    "assets": [
+      {
+        "id": 1730449,
+        "name": "forgejo-16.0.2-linux-amd64",
+        "size": 119142664,
+        "download_count": 5292,
+        "created_at": "2026-07-30T22:59:55+02:00",
+        "uuid": "49e93aa2-3684-4039-9404-c7215f353642",
+        "browser_download_url": "https://codeberg.org/forgejo/forgejo/releases/download/v16.0.2/forgejo-16.0.2-linux-amd64",
+        "type": "attachment"
+      },
+      {
+        "id": 1730452,
+        "name": "forgejo-16.0.2-linux-amd64.asc",
+        "size": 228,
+        "download_count": 667,
+        "created_at": "2026-07-30T22:59:56+02:00",
+        "uuid": "b5ebbbe2-dabd-4304-b403-6c62b2f57678",
+        "browser_download_url": "https://codeberg.org/forgejo/forgejo/releases/download/v16.0.2/forgejo-16.0.2-linux-amd64.asc",
+        "type": "attachment"
+      },
+      {
+        "id": 1730455,
+        "name": "forgejo-16.0.2-linux-amd64.sha256",
+        "size": 93,
+        "download_count": 6724,
+        "created_at": "2026-07-30T22:59:56+02:00",
+        "uuid": "894abc4c-5529-4d59-9a16-4ccdb5eceda0",
+        "browser_download_url": "https://codeberg.org/forgejo/forgejo/releases/download/v16.0.2/forgejo-16.0.2-linux-amd64.sha256",
+        "type": "attachment"
+      }
+    ],
+    "archive_download_count": {
+      "zip": 67,
+      "tar_gz": 757
+    }
+  }
+]

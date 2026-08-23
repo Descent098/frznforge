@@ -4,7 +4,7 @@ import RepoHeader from '../../../components/RepoHeader.astro';
 import RefSwitcher from '../../../components/RefSwitcher.astro';
 import FileTable from '../../../components/FileTable.astro';
 import { archiveUrl, browsableRefs, commitUrl, commitsUrl, getRepoRoutes } from '../../../lib/routes';
-import { renderMarkdown, isMarkdownPath } from '../../../lib/markdown';
+import { isMarkdownPath, isTrustedSource, renderMarkdown } from '../../../lib/markdown';
 import { formatInt, getConfig, getData, heatFor, initials, prettyUrl, relativeTime } from '../../../lib/site';
 import type { Repo } from '../../../lib/data/schema';
 
@@ -37,7 +37,7 @@ const rootEntries = repo.tree.filter((e) => !e.path.includes('/'));
 
 const readmeHtml = repo.readme
   ? isMarkdownPath(repo.readme.path)
-    ? renderMarkdown(repo.readme.content)
+    ? renderMarkdown(repo.readme.content, { trusted: isTrustedSource(repo.source) })
     : `<pre>${repo.readme.content.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</pre>`
   : null;
 

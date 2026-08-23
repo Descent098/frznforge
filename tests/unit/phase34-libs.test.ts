@@ -17,6 +17,7 @@ import {
   refSlug,
   releasesOf,
   repoRoutes,
+  resolveReleases,
   treeRoutes,
   treeUrl,
 } from '../../src/lib/routes';
@@ -69,6 +70,7 @@ const repo: Repo = {
   template: false,
   license: null,
   releaseMode: 'tags',
+  releases: [],
   empty: false,
   defaultBranch: 'main',
   branches: [
@@ -165,6 +167,25 @@ describe('routes', () => {
   it('releasesOf returns annotated tags newest first', () => {
     expect(releasesOf(repo).map((t) => t.name)).toEqual(['v1.0.0']);
   });
+
+  it('orders releases by code point, matching the artifact and not the build machine’s locale', () => {
+    // `localeCompare` puts 'v1.0.0' before 'V1.0.0'; the importers sort the artifact by code
+    // point, which puts 'V1.0.0' first. Disagreeing means two machines with different ICU
+    // data render the release list — and the "Latest" badge — in a different order.
+    const mk = (tag: string) => ({
+      tag,
+      name: tag,
+      body: '',
+      url: null,
+      prerelease: false,
+      publishedAt: '2026-01-01T00:00:00Z',
+      author: null,
+      assets: [],
+    });
+    const tied = { ...repo, releases: [mk('v1.0.0'), mk('V1.0.0')], releaseMode: 'provider' as const };
+    expect(resolveReleases(tied).map((r) => r.tag)).toEqual(['V1.0.0', 'v1.0.0']);
+    expect('v1.0.0'.localeCompare('V1.0.0')).toBe(-1); // …which is what we are not doing
+  });
 });
 
 describe('highlight helpers', () => {
@@ -220,7 +241,7 @@ describe('activity', () => {
 });
 
 describe('search', () => {
-  const data = { schemaVersion: 2 as const, repos: [repo], warnings: [] };
+  const data = { schemaVersion: 3 as const, repos: [repo], warnings: [] };
   const index = buildSearchIndex(data);
   it('indexes pages, repos and default-branch files only', () => {
     const kinds = index.docs.map((d) => d.kind);

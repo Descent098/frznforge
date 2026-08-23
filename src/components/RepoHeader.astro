@@ -3,7 +3,7 @@
  * Shared repo page header: breadcrumb, description, badges and the section tabs.
  * Used by the overview and every Phase 3 sub-page (`active` picks the current tab).
  */
-import { branchesUrl, commitsUrl, releasesOf, releasesUrl, repoUrl, tagsUrl } from '../lib/routes';
+import { branchesUrl, commitsUrl, releasesUrl, repoUrl, resolveReleases, tagsUrl } from '../lib/routes';
 import { formatInt, getConfig } from '../lib/site';
 import type { Repo } from '../lib/data/schema';
 
@@ -13,7 +13,8 @@ interface Props {
 }
 const { repo, active } = Astro.props;
 const cfg = await getConfig();
-const releases = releasesOf(repo);
+// same source the releases pages render from, so the tab count can never disagree with them
+const releases = resolveReleases(repo);
 const upstreamHost = repo.links.upstream ? new URL(repo.links.upstream).hostname.replace(/^www\./, '') : null;
 const cur = (tab: string) => (tab === active ? 'page' : undefined);
 ---

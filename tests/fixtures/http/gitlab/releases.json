@@ -1,0 +1,394 @@
+[
+  {
+    "name": "v19.3.0",
+    "tag_name": "v19.3.0",
+    "description": "See [the changelog](https://gitlab.com/gitlab-org/gitlab-runner/blob/v19.3.0/CHANGELOG.md) :rocket:\n\nGitLab Runner documentation can be found at https://docs.gitlab.com/runner/.\n",
+    "created_at": "2026-08-19T21:10:48.199Z",
+    "released_at": "2026-08-19T21:10:48.199Z",
+    "upcoming_release": false,
+    "author": {
+      "id": 25728545,
+      "username": "ashvins",
+      "public_email": "",
+      "name": "Ashvin Sharma",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/25728545/avatar.png",
+      "web_url": "https://gitlab.com/ashvins"
+    },
+    "commit": {
+      "id": "9cbf0074ddb0e2f79d79f44406cafebf09117b64",
+      "short_id": "9cbf0074",
+      "created_at": "2026-08-19T08:58:54.000+00:00",
+      "parent_ids": [
+        "83aed1642d3fe151cbffc9c7c2e57e1444304074"
+      ],
+      "title": "Update CHANGELOG for v19.3.0",
+      "message": "Update CHANGELOG for v19.3.0\n",
+      "author_name": "Auto Runner Releaser",
+      "author_email": "auto-runner-releaser@gitlab.com",
+      "authored_date": "2026-08-19T08:58:54.000+00:00",
+      "committer_name": "Auto Runner Releaser",
+      "committer_email": "auto-runner-releaser@gitlab.com",
+      "committed_date": "2026-08-19T08:58:54.000+00:00",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/commit/9cbf0074ddb0e2f79d79f44406cafebf09117b64"
+    },
+    "commit_path": "/gitlab-org/gitlab-runner/-/commit/9cbf0074ddb0e2f79d79f44406cafebf09117b64",
+    "tag_path": "/gitlab-org/gitlab-runner/-/tags/v19.3.0",
+    "assets": {
+      "count": 42,
+      "sources": [
+        {
+          "format": "zip",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.3.0/gitlab-runner-v19.3.0.zip"
+        },
+        {
+          "format": "tar.gz",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.3.0/gitlab-runner-v19.3.0.tar.gz"
+        },
+        {
+          "format": "tar.bz2",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.3.0/gitlab-runner-v19.3.0.tar.bz2"
+        },
+        {
+          "format": "tar",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.3.0/gitlab-runner-v19.3.0.tar"
+        }
+      ],
+      "links": [
+        {
+          "id": 12471682,
+          "name": "other release artifacts",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.3.0/index.html",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.3.0/downloads/index.html",
+          "link_type": "other"
+        },
+        {
+          "id": 12471681,
+          "name": "checksums GPG signature",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.3.0/release.sha256.asc",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.3.0/downloads/release.sha256.asc",
+          "link_type": "other"
+        },
+        {
+          "id": 12471680,
+          "name": "checksums",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.3.0/release.sha256",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.3.0/downloads/release.sha256",
+          "link_type": "other"
+        }
+      ]
+    },
+    "evidences": [
+      {
+        "sha": "41fd7970e6f9b0e8d03701d8212247f13ed68fd13bad",
+        "filepath": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.3.0/evidences/23463484.json",
+        "collected_at": "2026-08-19T21:10:48.442Z"
+      }
+    ],
+    "_links": {
+      "closed_issues_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/issues?release_tag=v19.3.0&scope=all&state=closed",
+      "closed_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.3.0&scope=all&state=closed",
+      "merged_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.3.0&scope=all&state=merged",
+      "opened_issues_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/issues?release_tag=v19.3.0&scope=all&state=opened",
+      "opened_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.3.0&scope=all&state=opened",
+      "self": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.3.0"
+    }
+  },
+  {
+    "name": "v19.2.2",
+    "tag_name": "v19.2.2",
+    "description": "See [the changelog](https://gitlab.com/gitlab-org/gitlab-runner/blob/v19.2.2/CHANGELOG.md) :rocket:\n\nGitLab Runner documentation can be found at https://docs.gitlab.com/runner/.\n",
+    "created_at": "2026-08-13T15:31:29.907Z",
+    "released_at": "2026-08-13T15:31:29.907Z",
+    "upcoming_release": false,
+    "author": {
+      "id": 35011548,
+      "username": "daniel-keenan",
+      "public_email": "",
+      "name": "Daniel Keenan",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/35011548/avatar.png",
+      "web_url": "https://gitlab.com/daniel-keenan"
+    },
+    "commit": {
+      "id": "343288f1214ac954d32f1c60ae3855f2d7b0afe6",
+      "short_id": "343288f1",
+      "created_at": "2026-08-12T15:19:39.000+00:00",
+      "parent_ids": [
+        "74edec5310458f92082ea030a61c0033a61462a8"
+      ],
+      "title": "Update CHANGELOG for v19.2.2",
+      "message": "Update CHANGELOG for v19.2.2\n",
+      "author_name": "Auto Runner Releaser",
+      "author_email": "auto-runner-releaser@gitlab.com",
+      "authored_date": "2026-08-12T15:19:39.000+00:00",
+      "committer_name": "Auto Runner Releaser",
+      "committer_email": "auto-runner-releaser@gitlab.com",
+      "committed_date": "2026-08-12T15:19:39.000+00:00",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/commit/343288f1214ac954d32f1c60ae3855f2d7b0afe6"
+    },
+    "commit_path": "/gitlab-org/gitlab-runner/-/commit/343288f1214ac954d32f1c60ae3855f2d7b0afe6",
+    "tag_path": "/gitlab-org/gitlab-runner/-/tags/v19.2.2",
+    "assets": {
+      "count": 42,
+      "sources": [
+        {
+          "format": "zip",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.2.2/gitlab-runner-v19.2.2.zip"
+        },
+        {
+          "format": "tar.gz",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.2.2/gitlab-runner-v19.2.2.tar.gz"
+        },
+        {
+          "format": "tar.bz2",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.2.2/gitlab-runner-v19.2.2.tar.bz2"
+        },
+        {
+          "format": "tar",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.2.2/gitlab-runner-v19.2.2.tar"
+        }
+      ],
+      "links": [
+        {
+          "id": 12409051,
+          "name": "other release artifacts",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.2.2/index.html",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.2.2/downloads/index.html",
+          "link_type": "other"
+        },
+        {
+          "id": 12409050,
+          "name": "checksums GPG signature",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.2.2/release.sha256.asc",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.2.2/downloads/release.sha256.asc",
+          "link_type": "other"
+        },
+        {
+          "id": 12409049,
+          "name": "checksums",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.2.2/release.sha256",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.2.2/downloads/release.sha256",
+          "link_type": "other"
+        }
+      ]
+    },
+    "evidences": [
+      {
+        "sha": "8f7e4d3fb0f97153d45d73535fcda7d962fd5bbb8bed",
+        "filepath": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.2.2/evidences/23341918.json",
+        "collected_at": "2026-08-13T15:31:30.190Z"
+      }
+    ],
+    "_links": {
+      "closed_issues_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/issues?release_tag=v19.2.2&scope=all&state=closed",
+      "closed_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.2.2&scope=all&state=closed",
+      "merged_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.2.2&scope=all&state=merged",
+      "opened_issues_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/issues?release_tag=v19.2.2&scope=all&state=opened",
+      "opened_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.2.2&scope=all&state=opened",
+      "self": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.2.2"
+    }
+  },
+  {
+    "name": "v19.0.3",
+    "tag_name": "v19.0.3",
+    "description": "See [the changelog](https://gitlab.com/gitlab-org/gitlab-runner/blob/v19.0.3/CHANGELOG.md) :rocket:\n\nGitLab Runner documentation can be found at https://docs.gitlab.com/runner/.\n",
+    "created_at": "2026-07-31T00:49:13.740Z",
+    "released_at": "2026-07-31T00:49:13.740Z",
+    "upcoming_release": false,
+    "author": {
+      "id": 15293556,
+      "username": "takax",
+      "public_email": "",
+      "name": "Taka Nishida",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/15293556/avatar.png",
+      "web_url": "https://gitlab.com/takax"
+    },
+    "commit": {
+      "id": "e951e4926504fcfce3399542ff56029f77798c5a",
+      "short_id": "e951e492",
+      "created_at": "2026-07-28T07:59:47.000+00:00",
+      "parent_ids": [
+        "8a09296d8b4d023248439aaa38adc33e3a07f432"
+      ],
+      "title": "Update CHANGELOG for v19.0.3",
+      "message": "Update CHANGELOG for v19.0.3\n",
+      "author_name": "Auto Runner Releaser",
+      "author_email": "auto-runner-releaser@gitlab.com",
+      "authored_date": "2026-07-28T07:59:47.000+00:00",
+      "committer_name": "Auto Runner Releaser",
+      "committer_email": "auto-runner-releaser@gitlab.com",
+      "committed_date": "2026-07-28T07:59:47.000+00:00",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/commit/e951e4926504fcfce3399542ff56029f77798c5a"
+    },
+    "commit_path": "/gitlab-org/gitlab-runner/-/commit/e951e4926504fcfce3399542ff56029f77798c5a",
+    "tag_path": "/gitlab-org/gitlab-runner/-/tags/v19.0.3",
+    "assets": {
+      "count": 42,
+      "sources": [
+        {
+          "format": "zip",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.0.3/gitlab-runner-v19.0.3.zip"
+        },
+        {
+          "format": "tar.gz",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.0.3/gitlab-runner-v19.0.3.tar.gz"
+        },
+        {
+          "format": "tar.bz2",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.0.3/gitlab-runner-v19.0.3.tar.bz2"
+        },
+        {
+          "format": "tar",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.0.3/gitlab-runner-v19.0.3.tar"
+        }
+      ],
+      "links": [
+        {
+          "id": 12270190,
+          "name": "other release artifacts",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.0.3/index.html",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.0.3/downloads/index.html",
+          "link_type": "other"
+        },
+        {
+          "id": 12270189,
+          "name": "checksums GPG signature",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.0.3/release.sha256.asc",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.0.3/downloads/release.sha256.asc",
+          "link_type": "other"
+        },
+        {
+          "id": 12270188,
+          "name": "checksums",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.0.3/release.sha256",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.0.3/downloads/release.sha256",
+          "link_type": "other"
+        }
+      ]
+    },
+    "evidences": [
+      {
+        "sha": "fcbcb1307abd571f02c3b7dcbb82f7be1f2e6721b18d",
+        "filepath": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.0.3/evidences/22760017.json",
+        "collected_at": "2026-07-31T00:49:14.081Z"
+      }
+    ],
+    "_links": {
+      "closed_issues_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/issues?release_tag=v19.0.3&scope=all&state=closed",
+      "closed_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.0.3&scope=all&state=closed",
+      "merged_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.0.3&scope=all&state=merged",
+      "opened_issues_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/issues?release_tag=v19.0.3&scope=all&state=opened",
+      "opened_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.0.3&scope=all&state=opened",
+      "self": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.0.3"
+    }
+  },
+  {
+    "name": "v19.2.1",
+    "tag_name": "v19.2.1",
+    "description": "See [the changelog](https://gitlab.com/gitlab-org/gitlab-runner/blob/v19.2.1/CHANGELOG.md) :rocket:\n\nGitLab Runner documentation can be found at https://docs.gitlab.com/runner/.\n",
+    "created_at": "2026-07-30T08:09:04.137Z",
+    "released_at": "2026-07-30T08:09:04.137Z",
+    "upcoming_release": false,
+    "author": {
+      "id": 15293556,
+      "username": "takax",
+      "public_email": "",
+      "name": "Taka Nishida",
+      "state": "active",
+      "locked": false,
+      "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/15293556/avatar.png",
+      "web_url": "https://gitlab.com/takax"
+    },
+    "commit": {
+      "id": "a470182f2a48e0e03ed11c3c4a2026b6597ecd26",
+      "short_id": "a470182f",
+      "created_at": "2026-07-28T05:32:08.000+00:00",
+      "parent_ids": [
+        "cd2fec203eccdfcb6db8e94797fc0c964910c201"
+      ],
+      "title": "Update CHANGELOG for v19.2.1",
+      "message": "Update CHANGELOG for v19.2.1\n",
+      "author_name": "Auto Runner Releaser",
+      "author_email": "auto-runner-releaser@gitlab.com",
+      "authored_date": "2026-07-28T05:32:08.000+00:00",
+      "committer_name": "Auto Runner Releaser",
+      "committer_email": "auto-runner-releaser@gitlab.com",
+      "committed_date": "2026-07-28T05:32:08.000+00:00",
+      "trailers": {},
+      "extended_trailers": {},
+      "web_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/commit/a470182f2a48e0e03ed11c3c4a2026b6597ecd26"
+    },
+    "commit_path": "/gitlab-org/gitlab-runner/-/commit/a470182f2a48e0e03ed11c3c4a2026b6597ecd26",
+    "tag_path": "/gitlab-org/gitlab-runner/-/tags/v19.2.1",
+    "assets": {
+      "count": 42,
+      "sources": [
+        {
+          "format": "zip",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.2.1/gitlab-runner-v19.2.1.zip"
+        },
+        {
+          "format": "tar.gz",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.2.1/gitlab-runner-v19.2.1.tar.gz"
+        },
+        {
+          "format": "tar.bz2",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.2.1/gitlab-runner-v19.2.1.tar.bz2"
+        },
+        {
+          "format": "tar",
+          "url": "https://gitlab.com/gitlab-org/gitlab-runner/-/archive/v19.2.1/gitlab-runner-v19.2.1.tar"
+        }
+      ],
+      "links": [
+        {
+          "id": 12259335,
+          "name": "other release artifacts",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.2.1/index.html",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.2.1/downloads/index.html",
+          "link_type": "other"
+        },
+        {
+          "id": 12259334,
+          "name": "checksums GPG signature",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.2.1/release.sha256.asc",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.2.1/downloads/release.sha256.asc",
+          "link_type": "other"
+        },
+        {
+          "id": 12259333,
+          "name": "checksums",
+          "url": "https://gitlab-runner-downloads.s3.amazonaws.com/v19.2.1/release.sha256",
+          "direct_asset_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.2.1/downloads/release.sha256",
+          "link_type": "other"
+        }
+      ]
+    },
+    "evidences": [
+      {
+        "sha": "ac2cca15cc27e2b03113e015831b7aee7a1eff15a8ed",
+        "filepath": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.2.1/evidences/22723213.json",
+        "collected_at": "2026-07-30T08:09:04.683Z"
+      }
+    ],
+    "_links": {
+      "closed_issues_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/issues?release_tag=v19.2.1&scope=all&state=closed",
+      "closed_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.2.1&scope=all&state=closed",
+      "merged_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.2.1&scope=all&state=merged",
+      "opened_issues_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/issues?release_tag=v19.2.1&scope=all&state=opened",
+      "opened_merge_requests_url": "https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests?release_tag=v19.2.1&scope=all&state=opened",
+      "self": "https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v19.2.1"
+    }
+  }
+]

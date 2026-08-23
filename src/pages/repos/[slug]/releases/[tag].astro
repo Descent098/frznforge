@@ -1,37 +1,73 @@
 ---
+/**
+ * A single release page, for either origin (provider import or annotated tag).
+ *
+ * Downloads mix two very different things: assets uploaded to the provider, which live off
+ * this static site and so are marked as external links, and the source zip this build
+ * produced with `git archive`, which is local.
+ */
 import Base from '../../../../layouts/Base.astro';
 import RepoHeader from '../../../../components/RepoHeader.astro';
-import { archiveUrl, commitUrl, refFromSlug, refSlug, releasesOf, releasesUrl, treeUrl } from '../../../../lib/routes';
-import { renderMarkdown } from '../../../../lib/markdown';
+import { archiveUrl, commitUrl, refSlug, releasesUrl, resolveReleases, treeUrl } from '../../../../lib/routes';
+import { isTrustedSource, renderMarkdown } from '../../../../lib/markdown';
 import { getData, heatFor, relativeTime } from '../../../../lib/site';
-import type { Repo } from '../../../../lib/data/schema';
+import type { ReleaseAsset, Repo } from '../../../../lib/data/schema';
 
 export async function getStaticPaths() {
   const data = await getData();
-  return data.repos.flatMap((repo) =>
-    releasesOf(repo).map((t) => ({
-      params: { slug: repo.slug, tag: refSlug(t.name) },
-      props: { repo },
-    })),
-  );
+  return data.repos.flatMap((repo) => {
+    // a provider can report two releases against one tag; the tag owns the URL
+    const seen = new Set<string>();
+    return resolveReleases(repo)
+      .filter((r) => {
+        if (seen.has(r.tag)) return false;
+        seen.add(r.tag);
+        return true;
+      })
+      .map((r) => ({ params: { slug: repo.slug, tag: refSlug(r.tag) }, props: { repo, tag: r.tag } }));
+  });
 }
 
-interface Props { repo: Repo }
-const { repo } = Astro.props;
+interface Props { repo: Repo; tag: string }
+const { repo, tag } = Astro.props;
 const now = new Date();
-const tagName = refFromSlug(Astro.params.tag!);
-const rel = releasesOf(repo).find((t) => t.name === tagName)!;
-const isLatest = releasesOf(repo)[0]?.name === rel.name;
-const archive = repo.archives.find((a) => a.kind === 'tag' && a.ref === rel.name) ?? null;
-const hasTree = !!repo.refTrees[rel.name];
+
+const releases = resolveReleases(repo);
+const rel = releases.find((r) => r.tag === tag)!;
+const isLatest = releases.findIndex((r) => !r.prerelease) === releases.indexOf(rel);
+
+const PROVIDER_LABELS = { github: 'GitHub', gitlab: 'GitLab', gitea: 'Gitea', forgejo: 'Forgejo' } as const;
+const providerLabel = repo.source.type === 'local' ? null : PROVIDER_LABELS[repo.source.type];
+
+/** `SiteRelease` carries no author, so read it back from whichever origin produced it. */
+const author =
+  rel.source === 'provider'
+    ? repo.releases.find((r) => r.tag === rel.tag)?.author ?? null
+    : repo.gitTags.find((t) => t.name === rel.tag)?.tagger?.name ?? null;
+
+const archive = repo.archives.find((a) => a.kind === 'tag' && a.ref === rel.tag) ?? null;
+const hasTree = !!repo.refTrees[rel.tag];
+const commit = rel.commit && repo.commits[rel.commit] ? rel.commit : null;
+const hasDownloads = rel.assets.length > 0 || archive !== null;
+const titled = rel.name.trim() !== '' && rel.name !== rel.tag;
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/** Rough kind-of-file icon from the MIME type the provider reported, falling back to the name. */
+function assetIcon(asset: ReleaseAsset): string {
+  const type = (asset.contentType ?? '').toLowerCase();
+  const name = asset.name.toLowerCase();
+  if (/zip|gzip|x-tar|x-xz|x-bzip|7z|compressed/.test(type) || /\.(zip|tar|tgz|txz|gz|xz|bz2|7z)$/.test(name)) return '#i-zip';
+  if (/^text\/|json|xml|yaml/.test(type) || /\.(txt|md|json|ya?ml|asc|sig|sha\d*|sha\d*sums?)$/.test(name)) return '#i-file';
+  if (/\.(exe|msi|dmg|pkg|deb|rpm|apk|appimage|whl|jar|nupkg)$/.test(name) || type === 'application/octet-stream') return '#i-package';
+  return '#i-download';
+}
 ---
-<Base title={`${rel.name} · Releases · ${repo.name}`} description={repo.description ?? undefined} active="repos">
+<Base title={`${titled ? rel.name : rel.tag} · Releases · ${repo.name}`} description={repo.description ?? undefined} active="repos">
   <div class="hf-container">
     <RepoHeader repo={repo} active="releases" />
 
@@ -39,26 +75,66 @@ function formatBytes(n: number): string {
       <p class="hf-release-backlink"><a href={releasesUrl(repo.slug)}><svg class="hf-i"><use href="#i-arrow-left" /></svg> All releases</a></p>
       <article class="hf-card hf-release-card hf-release-page">
         <header class="hf-release-head">
-          <h1>{rel.name}</h1>
+          <h1>{titled ? rel.name : rel.tag}</h1>
+          {titled && <code class="hf-release-tag">{rel.tag}</code>}
           {isLatest && <span class="hf-tag hf-release-latest">Latest</span>}
+          {rel.prerelease && <span class="hf-tag hf-release-pre">Pre-release</span>}
           <span class={`hf-age t-${heatFor(rel.date, now)}`} title={rel.date}>{relativeTime(rel.date, now)}</span>
         </header>
+
         <div class="hf-release-meta">
-          {rel.tagger && <span><svg class="hf-i"><use href="#i-people" /></svg> {rel.tagger.name}</span>}
-          {repo.commits[rel.target] ? (
-            <span><svg class="hf-i"><use href="#i-commit" /></svg> target <a href={commitUrl(repo.slug, rel.target)}><code>{rel.target.slice(0, 7)}</code></a></span>
+          {author && <span><svg class="hf-i"><use href="#i-people" /></svg> {author}</span>}
+          {commit ? (
+            <span><svg class="hf-i"><use href="#i-commit" /></svg> target <a href={commitUrl(repo.slug, commit)}><code>{commit.slice(0, 7)}</code></a></span>
+          ) : rel.commit ? (
+            <span><svg class="hf-i"><use href="#i-commit" /></svg> target <code>{rel.commit.slice(0, 7)}</code></span>
           ) : (
-            <span><svg class="hf-i"><use href="#i-commit" /></svg> target <code>{rel.target.slice(0, 7)}</code></span>
+            <span><svg class="hf-i"><use href="#i-tag" /></svg> tag <code>{rel.tag}</code></span>
           )}
-          {hasTree && <span><svg class="hf-i"><use href="#i-code" /></svg> <a href={treeUrl(repo.slug, rel.name)}>Browse source</a></span>}
+          {hasTree && <span><svg class="hf-i"><use href="#i-code" /></svg> <a href={treeUrl(repo.slug, rel.tag)}>Browse source</a></span>}
+          <span class="hf-release-origin">
+            <svg class="hf-i"><use href={rel.source === 'provider' ? '#i-package' : '#i-tag'} /></svg>
+            {rel.source === 'provider' ? (
+              rel.url ? (
+                <a href={rel.url} rel="noopener">source: {providerLabel ?? 'provider'} release <svg class="hf-i hf-ext-mark"><use href="#i-ext" /></svg></a>
+              ) : (
+                <>source: {providerLabel ?? 'provider'} release</>
+              )
+            ) : (
+              <>source: annotated tag</>
+            )}
+          </span>
         </div>
-        {rel.message && <div class="hf-md hf-release-notes" set:html={renderMarkdown(rel.message)} />}
+
+        {rel.body.trim() && <div class="hf-md hf-release-notes" set:html={renderMarkdown(rel.body, { trusted: isTrustedSource(repo.source) })} />}
+
         <footer class="hf-release-assets">
-          <h3>Assets</h3>
-          {archive ? (
-            <a class="hf-btn" href={archiveUrl(repo.slug, rel.name)}>
-              <svg class="hf-i"><use href="#i-zip" /></svg> Source code (zip) <small>{formatBytes(archive.bytes)}</small>
-            </a>
+          <h2>Downloads</h2>
+          {hasDownloads ? (
+            <ul class="hf-asset-list">
+              {rel.assets.map((asset) => (
+                <li>
+                  <a class="hf-asset" href={asset.url} rel="noopener">
+                    <svg class="hf-i"><use href={assetIcon(asset)} /></svg>
+                    <span class="hf-asset-name">{asset.name}</span>
+                    {asset.contentType && <span class="hf-asset-type">{asset.contentType}</span>}
+                    {asset.size > 0 && <span class="hf-asset-size">{formatBytes(asset.size)}</span>}
+                    <svg class="hf-i hf-ext-mark" aria-hidden="true"><use href="#i-ext" /></svg>
+                    <span class="hf-sr">(external link)</span>
+                  </a>
+                </li>
+              ))}
+              {archive && (
+                <li>
+                  <a class="hf-asset hf-asset--local" href={archiveUrl(repo.slug, rel.tag)}>
+                    <svg class="hf-i"><use href="#i-zip" /></svg>
+                    <span class="hf-asset-name">Source code (zip)</span>
+                    <span class="hf-asset-type">built from this mirror</span>
+                    <span class="hf-asset-size">{formatBytes(archive.bytes)}</span>
+                  </a>
+                </li>
+              )}
+            </ul>
           ) : (
             <p class="hf-muted">No downloadable assets for this release.</p>
           )}

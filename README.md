@@ -35,6 +35,11 @@ body). Per-repo metadata (description, links, tags, template flag, license) come
 `.frznforge.json` committed inside each repo, overridable from the site config. See
 [docs/user/configuration.md](docs/user/configuration.md).
 
+Repos hosted on GitHub, GitLab, Gitea or Forgejo can be imported instead of pointed at
+locally — frznforge mirror-clones them and reads their releases from the provider API.
+`npm run frznforge -- init` walks an account and writes the config entries for you. See
+[docs/user/importing.md](docs/user/importing.md).
+
 ## Development
 
 ```bash

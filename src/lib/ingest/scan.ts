@@ -2,7 +2,17 @@
  * scanRepo — orchestrates the extractors for one local repository and assembles a `Repo`
  * in schema key order. Never reads the working tree.
  */
-import type { Archive, Readme, RefTree, Repo, RepoMetaInput, Warning } from '../data/schema';
+import type {
+  Archive,
+  Readme,
+  RefTree,
+  Release,
+  Repo,
+  RepoLinks,
+  RepoMetaInput,
+  RepoSource,
+  Warning,
+} from '../data/schema';
 import { contributorsFromCommits } from './contributors';
 import { loadCommits } from './commits';
 import { gitBuffer, isGitRepo, looksBinary, readBlob } from './git';
@@ -16,7 +26,37 @@ import { listRootTree, scanTree } from './tree';
 export interface ScanSource {
   absPath: string;
   slug?: string;
+  /**
+   * Display name to use when no metadata layer sets one. Defaults to the repo directory
+   * basename; remote sources pass the name from the config instead, because their directory
+   * is a sanitised cache key rather than the repo's real name.
+   */
+  defaultName?: string;
   overrides?: RepoMetaInput;
+  /**
+   * Metadata reported by a hosting provider (schema v3). Lowest of the three metadata
+   * layers: config `overrides` > the repo's committed `.frznforge.json` > this.
+   */
+  providerMeta?: RepoMetaInput | null;
+  /** Artifact `source` value; defaults to `{ type: 'local', path: absPath }`. */
+  source?: RepoSource;
+  /** Release mode when neither `.frznforge.json` nor `overrides` picks one. Default 'tags'. */
+  releaseMode?: 'tags' | 'provider';
+  /** Provider-imported releases; only kept when the effective mode is 'provider'. */
+  releases?: Release[];
+}
+
+/** Merge two metadata layers field-by-field, `high` winning wherever it is set. */
+function layerMeta(high: RepoMetaInput | null, low: RepoMetaInput | null | undefined): RepoMetaInput | null {
+  if (!low) return high;
+  if (!high) return low;
+  const merged: RepoMetaInput = { ...low };
+  for (const [key, value] of Object.entries(high)) {
+    if (value !== undefined) (merged as Record<string, unknown>)[key] = value;
+  }
+  const links: RepoLinks = { ...low.links, ...high.links };
+  if (Object.keys(links).length > 0) merged.links = links;
+  return merged;
 }
 
 export interface ScanOptions {
@@ -145,7 +185,16 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
   // metadata
   const metaFile = head ? await readRepoMetaFile(repoPath, head) : { meta: null, warnings: [] as Warning[] };
   metaFile.warnings.forEach(warn);
-  const meta = mergeMeta({ name: repoBasename(repoPath) }, metaFile.meta, source.overrides);
+  // Precedence: config overrides > .frznforge.json > provider metadata > derived defaults.
+  // The two lower layers are pre-merged so mergeMeta's own two-layer pick still applies.
+  const meta = mergeMeta(
+    { name: source.defaultName ?? repoBasename(repoPath) },
+    layerMeta(metaFile.meta, source.providerMeta),
+    source.overrides,
+  );
+  const releaseMode: 'tags' | 'provider' =
+    source.overrides?.releaseMode ?? metaFile.meta?.releaseMode ?? source.releaseMode ?? 'tags';
+  const releases = releaseMode === 'provider' ? (source.releases ?? []) : [];
 
   // root-level files: license + readme
   const rootEntries = head ? await listRootTree(repoPath, head) : [];
@@ -178,12 +227,13 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
     slug,
     name: meta.name,
     description: meta.description,
-    source: { type: 'local', path: repoPath },
+    source: source.source ?? { type: 'local', path: repoPath },
     links: meta.links,
     tags: meta.tags,
     template: meta.template,
     license,
-    releaseMode: meta.releaseMode,
+    releaseMode,
+    releases,
     empty,
     defaultBranch: def.name,
     branches: branchesRes.branches,

@@ -1,20 +1,28 @@
 /**
  * Playwright global setup: build the site from a deterministic FIXTURE artifact.
- *  1. create three git repos under tests/.tmp/e2e/repos (content, template, empty)
+ *  1. create the fixture git repos under tests/.tmp/e2e (local ones in repos/, the stand-in
+ *     "provider" ones in origins/)
  *  2. run the real ingest pipeline on them → tests/.tmp/e2e/data
  *  3. `astro build` with FRZNFORGE_OUT_DIR pointing at that data → tests/.tmp/e2e/dist
  * The webServer in playwright.config.ts then serves that dist.
+ *
+ * Nothing here touches the network — see `remoteDeps` for how the provider repos are faked.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveConfig } from '../../src/lib/config/index';
+import { resolveConfig, type RepoSourceConfig } from '../../src/lib/config/index';
 import userConfig from '../../frznforge.config';
-import { ingest, writeArtifact } from '../../src/lib/ingest';
+import { ensureMirror, ingest, writeArtifact, type PrepareRemoteDeps } from '../../src/lib/ingest';
+import type { ImportedRepoMeta, Importer } from '../../src/lib/importers/index';
+import type { Release } from '../../src/lib/data/schema';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const TMP = path.join(ROOT, 'tests', '.tmp', 'e2e');
 const REPOS = path.join(TMP, 'repos');
+/** Git repos that stand in for the provider's git server (never scanned directly). */
+const ORIGINS = path.join(TMP, 'origins');
+const CACHE = path.join(TMP, 'cache');
 const DATA = path.join(TMP, 'data');
 const DIST = path.join(TMP, 'dist');
 
@@ -39,13 +47,66 @@ function commitAll(cwd: string, message: string, date: string) {
   git(cwd, ['commit', '-q', '-m', message], date);
 }
 
-function makeRepo(name: string, init: (dir: string) => void) {
-  const dir = path.join(REPOS, name);
+function makeRepoIn(base: string, name: string, init: (dir: string) => void) {
+  const dir = path.join(base, name);
   fs.mkdirSync(dir, { recursive: true });
   git(dir, ['init', '-q', '-b', 'main']);
   init(dir);
   return dir;
 }
+
+function makeRepo(name: string, init: (dir: string) => void) {
+  return makeRepoIn(REPOS, name, init);
+}
+
+/* ---- provider stand-ins ---------------------------------------------------
+ * charlie and delta are ingested through the REAL remote code path —
+ * `prepareRemote` → `git clone --mirror` into the ingest cache → `scanRepo` on the bare
+ * mirror — with exactly two seams swapped so the build stays offline:
+ *   • `createImporter` returns a stub that hands back canned metadata + releases instead of
+ *     calling a REST API;
+ *   • `ensureMirror` is the production function, called with the local `origins/<name>`
+ *     directory as the clone URL instead of the provider's https URL.
+ * Everything downstream (cache layout, mirror scan, metadata precedence, releaseMode,
+ * warnings) is production code, so the artifact these produce is shaped exactly like a real
+ * provider import.
+ * ------------------------------------------------------------------------ */
+
+/** Stable key for a configured remote source (fixture repo names are unique). */
+function remoteKey(source: RepoSourceConfig): string {
+  if (source.type === 'local') return '';
+  return source.type === 'gitlab' ? source.project : `${source.owner}/${source.repo}`;
+}
+
+interface RemoteFixture {
+  /** Local git repo the mirror is cloned from. */
+  origin: string;
+  meta: ImportedRepoMeta;
+  releases: Release[];
+}
+
+const remoteFixtures = new Map<string, RemoteFixture>();
+
+const remoteDeps: PrepareRemoteDeps = {
+  // No token is ever resolved: the env the token comes from is empty.
+  env: {},
+  createImporter: (source) => {
+    const fixture = remoteFixtures.get(remoteKey(source));
+    if (!fixture) return null;
+    const importer: Importer = {
+      provider: source.type as Importer['provider'],
+      fetchMeta: async () => fixture.meta,
+      fetchReleases: async () => ({ releases: fixture.releases, truncated: false }),
+    };
+    return importer;
+  },
+  ensureMirror: (source, cachePath, opts) => {
+    const fixture = remoteFixtures.get(remoteKey(source));
+    if (!fixture) throw new Error(`no remote fixture registered for ${remoteKey(source)}`);
+    // forward slashes: git accepts them on Windows and they keep the arg quoting simple
+    return ensureMirror(source, cachePath, { ...opts, cloneUrl: fixture.origin.replace(/\\/g, '/') });
+  },
+};
 
 export default async function globalSetup() {
   fs.rmSync(TMP, { recursive: true, force: true });
@@ -99,9 +160,108 @@ export default async function globalSetup() {
   // empty — no commits at all
   makeRepo('empty', () => {});
 
+  // charlie — a GitHub-hosted repo whose releases come from the provider API
+  const charlieOrigin = makeRepoIn(ORIGINS, 'charlie', (d) => {
+    fs.writeFileSync(path.join(d, 'README.md'), '# Charlie\n\nMirrored from a provider.\n');
+    fs.mkdirSync(path.join(d, 'src'));
+    fs.writeFileSync(path.join(d, 'src', 'main.ts'), 'export const charlie = true;\n'.repeat(12));
+    commitAll(d, 'import charlie', '2024-03-10T00:00:00Z');
+    git(d, ['tag', '-a', 'v2.1.0', '-m', 'Sunrise'], '2024-04-01T12:00:00Z');
+    fs.writeFileSync(path.join(d, 'src', 'main.ts'), 'export const charlie = true;\nexport const rc = 1;\n');
+    commitAll(d, 'prepare the release candidate', '2024-05-01T12:00:00Z');
+    git(d, ['tag', '-a', 'v2.2.0-rc.1', '-m', 'Release candidate'], '2024-05-01T12:00:00Z');
+  });
+  remoteFixtures.set('fixture/charlie', {
+    origin: charlieOrigin,
+    meta: {
+      name: 'charlie',
+      description: 'Charlie fixture: metadata imported from a provider API.',
+      homepage: 'https://example.com/charlie',
+      topics: ['imported', 'provider'],
+      license: 'Apache-2.0',
+      defaultBranch: 'main',
+      webUrl: 'https://github.com/fixture/charlie',
+      cloneUrl: 'https://github.com/fixture/charlie.git',
+      issuesUrl: 'https://github.com/fixture/charlie/issues',
+      template: false,
+      archived: false,
+    },
+    releases: [
+      {
+        tag: 'v2.1.0',
+        // a title distinct from the tag: exercises the name + tag-chip branch
+        name: 'Sunrise',
+        body: "## What's new\n\n- imported over the provider API\n- ships two uploaded assets\n\nSee `docs/` for the details.\n",
+        url: 'https://github.com/fixture/charlie/releases/tag/v2.1.0',
+        prerelease: false,
+        publishedAt: '2024-04-01T12:00:00Z',
+        author: 'Fixture Releaser',
+        assets: [
+          {
+            name: 'charlie-2.1.0-linux-x64.tar.gz',
+            url: 'https://github.com/fixture/charlie/releases/download/v2.1.0/charlie-2.1.0-linux-x64.tar.gz',
+            size: 1_048_576,
+            contentType: 'application/gzip',
+          },
+          {
+            name: 'charlie-2.1.0.sha256',
+            url: 'https://github.com/fixture/charlie/releases/download/v2.1.0/charlie-2.1.0.sha256',
+            size: 96,
+            contentType: 'text/plain',
+          },
+        ],
+      },
+      {
+        tag: 'v2.2.0-rc.1',
+        name: 'v2.2.0-rc.1',
+        // Imported release notes are written by whoever can publish on the forge, so this
+        // body carries the payload an XSS regression would put on the generated page.
+        body:
+          'Release candidate. **Not** for production use.\n\n' +
+          '<script>window.__PWNED = 1</script>\n\n' +
+          '<img src=x onerror="window.__PWNED = 2">\n\n' +
+          '[boom](javascript:window.__PWNED=3)\n',
+        url: 'https://github.com/fixture/charlie/releases/tag/v2.2.0-rc.1',
+        prerelease: true,
+        publishedAt: '2024-05-01T12:00:00Z',
+        author: 'Fixture Releaser',
+        assets: [],
+      },
+    ],
+  });
+
+  // delta — a provider repo that has published nothing yet (and has no annotated tags, so
+  // `resolveReleases` cannot fall back to git): the provider-flavoured empty state
+  const deltaOrigin = makeRepoIn(ORIGINS, 'delta', (d) => {
+    fs.writeFileSync(path.join(d, 'README.md'), '# Delta\n\nNothing released yet.\n');
+    fs.writeFileSync(path.join(d, 'app.ts'), 'export const delta = 0;\n'.repeat(8));
+    commitAll(d, 'first push', '2024-03-20T00:00:00Z');
+  });
+  remoteFixtures.set('fixture/delta', {
+    origin: deltaOrigin,
+    meta: {
+      name: 'delta',
+      description: 'Delta fixture: a Gitea repo with no releases.',
+      homepage: null,
+      topics: ['imported'],
+      license: null,
+      defaultBranch: 'main',
+      webUrl: 'https://gitea.example.com/fixture/delta',
+      cloneUrl: 'https://gitea.example.com/fixture/delta.git',
+      issuesUrl: null,
+      template: false,
+      archived: false,
+    },
+    releases: [],
+  });
+
   // uncommitted noise in alpha: must NOT show up anywhere
   fs.writeFileSync(path.join(alpha, 'UNTRACKED-SECRET.txt'), 'should never be published');
   fs.writeFileSync(path.join(alpha, 'README.md'), '# MODIFIED BUT NOT COMMITTED\n');
+
+  // resolveConfig honours these env vars; the fixture picks its own directories
+  delete process.env.FRZNFORGE_OUT_DIR;
+  delete process.env.FRZNFORGE_CACHE_DIR;
 
   const cfg = resolveConfig(
     {
@@ -110,13 +270,14 @@ export default async function globalSetup() {
         { type: 'local', path: path.join(REPOS, 'alpha') },
         { type: 'local', path: path.join(REPOS, 'bravo') },
         { type: 'local', path: path.join(REPOS, 'empty') },
+        { type: 'github', owner: 'fixture', repo: 'charlie' },
+        { type: 'gitea', host: 'https://gitea.example.com', owner: 'fixture', repo: 'delta' },
       ],
-      ingest: { ...(userConfig.ingest ?? {}), outDir: DATA },
+      ingest: { ...(userConfig.ingest ?? {}), outDir: DATA, cacheDir: CACHE },
     },
     ROOT,
   );
-  delete process.env.FRZNFORGE_OUT_DIR; // resolveConfig honours the env; be explicit here
-  const { data, blobs, archives } = await ingest({ ...cfg, outDir: DATA });
+  const { data, blobs, archives } = await ingest({ ...cfg, outDir: DATA }, {}, { remote: remoteDeps });
   await writeArtifact(data, blobs, archives, DATA);
 
   execFileSync('npx', ['astro', 'build', '--outDir', DIST], {

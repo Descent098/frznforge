@@ -5,7 +5,17 @@
  * Ref names appear in URLs as a "ref slug": '/' → '~' (git refnames can never contain '~'),
  * so `feat/zip` browses at /repos/<slug>/tree/feat~zip/.
  */
-import type { FileInfo, ForgeData, Repo, Tag, TreeEntry } from './data/schema';
+import type { FileInfo, ForgeData, ReleaseAsset, Repo, Tag, TreeEntry } from './data/schema';
+
+/**
+ * Code-point string order, matching what the importers use when they sort the artifact
+ * (`compareStrings` in src/lib/importers/http.ts). `localeCompare` must not be used for
+ * anything that decides rendered order: it depends on the build machine's ICU data, so two
+ * machines would emit different HTML from the same artifact.
+ */
+function cmp(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
 export interface RepoRoute { slug: string; url: string; repo: Repo }
 
@@ -53,7 +63,7 @@ export function browsableRefs(repo: Repo): BrowsableRef[] {
     });
   }
   const rest = Object.values(repo.refTrees).sort(
-    (a, b) => Number(a.kind === 'tag') - Number(b.kind === 'tag') || a.name.localeCompare(b.name),
+    (a, b) => Number(a.kind === 'tag') - Number(b.kind === 'tag') || cmp(a.name, b.name),
   );
   for (const r of rest) {
     out.push({ name: r.name, slugged: refSlug(r.name), kind: r.kind, isDefault: false, commit: r.commit, tree: r.tree, files: r.files });
@@ -82,9 +92,73 @@ export const archiveUrl = (slug: string, ref: string) => `/repos/${slug}/archive
 
 /* ---- releases ------------------------------------------------------------- */
 
-/** Releases = annotated tags, newest first (releaseMode 'tags'). */
+/**
+ * Annotated tags, newest first — the tag-mode release list.
+ *
+ * Prefer `resolveReleases()`: this only sees git tags and so misses provider-imported
+ * releases. Kept because the tags page and the tag-mode pages read it directly.
+ */
 export function releasesOf(repo: Repo): Tag[] {
-  return repo.gitTags.filter((t) => t.annotated).sort((a, b) => b.date.localeCompare(a.date));
+  return repo.gitTags.filter((t) => t.annotated).sort((a, b) => cmp(b.date, a.date) || cmp(a.name, b.name));
+}
+
+/**
+ * One release as the site renders it, from either origin.
+ *
+ * `source` says where it came from: `'provider'` releases carry a body written on the forge
+ * plus downloadable `assets`; `'tag'` releases are annotated git tags, whose message is the
+ * body and which never have assets. `commit` is the commit the tag points at, or `null`
+ * when a provider release names a tag this mirror does not have.
+ */
+export interface SiteRelease {
+  /** Tag name — also the URL segment (`releaseUrl(slug, tag)`). */
+  tag: string;
+  name: string;
+  /** Markdown: the provider's release notes, or the annotated tag message. */
+  body: string;
+  /** Release page on the provider; always null for tag-derived releases. */
+  url: string | null;
+  prerelease: boolean;
+  /** Publish date (provider) or tag date, ISO UTC. */
+  date: string;
+  assets: ReleaseAsset[];
+  source: 'provider' | 'tag';
+  commit: string | null;
+}
+
+/**
+ * The release list for a repo, newest first (date desc, tag asc as tiebreak).
+ *
+ * Provider-imported releases win when there are any; otherwise this falls back to the
+ * annotated-tag derivation, so a repo that switches `releaseMode` — or a remote whose
+ * releases could not be fetched this build — still renders.
+ */
+export function resolveReleases(repo: Repo): SiteRelease[] {
+  const out: SiteRelease[] =
+    repo.releases.length > 0
+      ? repo.releases.map((r) => ({
+          tag: r.tag,
+          name: r.name,
+          body: r.body,
+          url: r.url,
+          prerelease: r.prerelease,
+          date: r.publishedAt,
+          assets: r.assets,
+          source: 'provider' as const,
+          commit: repo.gitTags.find((t) => t.name === r.tag)?.target ?? null,
+        }))
+      : releasesOf(repo).map((t) => ({
+          tag: t.name,
+          name: t.name,
+          body: t.message ?? '',
+          url: null,
+          prerelease: false,
+          date: t.date,
+          assets: [],
+          source: 'tag' as const,
+          commit: t.target,
+        }));
+  return out.sort((a, b) => cmp(b.date, a.date) || cmp(a.tag, b.tag));
 }
 
 /* ---- exhaustive route listing (pages + sync tests) ------------------------- */
@@ -141,7 +215,10 @@ export function repoRoutes(repo: Repo): string[] {
     for (let p = 1; p <= commitsPageCount(repo, b.name); p++) urls.push(commitsUrl(repo.slug, b.name, p));
   }
   for (const sha of Object.keys(repo.commits)) urls.push(commitUrl(repo.slug, sha));
-  for (const t of releasesOf(repo)) urls.push(releaseUrl(repo.slug, t.name));
+  // one page per release, from provider data when there is any (dedupe: a provider may
+  // report two releases against the same tag)
+  const releaseUrls = new Set(resolveReleases(repo).map((r) => releaseUrl(repo.slug, r.tag)));
+  for (const url of releaseUrls) urls.push(url);
   for (const a of repo.archives) urls.push(archiveUrl(repo.slug, a.ref));
   return urls;
 }

@@ -1,15 +1,101 @@
 /**
  * Render markdown strings (READMEs, release notes) to HTML at build time.
- * Content is the site owner's own — no sanitisation pass (same trust model as the
- * profile.md content collection). Relative links/images are left as-is for now; Phase 3
- * rewrites them to file routes.
+ *
+ * Two trust levels, because since schema v3 not all of this content is the site owner's:
+ *
+ *  - **trusted** (default) — the owner's own writing: `content/profile.md`, and repos
+ *    configured as `type: 'local'`. Rendered with raw HTML passed through, same as before.
+ *  - **untrusted** — anything that came off a forge: an imported repo's README and its
+ *    provider release notes. `docs/user/importing.md` explicitly invites importing repos you
+ *    do not control, so anyone who can push a README or publish a release there would
+ *    otherwise get arbitrary `<script>` onto this site's origin (the output is emitted with
+ *    `set:html`). For that content raw HTML blocks and inline tags are dropped, and link and
+ *    image URLs are restricted to http/https/mailto and relative targets.
+ *
+ * Dropping raw HTML rather than allow-listing it is deliberate: a partial HTML sanitiser is
+ * a liability, and the alternative here would mean shipping one with no dependencies.
+ *
+ * Relative links/images are left as-is for now; Phase 3 rewrites them to file routes.
  */
-import { Marked } from 'marked';
+import { Marked, type Tokens } from 'marked';
 
-const marked = new Marked({ gfm: true, breaks: false });
+const OPTIONS = { gfm: true, breaks: false } as const;
 
-export function renderMarkdown(src: string): string {
-  return marked.parse(src, { async: false }) as string;
+/** URL schemes a link or image may use; everything else becomes an inert `#`. */
+const SAFE_SCHEMES = new Set(['http', 'https', 'mailto']);
+
+/**
+ * Decode the entity escapes a payload uses to hide a scheme (`&#106;avascript:`). Only used
+ * to *inspect* a URL — never to build the rendered output.
+ */
+function decodeEntities(value: string): string {
+  return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);?/gi, (whole, body: string) => {
+    if (body.startsWith('#')) {
+      const code = body[1]?.toLowerCase() === 'x' ? Number.parseInt(body.slice(2), 16) : Number.parseInt(body.slice(1), 10);
+      return Number.isInteger(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+    }
+    const named: Record<string, string> = { amp: '&', colon: ':', tab: '\t', newline: '\n', lt: '<', gt: '>' };
+    return named[body.toLowerCase()] ?? whole;
+  });
+}
+
+/**
+ * `href` unchanged when it is safe to navigate to, `#` when it is not.
+ *
+ * A URL with no scheme (relative, or a `#fragment`) is fine; a URL with one must name a
+ * scheme on the allow-list, which rules out `javascript:`, `data:` and `vbscript:`.
+ */
+export function safeUrl(href: string): string {
+  // Whitespace and control characters go first: `java&#9;script:` still navigates.
+  const probe = decodeEntities(href).replace(/[\s\u0000-\u001f\u007f]+/g, '').toLowerCase();
+  const scheme = /^([a-z][a-z0-9+.-]*):/.exec(probe);
+  if (!scheme) return href;
+  return SAFE_SCHEMES.has(scheme[1]!) ? href : '#';
+}
+
+const trusted = new Marked(OPTIONS);
+
+/**
+ * Renderer overrides for content frznforge did not author. Returning `false` from an override
+ * tells marked to fall through to its own implementation, so link/image only rewrite the URL
+ * and keep every other rendering detail (escaping of titles and alt text included).
+ */
+const untrusted = new Marked(OPTIONS).use({
+  renderer: {
+    /** Raw HTML — block (`<script>…`) and inline (`<img onerror=…>`) both land here. */
+    html(): string {
+      return '';
+    },
+    link(token: Tokens.Link): false {
+      token.href = safeUrl(token.href);
+      return false;
+    },
+    image(token: Tokens.Image): false {
+      token.href = safeUrl(token.href);
+      return false;
+    },
+  },
+});
+
+export interface RenderOptions {
+  /**
+   * False for content imported from a forge. Defaults to true (the owner's own content), so
+   * an existing call site keeps its old behaviour.
+   */
+  trusted?: boolean;
+}
+
+export function renderMarkdown(src: string, options: RenderOptions = {}): string {
+  const engine = options.trusted === false ? untrusted : trusted;
+  return engine.parse(src, { async: false }) as string;
+}
+
+/**
+ * Whether a repo's markdown is the site owner's own. Only `type: 'local'` is — every other
+ * source is a repo pulled off someone else's forge.
+ */
+export function isTrustedSource(source: { type: string }): boolean {
+  return source.type === 'local';
 }
 
 /** Heuristic: treat .md/.markdown/.mdown and extensionless README as markdown. */

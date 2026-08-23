@@ -14,11 +14,26 @@ export interface RepoMetaFileResult {
   warnings: Warning[];
 }
 
-/** Truncate to MAX_DESCRIPTION chars (297 + "…"). Returns the input when short enough. */
+/**
+ * True when `desc` is longer than the artifact allows.
+ *
+ * Counted in UTF-16 code units, because that is what `z.string().max(300)` counts. Measuring
+ * code points here instead would let a description of 300 emoji (600 units) sail past this
+ * check and then fail `parseForgeData`, taking the whole build down over remote data.
+ */
+export function isDescriptionTooLong(desc: string): boolean {
+  return desc.length > MAX_DESCRIPTION;
+}
+
+/** Truncate to MAX_DESCRIPTION code units (299 + "…"). Returns the input when short enough. */
 export function truncateDescription(desc: string): string {
-  const chars = Array.from(desc);
-  if (chars.length <= MAX_DESCRIPTION) return desc;
-  return chars.slice(0, MAX_DESCRIPTION - 3).join('') + '…';
+  if (!isDescriptionTooLong(desc)) return desc;
+  let end = MAX_DESCRIPTION - 1;
+  // Never cut between the two halves of a surrogate pair — that produces a lone surrogate,
+  // which is a valid JS string but mojibake everywhere it is rendered.
+  const lead = desc.charCodeAt(end - 1);
+  if (lead >= 0xd800 && lead <= 0xdbff) end -= 1;
+  return desc.slice(0, end) + '…';
 }
 
 /**
@@ -44,7 +59,7 @@ export async function readRepoMetaFile(repo: string, treeish: string): Promise<R
   }
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
     const obj = parsed as Record<string, unknown>;
-    if (typeof obj.description === 'string' && Array.from(obj.description).length > MAX_DESCRIPTION) {
+    if (typeof obj.description === 'string' && isDescriptionTooLong(obj.description)) {
       obj.description = truncateDescription(obj.description);
       warnings.push({
         code: 'description-truncated',
@@ -74,7 +89,7 @@ export interface MergedMeta {
   template: boolean;
   /** SPDX override, if any. */
   license: string | null;
-  releaseMode: 'tags';
+  releaseMode: 'tags' | 'provider';
 }
 
 /** Site-config overrides > in-repo file > derived defaults. */
@@ -83,14 +98,17 @@ export function mergeMeta(
   fileMeta: RepoMetaInput | null,
   overrides: RepoMetaInput | undefined,
 ): MergedMeta {
-  if (overrides?.description !== undefined && Array.from(overrides.description).length > MAX_DESCRIPTION) {
+  if (overrides?.description !== undefined && isDescriptionTooLong(overrides.description)) {
     throw new Error(
       `config overrides.description for '${defaults.name}' is longer than ${MAX_DESCRIPTION} characters`,
     );
   }
   const pick = <K extends keyof RepoMetaInput>(k: K): RepoMetaInput[K] | undefined =>
     overrides?.[k] !== undefined ? overrides[k] : fileMeta?.[k];
-  const links = pick('links') ?? {};
+  // `links` merges per key rather than being picked wholesale (which is what every other
+  // field does), matching layerMeta in scan.ts: adding a `donations` link in the config must
+  // not delete the homepage/issues/upstream links the lower layers derived.
+  const links: RepoLinks = { ...fileMeta?.links, ...overrides?.links };
   return {
     name: pick('name') ?? defaults.name,
     description: pick('description') ?? null,

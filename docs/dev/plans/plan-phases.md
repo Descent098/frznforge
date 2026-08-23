@@ -158,33 +158,36 @@ Tests
 
 ---
 
-## Phase 5 — Importers *(next)*
+## Phase 5 — Importers ✅ *(done 2026-08-23)*
 
 Goal: repos that live elsewhere can be pulled in on every build.
 
 Ships
-- [ ] Importer interface + implementations: GitHub, GitLab, Gitea, Forgejo (shared
+- [x] Importer interface + implementations: GitHub, GitLab, Gitea, Forgejo (shared
   Gitea-API base), and "local path" as the existing default.
-- [ ] Interactive `npm run frznforge init` (or `setup`) command: pick provider, auth token
+- [x] Interactive `npm run frznforge init` (or `setup`) command: pick provider, auth token
   (from env, never written to config), select repos, writes them into
   `frznforge.config`.
-- [ ] On `npm run build`: clone/fetch configured remotes into a cache dir, then run the
+- [x] On `npm run build`: clone/fetch configured remotes into a cache dir, then run the
   Phase 1 scanner on them. Incremental fetch where possible.
-- [ ] Release import from each provider; per-repo override to use tag-based releases even
+- [x] Release import from each provider; per-repo override to use tag-based releases even
   when hosted on a forge.
-- [ ] Rate-limit handling and clear error messages when a token is missing/expired.
+- [x] Rate-limit handling and clear error messages when a token is missing/expired.
 
 Done when
-- [ ] A fresh checkout with a token in env can build a site containing at least one repo from
-  each supported provider (verified manually; CI uses recorded fixtures).
+- [x] A fresh checkout can build a site containing at least one repo from each supported
+  provider — verified live via `npm run smoke:remote` (GitHub Descent098/sdu, GitLab
+  gitlab-org/release-cli, Gitea gitea/tea, Forgejo codeberg.org dnkl/fuzzel): 4 repos,
+  86 provider releases, 1,309 assets, 15,988 pages built. Run anonymously (public repos);
+  a token in env is picked up and only raises the rate limit. CI uses recorded fixtures.
 
 Tests
-- [ ] Unit: each importer against recorded HTTP fixtures (no live network in CI).
-- [ ] Sync: imported release list ↔ release pages; imported repo ↔ listing entry.
+- [x] Unit: each importer against recorded HTTP fixtures (no live network in CI).
+- [x] Sync: imported release list ↔ release pages; imported repo ↔ listing entry.
 
 ---
 
-## Phase 6 — Notes & organizations
+## Phase 6 — Notes & organizations *(next)*
 
 Goal: the two remaining "content types".
 
@@ -214,7 +217,10 @@ Ships
 - [ ] Insights page per repo: commits over time, contributors over time, lines-of-code over
   time (computed at ingest from sampled commits to keep builds bounded).
 - [ ] Performance pass: build caching between runs, lazy-generated heavy pages, asset
-  budgets.
+  budgets. **Measured 2026-08-23:** four real remote repos (534 files, 27+22+7+2 branches)
+  generate **15,988 pages in 5m23s** — the multiplier is tree/blob/raw routes *per branch*.
+  Options: cap browsable branches like `ingest.tagTrees` does for tags, generate blob pages
+  only for the default branch (others via a client-side viewer), or make it configurable.
 - [ ] Accessibility and responsive pass across all pages.
 - [ ] User docs in `docs/user/`: quick start, config reference, deploy guides (GitHub Pages,
   Cloudflare Pages, any static host), migrating from a forge.

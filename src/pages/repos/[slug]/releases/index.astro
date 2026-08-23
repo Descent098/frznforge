@@ -1,9 +1,14 @@
 ---
+/**
+ * Releases index. Works for both origins: `resolveReleases` prefers provider-imported
+ * releases and falls back to annotated tags, so a repo whose remote could not be fetched
+ * this build still renders whatever git knows about.
+ */
 import Base from '../../../../layouts/Base.astro';
 import RepoHeader from '../../../../components/RepoHeader.astro';
-import { archiveUrl, commitUrl, releaseUrl, releasesOf } from '../../../../lib/routes';
-import { renderMarkdown } from '../../../../lib/markdown';
-import { getData, heatFor, relativeTime } from '../../../../lib/site';
+import ReleaseCard from '../../../../components/ReleaseCard.astro';
+import { resolveReleases } from '../../../../lib/routes';
+import { getData } from '../../../../lib/site';
 import type { Repo } from '../../../../lib/data/schema';
 
 export async function getStaticPaths() {
@@ -14,14 +19,19 @@ export async function getStaticPaths() {
 interface Props { repo: Repo }
 const { repo } = Astro.props;
 const now = new Date();
-const releases = releasesOf(repo);
+const releases = resolveReleases(repo);
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
-const archiveFor = (name: string) => repo.archives.find((a) => a.kind === 'tag' && a.ref === name) ?? null;
+const PROVIDER_LABELS = { github: 'GitHub', gitlab: 'GitLab', gitea: 'Gitea', forgejo: 'Forgejo' } as const;
+const providerLabel = repo.source.type === 'local' ? null : PROVIDER_LABELS[repo.source.type];
+
+/** "Latest" marks the newest release a visitor should actually install. */
+const latestIndex = releases.findIndex((r) => !r.prerelease);
+
+/**
+ * Empty state depends on where releases were *supposed* to come from: telling someone with a
+ * provider-backed repo to run `git tag -a` would be wrong advice.
+ */
+const providerEmpty = releases.length === 0 && repo.releaseMode === 'provider' && providerLabel !== null;
 ---
 <Base title={`Releases · ${repo.name}`} description={repo.description ?? undefined} active="repos">
   <div class="hf-container">
@@ -31,37 +41,20 @@ const archiveFor = (name: string) => repo.archives.find((a) => a.kind === 'tag' 
       {releases.length === 0 ? (
         <div class="hf-card hf-empty">
           <svg class="hf-i"><use href="#i-package" /></svg>
-          <p><strong>No releases yet.</strong> Releases are created from annotated tags — <code>git tag -a v1.0.0 -m '...'</code></p>
+          {providerEmpty ? (
+            <p><strong>No releases published on {providerLabel} yet.</strong> They will appear here on the next build once the first one is published.</p>
+          ) : (
+            <p><strong>No releases yet.</strong> Releases are created from annotated tags — <code>git tag -a v1.0.0 -m '...'</code></p>
+          )}
         </div>
       ) : (
-        <div class="hf-release-list">
-          {releases.map((rel, i) => {
-            const archive = archiveFor(rel.name);
-            return (
-              <article class="hf-card hf-release-card">
-                <header class="hf-release-head">
-                  <h2><a href={releaseUrl(repo.slug, rel.name)}>{rel.name}</a></h2>
-                  {i === 0 && <span class="hf-tag hf-release-latest">Latest</span>}
-                  <span class={`hf-age t-${heatFor(rel.date, now)}`} title={rel.date}>{relativeTime(rel.date, now)}</span>
-                </header>
-                <div class="hf-release-meta">
-                  {rel.tagger && <span><svg class="hf-i"><use href="#i-people" /></svg> {rel.tagger.name}</span>}
-                  {repo.commits[rel.target] && (
-                    <span><svg class="hf-i"><use href="#i-commit" /></svg> <a href={commitUrl(repo.slug, rel.target)}><code>{rel.target.slice(0, 7)}</code></a></span>
-                  )}
-                </div>
-                {rel.message && <div class="hf-md hf-release-notes" set:html={renderMarkdown(rel.message)} />}
-                {archive && (
-                  <footer class="hf-release-assets">
-                    <a class="hf-btn hf-btn--sm" href={archiveUrl(repo.slug, rel.name)}>
-                      <svg class="hf-i"><use href="#i-zip" /></svg> Source code (zip) <small>{formatBytes(archive.bytes)}</small>
-                    </a>
-                  </footer>
-                )}
-              </article>
-            );
-          })}
-        </div>
+        <ol class="hf-release-list" aria-label={`Releases of ${repo.name}, newest first`}>
+          {releases.map((release, i) => (
+            <li>
+              <ReleaseCard repo={repo} release={release} isLatest={i === latestIndex} providerLabel={providerLabel} now={now} />
+            </li>
+          ))}
+        </ol>
       )}
     </div>
   </div>

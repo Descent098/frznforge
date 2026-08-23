@@ -14,7 +14,7 @@
  */
 import { z } from 'astro/zod';
 
-export const SCHEMA_VERSION = 2 as const;
+export const SCHEMA_VERSION = 3 as const;
 
 /* ---- primitives -------------------------------------------------------- */
 
@@ -48,8 +48,11 @@ export const RepoMetaInput = z.object({
   template: z.boolean().optional(),
   /** SPDX id override, e.g. "MIT". When absent, ingest detects from a LICENSE file. */
   license: z.string().min(1).optional(),
-  /** How releases are produced. Phase 1 supports only 'tags'. */
-  releaseMode: z.enum(['tags']).optional(),
+  /**
+   * How releases are produced: `'tags'` derives them from annotated git tags,
+   * `'provider'` imports them from the hosting forge's API (schema v3, remote sources only).
+   */
+  releaseMode: z.enum(['tags', 'provider']).optional(),
 });
 export type RepoMetaInput = z.infer<typeof RepoMetaInput>;
 
@@ -182,6 +185,53 @@ export const Readme = z.object({
 });
 export type Readme = z.infer<typeof Readme>;
 
+/* ---- releases (schema v3) ------------------------------------------------ */
+
+/**
+ * A downloadable file attached to a provider release.
+ *
+ * `url` is a plain string, not a validated URL: some providers (GitLab release asset
+ * links) hand out host-relative paths, and a schema rejection there would hard-fail the
+ * build. Importers should emit an absolute URL whenever the API gives them one.
+ *
+ * Nothing volatile lives here — download counters are deliberately NOT imported, because
+ * they would change the artifact between two builds of the same commits.
+ */
+export const ReleaseAsset = z.object({
+  name: z.string(),
+  url: z.string(),
+  size: z.number().int().nonnegative(),
+  /** MIME type reported by the provider, or null when it reports none. */
+  contentType: z.string().nullable(),
+});
+export type ReleaseAsset = z.infer<typeof ReleaseAsset>;
+
+/**
+ * A release imported from a hosting provider (`Repo.releaseMode === 'provider'`).
+ *
+ * Tag-mode repos have `Repo.releases === []` and the site derives releases from annotated
+ * tags instead (see `resolveReleases` in src/lib/routes.ts).
+ *
+ * `publishedAt` must be normalised to `IsoDate` (UTC, seconds precision) by the importer —
+ * providers return varying precision and offsets, and the artifact has to be deterministic.
+ */
+export const Release = z.object({
+  /** Tag name the release points at; matches a `Tag.name` when the tag exists locally. */
+  tag: z.string(),
+  /** Display title. Importers fall back to the tag name when the provider has no title. */
+  name: z.string(),
+  /** Release notes as markdown (rendered by the site). Empty string when there are none. */
+  body: z.string(),
+  /** Release page on the provider, or null. Plain string for the same reason as `ReleaseAsset.url`. */
+  url: z.string().nullable(),
+  prerelease: z.boolean(),
+  publishedAt: IsoDate,
+  /** Provider username/display name of the publisher, or null. */
+  author: z.string().nullable(),
+  assets: z.array(ReleaseAsset),
+});
+export type Release = z.infer<typeof Release>;
+
 /* ---- warnings ----------------------------------------------------------- */
 
 export const WarningCode = z.enum([
@@ -203,6 +253,14 @@ export const WarningCode = z.enum([
   'commits-capped',
   /** More tags than `ingest.tagTrees`; older tags have no browsable tree / archive. */
   'tag-trees-capped',
+  /** A provider API call or mirror fetch failed (network/API error); cache used or repo skipped. */
+  'remote-fetch-failed',
+  /** The provider answered 401/403/404 and no token was configured for that source. */
+  'remote-auth-missing',
+  /** The provider rate-limited us; cache used or repo skipped. */
+  'remote-rate-limited',
+  /** A previously fetched mirror/cache was used without refreshing (`ingest.fetch: 'never'` or a failed fetch). */
+  'remote-cache-stale',
 ]);
 export type WarningCode = z.infer<typeof WarningCode>;
 
@@ -240,10 +298,76 @@ export type Archive = z.infer<typeof Archive>;
 
 /* ---- repo -------------------------------------------------------------- */
 
+/**
+ * Where the scanned repository came from.
+ *
+ * `local` is a directory on disk. The four remote variants (schema v3) describe a repo that
+ * was imported over a provider API and then mirror-cloned into the ingest cache; the scanner
+ * still runs on a bare git mirror, so everything downstream of `source` is identical.
+ *
+ * `host` is the API base URL the importer talked to (`https://api.github.com` for
+ * github.com), `webUrl` is the human-facing repo page and `cloneUrl` the URL a visitor can
+ * `git clone`. GitLab identifies a repo by its full namespaced `project` path
+ * (`group/sub/proj`) rather than owner + repo.
+ *
+ * Note there is no `path` on remote sources: use `repoSourceLabel(source)` when you just
+ * need something printable.
+ */
 export const RepoSource = z.discriminatedUnion('type', [
   z.object({ type: z.literal('local'), path: z.string() }),
+  z.object({
+    type: z.literal('github'),
+    host: z.url(),
+    owner: z.string(),
+    repo: z.string(),
+    webUrl: z.url(),
+    cloneUrl: z.url(),
+  }),
+  z.object({
+    type: z.literal('gitlab'),
+    host: z.url(),
+    /** Full namespaced project path, e.g. "group/sub/proj". */
+    project: z.string(),
+    webUrl: z.url(),
+    cloneUrl: z.url(),
+  }),
+  z.object({
+    type: z.literal('gitea'),
+    host: z.url(),
+    owner: z.string(),
+    repo: z.string(),
+    webUrl: z.url(),
+    cloneUrl: z.url(),
+  }),
+  z.object({
+    type: z.literal('forgejo'),
+    host: z.url(),
+    owner: z.string(),
+    repo: z.string(),
+    webUrl: z.url(),
+    cloneUrl: z.url(),
+  }),
 ]);
 export type RepoSource = z.infer<typeof RepoSource>;
+
+/** Every non-`local` `RepoSource.type`. */
+export type RemoteProvider = Exclude<RepoSource['type'], 'local'>;
+
+/** A `RepoSource` that came from a hosting provider rather than a local directory. */
+export type RemoteRepoSource = Extract<RepoSource, { type: RemoteProvider }>;
+
+/** True for provider-imported sources (everything except `local`). */
+export function isRemoteRepoSource(source: RepoSource): source is RemoteRepoSource {
+  return source.type !== 'local';
+}
+
+/**
+ * A short human-readable identifier for a source: the scanned path for local repos, the
+ * web URL for remote ones. Use it in warnings and log lines so they work for every variant.
+ */
+export function repoSourceLabel(source: RepoSource): string {
+  return source.type === 'local' ? source.path : source.webUrl;
+}
 
 export const Repo = z.object({
   slug: Slug,
@@ -254,7 +378,13 @@ export const Repo = z.object({
   tags: z.array(z.string()),
   template: z.boolean(),
   license: License.nullable(),
-  releaseMode: z.enum(['tags']),
+  /** `'tags'` = releases derived from annotated tags; `'provider'` = imported (schema v3). */
+  releaseMode: z.enum(['tags', 'provider']),
+  /**
+   * Provider-imported releases, newest first (`publishedAt` desc, `tag` asc as tiebreak).
+   * Always `[]` when `releaseMode` is `'tags'` — the site then falls back to annotated tags.
+   */
+  releases: z.array(Release),
 
   /** True when the repo has no commits on any branch. Most other fields are then empty/null. */
   empty: z.boolean(),

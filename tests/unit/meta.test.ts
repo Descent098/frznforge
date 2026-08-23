@@ -77,8 +77,44 @@ describe('meta', () => {
     });
   });
 
+  it('merges links per key instead of replacing the whole object', () => {
+    // Adding one link in the config used to wipe the homepage/issues/upstream links the
+    // lower layers had derived (a remote source loses its "View on GitHub" link that way).
+    const merged = mergeMeta(
+      { name: 'r' },
+      { links: { homepage: 'https://example.com', issues: 'https://gh.test/o/r/issues', upstream: 'https://gh.test/o/r' } },
+      { links: { donations: 'https://ko-fi.test/o' } },
+    );
+    expect(merged.links).toEqual({
+      homepage: 'https://example.com',
+      issues: 'https://gh.test/o/r/issues',
+      donations: 'https://ko-fi.test/o',
+      upstream: 'https://gh.test/o/r',
+    });
+    // Key order stays schema order, for artifact determinism.
+    expect(Object.keys(merged.links)).toEqual(['homepage', 'issues', 'donations', 'upstream']);
+    // A config link still wins over the same key from the lower layer.
+    expect(
+      mergeMeta({ name: 'r' }, { links: { homepage: 'https://low.test' } }, { links: { homepage: 'https://high.test' } })
+        .links.homepage,
+    ).toBe('https://high.test');
+  });
+
   it('throws on an over-long override description (config error)', () => {
     expect(() => mergeMeta({ name: 'x' }, null, { description: 'a'.repeat(301) })).toThrow(/300/);
+  });
+
+  it('measures descriptions in the units the artifact schema counts', () => {
+    // 300 code points of emoji is 600 UTF-16 units, which is what z.string().max(300) counts.
+    // Measuring code points here let such a description through and then killed the build.
+    const emoji = '\u{1F600}'.repeat(350);
+    expect(truncateDescription(emoji).length).toBeLessThanOrEqual(300);
+    // Never split a surrogate pair: the last character must still be a whole emoji + ellipsis.
+    expect(truncateDescription(emoji).endsWith('\u{1F600}…')).toBe(true);
+    // 290 ASCII + 6 emoji is 296 code points but 302 units, so it must be truncated too.
+    const mixed = 'a'.repeat(290) + '\u{1F600}'.repeat(6);
+    expect(mixed.length).toBe(302);
+    expect(truncateDescription(mixed).length).toBeLessThanOrEqual(300);
   });
 
   it('flows through scanRepo with overrides winning', async () => {
@@ -128,8 +164,8 @@ describe('meta', () => {
       r.writeAndCommit({ '.frznforge.json': JSON.stringify({ description: long }) }, 'init');
       const res = await readRepoMetaFile(r.dir, 'main');
       expect(res.warnings.map((w) => w.code)).toEqual(['description-truncated']);
-      expect(res.meta!.description).toBe('d'.repeat(297) + '…');
-      expect(Array.from(res.meta!.description!)).toHaveLength(298);
+      expect(res.meta!.description).toBe('d'.repeat(299) + '…');
+      expect(res.meta!.description).toHaveLength(300);
       expect(truncateDescription('short')).toBe('short');
     } finally {
       r.cleanup();

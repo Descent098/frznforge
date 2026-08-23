@@ -5,7 +5,7 @@ import RefSwitcher from '../../../../../components/RefSwitcher.astro';
 import FileTable from '../../../../../components/FileTable.astro';
 import { findRef, treeRoutes, treeUrl } from '../../../../../lib/routes';
 import { readBlob } from '../../../../../lib/data/load';
-import { isMarkdownPath, renderMarkdown } from '../../../../../lib/markdown';
+import { isMarkdownPath, isTrustedSource, renderMarkdown } from '../../../../../lib/markdown';
 import { getConfig, getData } from '../../../../../lib/site';
 import type { Repo } from '../../../../../lib/data/schema';
 
@@ -43,7 +43,7 @@ const readmeInfo = readmeEntry ? ref.files[readmeEntry.path] : undefined;
 const readmeContent = readmeInfo?.stored && !readmeInfo.binary ? readBlob(cfg.outDir, readmeInfo.sha) : null;
 const readmeHtml = readmeEntry && readmeContent !== null
   ? isMarkdownPath(readmeEntry.path)
-    ? renderMarkdown(readmeContent)
+    ? renderMarkdown(readmeContent, { trusted: isTrustedSource(repo.source) })
     : `<pre>${readmeContent.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</pre>`
   : null;
 

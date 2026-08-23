@@ -580,6 +580,7 @@ Hello.
         },
       },
       "releaseMode": "tags",
+      "releases": [],
       "slug": "alpha",
       "source": {
         "path": "<redacted>",
@@ -847,6 +848,7 @@ Hello.
         },
       },
       "releaseMode": "tags",
+      "releases": [],
       "slug": "beta",
       "source": {
         "path": "<redacted>",
@@ -1454,6 +1456,7 @@ Hello.
         },
       },
       "releaseMode": "tags",
+      "releases": [],
       "slug": "beta-2",
       "source": {
         "path": "<redacted>",
@@ -1550,7 +1553,7 @@ Hello.
       "warnings": [],
     },
   ],
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "warnings": [
     {
       "code": "repo-not-found",

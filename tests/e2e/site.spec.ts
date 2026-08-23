@@ -4,21 +4,21 @@ test.describe('profile page', () => {
   test('renders owner, stats, README and pinned/fallback repos', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1, name: 'Kieran Wood' })).toBeVisible();
-    // stats reflect the fixture artifact: 3 repos
+    // stats reflect the fixture artifact: 5 repos (3 local + 2 provider-imported)
     const repoKpi = page.locator('.hf-kpi', { hasText: 'Repositories' });
-    await expect(repoKpi.locator('.hf-kpi-value')).toHaveText('3');
+    await expect(repoKpi.locator('.hf-kpi-value')).toHaveText('5');
     // profile README body rendered from content/profile.md
     await expect(page.locator('.hf-readme .hf-md h1')).toContainText(/Hi, I.m Kieran/);
     // frontmatter links
     await expect(page.locator('.hf-hero-links a', { hasText: 'kieranwood.ca' })).toHaveAttribute('href', 'https://kieranwood.ca');
     // pinned slug 'frznforge' is not in the fixture → falls back to listing first repos
-    await expect(page.locator('.hf-repo-card')).toHaveCount(3);
+    await expect(page.locator('.hf-repo-card')).toHaveCount(5);
     await expect(page.locator('.hf-repo-card', { hasText: 'alpha' })).toBeVisible();
   });
 
   test('sidebar shows repo count and theme toggle flips data-theme', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('.hf-nav a', { hasText: 'Repositories' }).locator('.hf-count')).toHaveText('3');
+    await expect(page.locator('.hf-nav a', { hasText: 'Repositories' }).locator('.hf-count')).toHaveText('5');
     const before = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
     await page.getByRole('button', { name: /^Theme/ }).click();
     const after = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
@@ -31,7 +31,7 @@ test.describe('repo listing', () => {
   test('lists all repos with JS, filters by language/tag/kind, searches, sorts, syncs URL', async ({ page }) => {
     await page.goto('/repos/');
     const cards = page.locator('.hf-repo-card');
-    await expect(cards).toHaveCount(3);
+    await expect(cards).toHaveCount(5);
 
     // language facet
     await page.getByRole('button', { name: /^Go\b/ }).click();
@@ -39,7 +39,7 @@ test.describe('repo listing', () => {
     await expect(cards.first()).toContainText('bravo');
     await expect(page).toHaveURL(/lang=Go/);
     await page.getByRole('button', { name: /^Go\b/ }).click();
-    await expect(cards).toHaveCount(3);
+    await expect(cards).toHaveCount(5);
 
     // kind = template
     await page.getByRole('button', { name: /^Templates/ }).click();
@@ -53,7 +53,7 @@ test.describe('repo listing', () => {
     await expect(cards.first()).toContainText('alpha');
     await expect(page).toHaveURL(/q=static\+site/);
     await page.getByRole('button', { name: 'Clear' }).click();
-    await expect(cards).toHaveCount(3);
+    await expect(cards).toHaveCount(5);
 
     // sort by name desc
     await page.getByRole('combobox', { name: /sort repositories/i }).selectOption('name-desc');
@@ -71,7 +71,7 @@ test.describe('repo listing', () => {
     const ctx = await browser.newContext({ javaScriptEnabled: false });
     const page = await ctx.newPage();
     await page.goto('/repos/');
-    await expect(page.locator('.hf-repo-card')).toHaveCount(3);
+    await expect(page.locator('.hf-repo-card')).toHaveCount(5);
     await expect(page.locator('.hf-repo-card a.hf-repo-name', { hasText: 'alpha' })).toHaveAttribute('href', '/repos/alpha/');
     await ctx.close();
   });

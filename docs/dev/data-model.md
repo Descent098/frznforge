@@ -1,8 +1,9 @@
 # Data model (ingest artifact)
 
-`npm run ingest` turns the local repositories listed in `frznforge.config.ts` into one JSON
+`npm run ingest` turns the repositories listed in `frznforge.config.ts` — local directories
+and, since schema v3, repos hosted on GitHub / GitLab / Gitea / Forgejo — into one JSON
 artifact plus a blob store. Every page of the site is built from this artifact and nothing
-else — the site never talks to git.
+else — the site never talks to git and never talks to a forge.
 
 The schema is defined once, as zod objects + inferred types, in `src/lib/data/schema.ts`.
 This document explains the layout and the meaning of each field; the schema file is the
@@ -34,6 +35,45 @@ source of truth for exact shapes.
   current artifact exactly: missing or size-mismatched files are (re)written and any file
   not referenced by the current run is deleted.
 
+### Remote mirror cache (schema v3)
+
+Remote sources are not scanned over the network. Each one is mirror-cloned into
+`ingest.cacheDir` (default `./.frznforge-cache`, resolved absolute like `outDir`,
+git-ignored) and the ordinary local scanner then runs on that bare mirror:
+
+```
+<ingest.cacheDir>/
+└── <provider>/                            github | gitlab | gitea | forgejo
+    └── <host-slug>/                       api.github.com, gitea.example.com-3000, …
+        ├── <owner>/<repo>-<digest>.git    bare mirror (GitLab: the namespace nests)
+        └── <owner>/<repo>-<digest>.meta.json   last successful importer answers
+```
+
+- The path is computed by `cachePathFor(cacheDir, source)` (`src/lib/config/index.ts`) and is
+  what `ResolvedConfig.repos[].absPath` points at for a remote source, so everything
+  downstream sees a single shape. It may not exist yet on the first build.
+- `<host-slug>` is the host URL with the scheme stripped and every character outside
+  `[a-z0-9.-]` (notably `:` and `/`, illegal in Windows paths) replaced by `-`. Owner, repo
+  and namespace segments are sanitised the same way, capped at 48 characters, and reserved
+  Windows basenames (`con`, `aux`, `com1`, …) are prefixed with `_`.
+- `<digest>` is the first 8 hex characters of sha256 over the source's *unsanitised* identity
+  (provider, host, and `<owner>/<repo>` or the GitLab project path). The sanitising above is
+  lossy — it folds case and collapses every non-ASCII name to the same slug — so the digest is
+  what makes the mapping injective. Without it two unrelated repos could share one mirror and
+  each be published with the other's git content.
+- The sibling `.meta.json` caches the importer's *normalised* answers (`ImportedRepoMeta` +
+  `Release[]`): no tokens, no timestamps, no counters, so serving a build from it produces
+  the same bytes a live call would have. It is read whenever `ingest.fetch` is `'never'` or an
+  API call fails, which is what makes `remote-cache-stale` mean *stale* rather than *absent*.
+- Neither the mirror path nor its basename is ever user-visible: a remote repo's default
+  `slug` and `name` come from the config (and the provider's `name`), not from the directory.
+- First run: `git clone --mirror`. Later runs: `git remote update --prune`.
+- `ingest.fetch` controls the network: `'auto'` (default) fetches and falls back to the cache
+  on failure, `'never'` is offline and uses the cache only, `'always'` always refreshes.
+  None of the three can fail the build — see the warnings table.
+- The cache is disposable. Deleting it costs a re-clone, nothing else; it is never read by
+  the site and never referenced from the artifact.
+
 ## Guarantees
 
 **Deterministic.** The same repositories at the same commits produce a byte-identical
@@ -46,6 +86,12 @@ source of truth for exact shapes.
   `gitTags` by name; `contributors` by commit count desc, then name, then email;
   `languages` by bytes desc, then name; `Branch.commits` newest-first (topological).
 - Warnings are collected in a fixed order (site-level first, then per repo in slug order).
+- **No volatile counters.** Provider APIs report values that change without the repository
+  changing — stars, forks, watchers, open-issue counts, release asset download counts, "last
+  fetched at" timestamps. None of them are imported. If a field would differ between two
+  builds of the same commits and releases, it does not belong in the artifact.
+- Imported timestamps are normalised to `IsoDate` (UTC, seconds precision) by the importer,
+  so a provider changing its date formatting cannot change the bytes.
 
 **Committed content only.** Ingest never reads the working tree or the index. It uses
 only git plumbing that reads committed objects (`for-each-ref`, `rev-list`, `log`,
@@ -57,29 +103,44 @@ default branches, missing metadata files, etc. are reported as warnings; the rep
 still emitted (and valid) and the build continues. Only hard problems (git missing,
 unwritable output dir, invalid site config) fail `npm run ingest`.
 
+**Never fails on an unreachable forge.** A remote that is offline, unauthenticated, private
+or rate-limited produces a `remote-*` warning and the build continues, using the cached
+mirror when one exists and skipping the repo when it does not.
+
+**Tokens never reach the artifact.** API tokens are read from environment variables only
+(`tokenEnv`, else `FRZNFORGE_<PROVIDER>_TOKEN`, else `GITHUB_TOKEN` / `GITLAB_TOKEN` /
+`GITEA_TOKEN` / `FORGEJO_TOKEN`). They are never written to config, never logged, and are
+redacted to `***` in any warning or error message. The clone credential is passed to git as a
+one-shot `-c http.extraheader=Authorization: Basic …` placed *before* the subcommand — never
+on the remote URL and never via `git clone -c` — so it cannot be persisted into the mirror's
+`.git/config`.
+
 ## `ForgeData` (top level)
 
 | field           | meaning                                                                          |
 | --------------- | -------------------------------------------------------------------------------- |
-| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `2`). The site refuses artifacts of another version. |
+| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `3`). The site refuses artifacts of another version. |
 | `repos`         | `Repo[]`, sorted by slug.                                                        |
 | `warnings`      | `Warning[]` — site-level warnings plus a mirror of every repo's own warnings (with `repo` set). |
 
 ## `Repo`
 
-Identity + metadata (merged: site-config `overrides` > in-repo `.frznforge.json` > defaults):
+Identity + metadata. Precedence, highest first: site-config `overrides` > the repo's committed
+`.frznforge.json` > provider metadata (schema v3, remote sources only) > values derived from
+the repository itself.
 
 | field         | meaning                                                                                                |
 | ------------- | ------------------------------------------------------------------------------------------------------ |
 | `slug`        | URL slug. From config `slug`, else the repo directory name slugified (`My_Repo` → `my-repo`). Collisions are suffixed `-2`, `-3`, … |
 | `name`        | Display name. Default: directory basename (`.git` suffix dropped for bare repos).                       |
-| `description` | ≤ 300 chars or `null`. In-repo values longer than 300 are truncated to 297 + `…` (warning). Over-long config overrides are a config error. |
-| `source`      | `{ type: 'local', path }` — absolute path that was scanned.                                            |
+| `description` | ≤ 300 UTF-16 code units or `null` (the unit `z.string().max(300)` counts). Longer in-repo and provider values are truncated, never splitting a surrogate pair, with a `description-truncated` warning. Over-long config overrides are a config error. |
+| `source`      | Discriminated on `type` — see "`RepoSource`" below.                                                    |
 | `links`       | `{ homepage?, issues?, donations?, upstream? }` URLs.                                                   |
 | `tags`        | Free-form topic tags (metadata, not git tags).                                                          |
 | `template`    | Repo is a template.                                                                                    |
 | `license`     | `License \| null` — see below.                                                                         |
-| `releaseMode` | `'tags'` (only mode in Phase 1).                                                                       |
+| `releaseMode` | `'tags'` (releases derived from annotated tags) or `'provider'` (imported from the forge API, schema v3). Defaults to `'tags'` for local sources and `'provider'` for remote ones; `releases` in the source config and `releaseMode` in the repo metadata override that. |
+| `releases`    | `Release[]` (schema v3) — imported releases, newest first (`publishedAt` desc, `tag` asc tiebreak). Always `[]` in tag mode, and `[]` in provider mode when the repo has no releases or the fetch failed. |
 
 Git-derived:
 
@@ -218,6 +279,60 @@ commit; `firstCommit`/`lastCommit` are author dates. Sorted by `commits` desc, t
 repo overview). Candidates are root-level only; `README.md` is preferred over `README`,
 `README.txt`, and other `README.*`.
 
+### `RepoSource`
+
+Where the repo came from, discriminated on `type`. Remote variants arrived in schema v3.
+
+| variant                        | fields                                                  |
+| ------------------------------ | ------------------------------------------------------- |
+| `local`                        | `path` — the absolute directory that was scanned.        |
+| `github`                       | `host`, `owner`, `repo`, `webUrl`, `cloneUrl`            |
+| `gitlab`                       | `host`, `project`, `webUrl`, `cloneUrl`                  |
+| `gitea`                        | `host`, `owner`, `repo`, `webUrl`, `cloneUrl`            |
+| `forgejo`                      | `host`, `owner`, `repo`, `webUrl`, `cloneUrl`            |
+
+- `host` is the API base URL the importer talked to (`https://api.github.com` for github.com,
+  the instance root for GitLab/Gitea/Forgejo). `webUrl` is the human-facing repo page;
+  `cloneUrl` is what the clone panel shows and what the mirror was cloned from.
+- GitLab identifies a project by its full namespaced `project` path (`group/sub/proj`)
+  instead of owner + repo.
+- `forgejo` is the same REST API as `gitea`; it is a separate variant purely so the UI and
+  the docs can name Forgejo correctly.
+- There is no `path` on remote variants. `repoSourceLabel(source)` returns something
+  printable for every variant (the path for `local`, the `webUrl` otherwise), and
+  `isRemoteRepoSource(source)` narrows to the non-local ones.
+- Whatever the variant, the scanner ran against a local bare git repository — the directory
+  for `local`, the mirror in `ingest.cacheDir` for the rest.
+
+### `Release` / `ReleaseAsset` (schema v3)
+
+One entry per release imported from a provider; only present when `releaseMode` is
+`'provider'`.
+
+| field         | meaning                                                                         |
+| ------------- | --------------------------------------------------------------------------------- |
+| `tag`         | Tag the release points at; matches a `Tag.name` when the mirror has that tag.     |
+| `name`        | Display title; the importer falls back to the tag name when the provider has none. |
+| `body`        | Release notes as markdown; `''` when there are none.                              |
+| `url`         | Release page on the provider, or `null`.                                          |
+| `prerelease`  | Provider's prerelease flag. Always `false` for GitLab, which has none (`upcoming_release` is clock-derived and would not be deterministic). |
+| `publishedAt` | `IsoDate`, normalised to UTC seconds precision by the importer.                   |
+| `author`      | Publisher's provider username/display name, or `null`.                            |
+| `assets`      | `ReleaseAsset[]` — `{ name, url, size, contentType }`, in the provider's order.   |
+
+`ReleaseAsset.url` and `Release.url` are plain strings rather than validated URLs: some
+providers (GitLab release asset links) hand out host-relative paths, and rejecting one in
+the schema would hard-fail a build over a remote's formatting choice. The importers resolve
+such a URL against the repo's web URL before storing it, so what actually lands here is
+absolute — otherwise the site would render it as a link into itself and 404.
+
+**No download counts, ever.** They are the archetypal volatile counter — see "Guarantees".
+
+The site reads releases through `resolveReleases(repo)` (`src/lib/routes.ts`), which returns
+`SiteRelease[]`: provider releases when `repo.releases` is non-empty, otherwise the
+annotated-tag derivation, newest first either way. `SiteRelease.source` (`'provider'` /
+`'tag'`) tells the UI which it got, and `SiteRelease.commit` is the tag target or `null`.
+
 ### `Warning`
 
 `{ code, repo, message }` — `repo` is the slug, or `null` for site-level warnings.
@@ -233,6 +348,10 @@ repo overview). Candidates are root-level only; `README.md` is preferred over `R
 | `tag-trees-capped`          | repo  | More tags than `ingest.tagTrees`; only the newest N have browsable trees / archives ("N of M tags have browsable trees"). |
 | `repo-not-found`            | site  | A configured path is not a git repository (or is a path inside one); the entry was skipped. |
 | `slug-collision`            | site  | Two configured repos resolved to the same slug; the later one (config order) was suffixed. `repo` holds the new slug. |
+| `remote-fetch-failed`       | repo  | A provider API call or mirror fetch failed (network error, bad response, unreachable host). The cached mirror was used if there is one, otherwise the repo was skipped. Never contains a token. |
+| `remote-auth-missing`       | repo  | The provider answered 401/403/404 and no token was configured for that source — most likely a private repo. Names the env vars that were consulted, never a value. |
+| `remote-rate-limited`       | repo  | The provider rate-limited the build. Cache used, or repo skipped.               |
+| `remote-cache-stale`        | repo  | A previously fetched mirror was used without refreshing — `ingest.fetch: 'never'`, or a fetch that failed while a cache existed. |
 
 ## Per-repo metadata: `.frznforge.json`
 
@@ -242,6 +361,12 @@ releaseMode? }`. The site config's `overrides` for that repo win field-by-field.
 
 ## Version history
 
+- **v3** — remote sources: `RepoSource` gains `github` / `gitlab` / `gitea` / `forgejo`
+  variants (`host`, `owner`+`repo` or `project`, `webUrl`, `cloneUrl`); `Repo.releases`
+  (`Release[]`, with `ReleaseAsset[]`); `Repo.releaseMode` widened to `'tags' | 'provider'`;
+  new warnings `remote-fetch-failed`, `remote-auth-missing`, `remote-rate-limited`,
+  `remote-cache-stale`; new config `ingest.cacheDir` + `ingest.fetch` and the mirror cache
+  layout described above.
 - **v2** — `Commit.files` + `Commit.stats` (numstat vs first parent; merges empty),
   `Repo.refTrees` (non-default branches + newest `ingest.tagTrees` tags),
   `Repo.archives` + the `archives/` directory (`git archive` zips, `ingest.archives`),
