@@ -1,0 +1,3 @@
+- [ ] Static sites
+    - [ ] For repos that are static sites, allow the site to be built alongside the normal repo content
+        - [ ] For example I have a site I'm building, and the repo has an `index.html` I should be able to set `hostable: true`, and I should get the `index.html` when I go to `/<reponame>`, and the normal repo view when I go to `source/<reponame>`
