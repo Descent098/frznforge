@@ -1,5 +1,5 @@
 {
-  "name": "receptive-remnant",
+  "name": "frznforge",
   "type": "module",
   "version": "0.0.1",
   "engines": {
@@ -7,14 +7,28 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "ingest": "tsx scripts/ingest.ts",
+    "build": "npm run ingest && astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "astro check",
+    "test:e2e": "playwright test",
+    "test:all": "npm test && npm run test:e2e"
   },
   "dependencies": {
     "@astrojs/svelte": "^9.0.1",
     "astro": "^7.2.4",
+    "marked": "^18.0.10",
     "svelte": "^5.56.10",
     "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "vitest": "^4.1.11"
   }
 }

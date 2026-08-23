@@ -15,94 +15,94 @@ Conventions used below:
 
 ---
 
-## Phase 0 — Foundation & direction *(current)*
+## Phase 0 — Foundation & direction ✅ *(done 2026-08-23)*
 
 Goal: agree on architecture and look before writing real code.
 
 Ships
-- `plan.md`, this file.
-- Four throwaway design explorations (profile page + repo page each) under
+- [x] `plan.md`, this file.
+- [x] Four throwaway design explorations (profile page + repo page each) under
   `src/pages/designs/*`, static content only, to pick a visual direction.
-- Decision record for: config file format, JSON artifact shape (high level), where
+- [x] Decision record for: config file format, JSON artifact shape (high level), where
   ingest code lives (`src/lib/ingest` vs a separate `packages/` dir).
 
 Done when
-- One design direction is chosen (or a hybrid is described in a short note in
+- [x] One design direction is chosen (or a hybrid is described in a short note in
   `docs/dev/plans/design-decision.md`).
-- The unused explorations are deleted or moved to `docs/dev/plans/design-inspo/`.
+- [x] The unused explorations are deleted or moved to `docs/dev/plans/design-inspo/`.
 
 Tests: none (no product code yet).
 
 ---
 
-## Phase 1 — Ingest core (local repos → JSON)
+## Phase 1 — Ingest core (local repos → JSON) ✅ *(done 2026-08-23)*
 
 Goal: a CLI step that turns one or more *local* git repositories into a single
 `data/forge.json` (or one file per repo plus an index) that every later phase reads.
 This is the contract the whole site is built on, so it gets the most tests.
 
 Ships
-- `frznforge.config.(ts|json)` – site-level config: owner profile path, list of repo
+- [x] `frznforge.config.(ts|json)` – site-level config: owner profile path, list of repo
   sources, output dir, pagination size.
-- Per-repo metadata file (`.frznforge.yml`/`frznforge.json` inside the repo, overridable
+- [x] Per-repo metadata file (`.frznforge.yml`/`frznforge.json` inside the repo, overridable
   from the site config): name, short description (≤300 chars), links (homepage, tracker,
   donations, upstream), tags, `template: true|false`, license override, release mode.
-- Scanner (concurrent across repos) that emits for each repo:
-  - identity + metadata (merged from repo file + site config)
-  - default branch, branch list, tag list (with annotated-tag messages)
-  - commit history per branch (hash, author, date, subject, body, parents)
-  - file tree of the default branch at HEAD (path, size, mode, last-commit ref)
-  - language breakdown (bytes per language, by extension/linguist-style map)
-  - contributors (name/email → commit count, first/last commit)
-  - README contents + detected license
-  - raw file contents (or a content-addressed blob store) for browsable files with a
+- [x] Scanner (concurrent across repos) that emits for each repo:
+  - [x] identity + metadata (merged from repo file + site config)
+  - [x] default branch, branch list, tag list (with annotated-tag messages)
+  - [x] commit history per branch (hash, author, date, subject, body, parents)
+  - [x] file tree of the default branch at HEAD (path, size, mode, last-commit ref)
+  - [x] language breakdown (bytes per language, by extension/linguist-style map)
+  - [x] contributors (name/email → commit count, first/last commit)
+  - [x] README contents + detected license
+  - [x] raw file contents (or a content-addressed blob store) for browsable files with a
     size cap and binary detection
-- `npm run ingest` script; `npm run build` runs ingest first.
-- Versioned schema (`schemaVersion` field) + TypeScript types for the artifact.
+- [x] `npm run ingest` script; `npm run build` runs ingest first.
+- [x] Versioned schema (`schemaVersion` field) + TypeScript types for the artifact.
 
 Done when
-- Pointing config at 2+ local repos produces a deterministic JSON artifact (same input →
+- [x] Pointing config at 2+ local repos produces a deterministic JSON artifact (same input →
   byte-identical output, modulo timestamps we explicitly choose to include).
-- Schema is documented in `docs/dev/data-model.md`.
+- [x] Schema is documented in `docs/dev/data-model.md`.
 
 Tests
-- Unit tests per extractor (branches, tags, tree, languages, contributors, license
+- [x] Unit tests per extractor (branches, tags, tree, languages, contributors, license
   detection) against fixture repos created in a temp dir during tests.
-- Snapshot test of the full artifact for a fixture repo.
-- Schema validation test (artifact conforms to the published types).
+- [x] Snapshot test of the full artifact for a fixture repo.
+- [x] Schema validation test (artifact conforms to the published types).
 
 ---
 
-## Phase 2 — Site skeleton: shell, profile, listing, repo overview
+## Phase 2 — Site skeleton: shell, profile, listing, repo overview *(current)*
 
 Goal: first deployable site. Thin, but every page that exists is real.
 
 Ships
-- Global layout from the chosen design: sidebar nav, header search box (static for now),
+- [ ] Global layout from the chosen design: sidebar nav, header search box (static for now),
   light/dark theme, fire/ice token system in plain CSS.
-- **Profile overview** from `profile.md` (markdown body + frontmatter): rendered README,
+- [ ] **Profile overview** from `profile.md` (markdown body + frontmatter): rendered README,
   links (sites, LinkedIn, email, location, workplace, school, other forges), pinned repos
   (≤10) rendered as cards. Contribution graph / top languages / event log are stubbed
   out with "coming in Phase 4" placeholders, *or* omitted entirely — no fake data.
-- **Repo listing** page: all repos as cards (name, short description, top 3 languages,
+- [ ] **Repo listing** page: all repos as cards (name, short description, top 3 languages,
   last updated). Sorting (newest/oldest/name), filters (language, template/normal,
   tags), text search, 50-per-page pagination. Svelte island for the interactive parts;
   pre-rendered first page works without JS.
-- **Repo overview** page: metadata panel (description, links, tags, license, template
+- [ ] **Repo overview** page: metadata panel (description, links, tags, license, template
   banner), language bar, contributor list, rendered README, clone panel (copyable
   `git clone` of the upstream URL, and/or pointer to the zip from Phase 3).
-- 404 page.
+- [ ] 404 page.
 
 Done when
-- `astro build` produces a fully static site from the Phase 1 artifact with no runtime
+- [ ] `astro build` produces a fully static site from the Phase 1 artifact with no runtime
   server and no network calls.
-- Lighthouse a11y ≥ 90 on the three page types.
+- [ ] Lighthouse a11y ≥ 90 on the three page types.
 
 Tests
-- Unit: listing filter/sort/search/pagination logic (pure functions, not components).
-- UI (Playwright or equivalent): listing filters work with and without JS; profile renders
+- [ ] Unit: listing filter/sort/search/pagination logic (pure functions, not components).
+- [ ] UI (Playwright or equivalent): listing filters work with and without JS; profile renders
   frontmatter links; repo page shows README and metadata from the fixture artifact.
-- Sync: a test that builds the site from the fixture artifact and asserts every repo in
+- [ ] Sync: a test that builds the site from the fixture artifact and asserts every repo in
   the artifact has a generated page and appears in the listing.
 
 ---
@@ -112,26 +112,26 @@ Tests
 Goal: the repo page becomes a real read-only forge view.
 
 Ships
-- File browser: directory listing with last-commit per entry; file view with
+- [ ] File browser: directory listing with last-commit per entry; file view with
   syntax highlighting (build-time, e.g. Shiki), line numbers, line-anchor links,
   raw view, markdown preview/source toggle, image preview, "binary/too large" fallback.
-- Commit history page (paginated) and single commit page (message, stats, diff —
+- [ ] Commit history page (paginated) and single commit page (message, stats, diff —
   diff can be a stretch goal inside this phase).
-- Branches page and tags page; branch switcher on the repo overview/file browser.
-- Source zip download per branch/tag (generated at build, written into `public/` or
+- [ ] Branches page and tags page; branch switcher on the repo overview/file browser.
+- [ ] Source zip download per branch/tag (generated at build, written into `public/` or
   `dist/`), plus size shown in the UI.
-- Releases: from annotated tags (tag message rendered as markdown) for plain repos.
+- [ ] Releases: from annotated tags (tag message rendered as markdown) for plain repos.
   Forge-imported releases come in Phase 5; the UI and data shape are built here.
 
 Done when
-- Every path in the fixture repo's tree is reachable by URL and renders.
-- Build time for a ~1k-file repo stays reasonable (set a budget, e.g. < 60 s) and is
+- [ ] Every path in the fixture repo's tree is reachable by URL and renders.
+- [ ] Build time for a ~1k-file repo stays reasonable (set a budget, e.g. < 60 s) and is
   tracked in CI output.
 
 Tests
-- Unit: path → route mapping, highlighting language detection, zip manifest.
-- UI: navigate tree → file → raw; switch branch; download link resolves.
-- Sync: artifact tree ↔ generated file routes 1:1; tags in artifact ↔ release pages.
+- [ ] Unit: path → route mapping, highlighting language detection, zip manifest.
+- [ ] UI: navigate tree → file → raw; switch branch; download link resolves.
+- [ ] Sync: artifact tree ↔ generated file routes 1:1; tags in artifact ↔ release pages.
 
 ---
 
@@ -140,20 +140,20 @@ Tests
 Goal: the parts that make it feel like *your* page rather than a directory.
 
 Ships
-- Contribution graph (from commit dates across all repos, owner's identities configured
+- [ ] Contribution graph (from commit dates across all repos, owner's identities configured
   in `profile.md`).
-- Top languages (aggregate of per-repo breakdowns).
-- Recent commits event log on the profile.
-- Build-time search index (repos, files by path, notes later) + Svelte search UI.
-- `Ctrl/Cmd+K` command palette: jump to repo, file, page; theme toggle; "copy clone URL".
+- [ ] Top languages (aggregate of per-repo breakdowns).
+- [ ] Recent commits event log on the profile.
+- [ ] Build-time search index (repos, files by path, notes later) + Svelte search UI.
+- [ ] `Ctrl/Cmd+K` command palette: jump to repo, file, page; theme toggle; "copy clone URL".
 
 Done when
-- Profile page matches the plan's GitHub-style reference without placeholders.
-- Palette is keyboard-only operable and works offline.
+- [ ] Profile page matches the plan's GitHub-style reference without placeholders.
+- [ ] Palette is keyboard-only operable and works offline.
 
 Tests
-- Unit: contribution bucketing by day/week, language aggregation, search index ranking.
-- UI: palette opens/closes/navigates; graph renders for the fixture.
+- [ ] Unit: contribution bucketing by day/week, language aggregation, search index ranking.
+- [ ] UI: palette opens/closes/navigates; graph renders for the fixture.
 
 ---
 
@@ -162,24 +162,24 @@ Tests
 Goal: repos that live elsewhere can be pulled in on every build.
 
 Ships
-- Importer interface + implementations: GitHub, GitLab, Gitea, Forgejo (shared
+- [ ] Importer interface + implementations: GitHub, GitLab, Gitea, Forgejo (shared
   Gitea-API base), and "local path" as the existing default.
-- Interactive `npm run frznforge init` (or `setup`) command: pick provider, auth token
+- [ ] Interactive `npm run frznforge init` (or `setup`) command: pick provider, auth token
   (from env, never written to config), select repos, writes them into
   `frznforge.config`.
-- On `npm run build`: clone/fetch configured remotes into a cache dir, then run the
+- [ ] On `npm run build`: clone/fetch configured remotes into a cache dir, then run the
   Phase 1 scanner on them. Incremental fetch where possible.
-- Release import from each provider; per-repo override to use tag-based releases even
+- [ ] Release import from each provider; per-repo override to use tag-based releases even
   when hosted on a forge.
-- Rate-limit handling and clear error messages when a token is missing/expired.
+- [ ] Rate-limit handling and clear error messages when a token is missing/expired.
 
 Done when
-- A fresh checkout with a token in env can build a site containing at least one repo from
+- [ ] A fresh checkout with a token in env can build a site containing at least one repo from
   each supported provider (verified manually; CI uses recorded fixtures).
 
 Tests
-- Unit: each importer against recorded HTTP fixtures (no live network in CI).
-- Sync: imported release list ↔ release pages; imported repo ↔ listing entry.
+- [ ] Unit: each importer against recorded HTTP fixtures (no live network in CI).
+- [ ] Sync: imported release list ↔ release pages; imported repo ↔ listing entry.
 
 ---
 
@@ -188,20 +188,20 @@ Tests
 Goal: the two remaining "content types".
 
 Ships
-- **Notes** (gist-style): a configured folder where each file is a single note and each
+- [ ] **Notes** (gist-style): a configured folder where each file is a single note and each
   sub-folder is a multi-file note. Markdown gets preview/source toggle; everything else
   gets highlighted source. Notes index page with search; notes appear in the palette.
-- **Organizations**: grouping of repos under a named org with its own profile overview
+- [ ] **Organizations**: grouping of repos under a named org with its own profile overview
   (same `profile.md` mechanism, own pinned repos, own links). Org listing and per-org
   repo listing reuse the Phase 2 listing component.
 
 Done when
-- Notes and orgs are routable, searchable, and covered by the sync tests.
+- [ ] Notes and orgs are routable, searchable, and covered by the sync tests.
 
 Tests
-- Unit: note folder → note model; org config → membership resolution.
-- UI: note preview/source toggle; org page renders pinned repos.
-- Sync: every note file/folder has a page; every repo with an `org` appears under it.
+- [ ] Unit: note folder → note model; org config → membership resolution.
+- [ ] UI: note preview/source toggle; org page renders pinned repos.
+- [ ] Sync: every note file/folder has a page; every repo with an `org` appears under it.
 
 ---
 
@@ -210,20 +210,20 @@ Tests
 Goal: make it something other people can adopt.
 
 Ships
-- Insights page per repo: commits over time, contributors over time, lines-of-code over
+- [ ] Insights page per repo: commits over time, contributors over time, lines-of-code over
   time (computed at ingest from sampled commits to keep builds bounded).
-- Performance pass: build caching between runs, lazy-generated heavy pages, asset
+- [ ] Performance pass: build caching between runs, lazy-generated heavy pages, asset
   budgets.
-- Accessibility and responsive pass across all pages.
-- User docs in `docs/user/`: quick start, config reference, deploy guides (GitHub Pages,
+- [ ] Accessibility and responsive pass across all pages.
+- [ ] User docs in `docs/user/`: quick start, config reference, deploy guides (GitHub Pages,
   Cloudflare Pages, any static host), migrating from a forge.
-- `create-frznforge` / template repo for new users.
-- Cut `v1.0.0`.
+- [ ] `create-frznforge` / template repo for new users.
+- [ ] Cut `v1.0.0`.
 
 Done when
-- Documentation is enough for someone to go from zero to a deployed site without reading
+- [ ] Documentation is enough for someone to go from zero to a deployed site without reading
   source.
-- All tests green; no open "must fix" items.
+- [ ] All tests green; no open "must fix" items.
 
 ---
 

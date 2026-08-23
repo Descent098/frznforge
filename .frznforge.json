@@ -1,0 +1,12 @@
+{
+  "name": "frznforge",
+  "description": "Read-only static forge generator. Showcase your repos without running a forge: scans git repos into JSON, then builds a fully static site.",
+  "links": {
+    "homepage": "https://github.com/Descent098/frznforge",
+    "issues": "https://github.com/Descent098/frznforge/issues",
+    "upstream": "https://github.com/Descent098/frznforge"
+  },
+  "tags": ["astro", "svelte", "ssg", "git"],
+  "template": false,
+  "license": "MIT"
+}
