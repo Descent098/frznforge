@@ -1182,3 +1182,35 @@ code, kbd, pre { font-family: var(--hf-mono); }
 .hf-footer a { color: var(--hf-text-2); text-decoration: underline; text-underline-offset: 2px; }
 .hf-footer a:hover { color: var(--hf-accent); }
 .hf-footer-warn { margin-left: auto; color: var(--hf-amber); cursor: help; }
+
+/* ==========================================================================
+   Phase 4: live command palette (modal), contribution graph extras, activity
+   ========================================================================== */
+.hf-palette-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(12, 8, 5, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex; justify-content: center; align-items: flex-start;
+  padding: min(14vh, 140px) 16px 16px;
+}
+.hf-palette-results { max-height: min(52vh, 460px); overflow-y: auto; }
+.hf-palette-item { width: 100%; text-align: left; cursor: pointer; }
+.hf-palette-item-text { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.hf-palette-item-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hf-palette-item-text small { color: var(--hf-text-3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.hf-palette-item .hf-kbd { visibility: hidden; }
+.hf-palette-item.is-active .hf-kbd { visibility: visible; }
+.hf-palette-msg { padding: 22px 16px; text-align: center; color: var(--hf-text-3); font-size: 13.5px; }
+.hf-palette input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; font: inherit; font-size: 15px; color: var(--hf-text); }
+.hf-palette input::placeholder { color: var(--hf-text-3); }
+
+.c-neutral.c-1 { background: rgba(140, 138, 134, 0.25); }
+.c-neutral.c-2 { background: rgba(140, 138, 134, 0.45); }
+.c-neutral.c-3 { background: var(--hf-neutral); }
+.c-neutral.c-4 { background: var(--hf-neutral); }
+.c-cool.c-1 { background: rgba(47, 134, 199, 0.18); }
+.c-cool.c-2 { background: rgba(47, 134, 199, 0.34); }
+.c-cool.c-3 { background: var(--hf-ice-2); }
+.c-cool.c-4 { background: var(--hf-ice-2); }
+.hf-contrib-grid i.is-future { background: transparent; }
+.hf-contrib-months span { white-space: nowrap; overflow: hidden; }

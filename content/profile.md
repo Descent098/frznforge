@@ -12,6 +12,8 @@ forges:
   github: https://github.com/Descent098
 pinned:
   - frznforge
+identities:
+  - kieran@canadiancoding.ca
 ---
 
 # Hi, I'm Kieran 👋

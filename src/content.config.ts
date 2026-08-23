@@ -37,6 +37,8 @@ export const ProfileFrontmatter = z.object({
     .prefault({}),
   /** Repo slugs to pin on the profile (max 10, in order). */
   pinned: z.array(z.string()).max(10).default([]),
+  /** Author emails counted as "you" in the contribution graph. Empty = count all commits. */
+  identities: z.array(z.email()).default([]),
 });
 export type ProfileFrontmatter = z.infer<typeof ProfileFrontmatter>;
 

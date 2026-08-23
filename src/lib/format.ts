@@ -56,6 +56,23 @@ export function relativeTime(date: string | Date | null | undefined, now: Date =
   return `${n} ${name}${n === 1 ? '' : 's'} ago`;
 }
 
+/** Compact age: "2h", "3w", "4mo", "1y". */
+export function relativeTimeShort(date: string | Date | null | undefined, now: Date = new Date()): string {
+  if (!date) return '—';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const s = Math.max(0, Math.round((now.getTime() - d.getTime()) / 1000));
+  if (s < 60) return 'now';
+  const m = s / 60;
+  if (m < 60) return `${Math.floor(m)}m`;
+  const h = m / 60;
+  if (h < 24) return `${Math.floor(h)}h`;
+  const days = h / 24;
+  if (days < 7) return `${Math.floor(days)}d`;
+  if (days < 30) return `${Math.floor(days / 7)}w`;
+  if (days < 365) return `${Math.floor(days / 30.44)}mo`;
+  return `${Math.floor(days / 365.25)}y`;
+}
+
 /** "Sep 2020" */
 export function monthYear(date: string | null | undefined): string {
   if (!date) return '—';

@@ -1,0 +1,59 @@
+---
+/**
+ * Static contribution heat map (52 weeks × 7 days). Hue = recency (fire → ice),
+ * intensity = commit count quartile. Pure HTML/CSS — no JS.
+ */
+import type { ContribGraph } from '../lib/contrib';
+import { formatInt } from '../lib/format';
+
+interface Props {
+  graph: ContribGraph;
+  title?: string;
+}
+const { graph, title = 'contributions in the last year' } = Astro.props;
+
+/** heat bucket → colour family used by the .c-* classes. */
+const family = { hot: 'c-hot', warm: 'c-warm', neutral: 'c-neutral', cool: 'c-cool', cold: 'c-cold' } as const;
+---
+<section class="hf-card hf-contrib" aria-labelledby="contrib-h">
+  <div class="hf-contrib-head">
+    <h2 id="contrib-h">{formatInt(graph.total)} {title}</h2>
+    <p>Recent weeks burn ember; older ones cool to ice.</p>
+    <span class="hf-legend" aria-hidden="true">
+      Less
+      <i style="--c: var(--hf-canvas-2)"></i>
+      <i style="--c: rgba(47, 134, 199, 0.42)"></i>
+      <i style="--c: var(--hf-ice)"></i>
+      <i style="--c: var(--hf-amber)"></i>
+      <i style="--c: var(--hf-ember)"></i>
+      More
+    </span>
+  </div>
+  <div class="hf-contrib-scroll">
+    <div class="hf-contrib-months" aria-hidden="true" style={`grid-template-columns: repeat(52, 1fr);`}>
+      {graph.months.map((m, i) => {
+        const next = graph.months[i + 1]?.week ?? 52;
+        return <span style={`grid-column: ${m.week + 1} / ${next + 1}`}>{m.label}</span>;
+      })}
+    </div>
+    <div class="hf-contrib-grid" role="img" aria-label={`Contribution heat map: ${formatInt(graph.total)} commits in the last 52 weeks`}>
+      {graph.weeks.map((week) =>
+        week.map((cell) =>
+          cell ? (
+            <i
+              class:list={[cell.level > 0 ? family[cell.heat] : null, cell.level > 0 ? `c-${cell.level}` : null]}
+              title={`${cell.day}: ${cell.count} commit${cell.count === 1 ? '' : 's'}`}
+            ></i>
+          ) : (
+            <i class="is-future"></i>
+          ),
+        ),
+      )}
+    </div>
+  </div>
+  <div class="hf-contrib-foot">
+    {graph.longestStreak > 0 && <span>Longest streak <b>{graph.longestStreak} day{graph.longestStreak === 1 ? '' : 's'}</b></span>}
+    {graph.busiestDay && <span>Busiest day <b>{graph.busiestDay.day}</b> · {graph.busiestDay.count} commits</span>}
+    {graph.total === 0 && <span>No commits in the last year.</span>}
+  </div>
+</section>

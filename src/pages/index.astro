@@ -1,8 +1,13 @@
 ---
 import { getCollection, render } from 'astro:content';
 import Base from '../layouts/Base.astro';
+import ContributionGraph from '../components/ContributionGraph.astro';
 import RepoCard from '../components/RepoCard.svelte';
+import { buildActivity } from '../lib/activity';
+import { buildContribGraph } from '../lib/contrib';
 import { summarize } from '../lib/listing';
+import { commitsUrl, tagsUrl } from '../lib/routes';
+import { heatFor, relativeTimeShort } from '../lib/format';
 import {
   aggregateLanguages,
   commitsSince,
@@ -44,6 +49,9 @@ const pinned = pinnedSlugs
 for (const slug of pinnedSlugs) {
   if (!data.repos.some((r) => r.slug === slug)) console.warn(`[frznforge] profile.md pins unknown repo "${slug}"`);
 }
+
+const graph = buildContribGraph(data.repos, fm?.identities ?? [], now);
+const activity = buildActivity(data.repos, 6);
 
 const forgeLabels: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab', codeberg: 'Codeberg', forgejo: 'Forgejo', gitea: 'Gitea' };
 const forges = Object.entries(fm?.forges ?? {}).filter(([, url]) => Boolean(url)) as Array<[string, string]>;
@@ -114,13 +122,39 @@ const forges = Object.entries(fm?.forges ?? {}).filter(([, url]) => Boolean(url)
       </div>
     </section>
 
-    {Content && (
-      <section class="hf-two-col hf-two-col--single" style="margin-top:16px">
+    <section class:list={['hf-two-col', { 'hf-two-col--single': activity.length === 0 }]} style="margin-top:16px">
+      {Content ? (
         <article class="hf-card hf-readme" aria-label="Profile README">
           <div class="hf-md"><Content /></div>
         </article>
-      </section>
-    )}
+      ) : (
+        <div></div>
+      )}
+      {activity.length > 0 && (
+        <aside class="hf-card hf-activity" aria-labelledby="activity-h">
+          <div class="hf-card-head">
+            <svg class="hf-i"><use href="#i-pulse" /></svg>
+            <h2 id="activity-h">Recent activity</h2>
+          </div>
+          <ul class="hf-activity-list">
+            {activity.map((e) => {
+              const heat = heatFor(e.date, now);
+              return (
+                <li>
+                  <span class={`hf-act-icon t-${heat}`}><svg class="hf-i"><use href={e.type === 'tag' ? '#i-tag' : '#i-commit'} /></svg></span>
+                  {e.type === 'push' ? (
+                    <span class="hf-act-text">Pushed {e.count} commit{e.count === 1 ? '' : 's'} to <a href={commitsUrl(e.repo, e.branch)}>{e.repo}</a>/<code>{e.branch}</code></span>
+                  ) : (
+                    <span class="hf-act-text">Tagged <code>{e.tag}</code> in <a href={tagsUrl(e.repo)}>{e.repo}</a></span>
+                  )}
+                  <span class={`hf-age t-${heat}`} title={e.date}>{relativeTimeShort(e.date, now)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </aside>
+      )}
+    </section>
 
     <section aria-labelledby="pinned-h" style="margin-top:28px">
       <div class="hf-section-head">
@@ -143,5 +177,11 @@ const forges = Object.entries(fm?.forges ?? {}).filter(([, url]) => Boolean(url)
         </div>
       )}
     </section>
+
+    {!graph.total && repoCount === 0 ? null : (
+      <div style="margin-top:16px">
+        <ContributionGraph graph={graph} />
+      </div>
+    )}
   </div>
 </Base>

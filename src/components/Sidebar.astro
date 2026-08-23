@@ -17,8 +17,8 @@ const siteHost = cfg.site.url ? prettyUrl(cfg.site.url) : null;
       <span class="hf-brand-name">{cfg.site.title}{siteHost && <small>{siteHost}</small>}</span>
     </a>
 
-    <!-- Phase 4 wires this to the search index + command palette; static affordance for now. -->
-    <a class="hf-search" href="/repos/">
+    <!-- Opens the command palette; plain link to /repos/ when JS is off. -->
+    <a class="hf-search" href="/repos/" id="hf-search-open">
       <svg class="hf-i"><use href="#i-search" /></svg>
       <span>Search repos…</span>
       <kbd class="hf-kbd">Ctrl K</kbd>
@@ -47,3 +47,10 @@ const siteHost = cfg.site.url ? prettyUrl(cfg.site.url) : null;
     </div>
   </div>
 </aside>
+
+<script>
+  document.getElementById('hf-search-open')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    window.dispatchEvent(new CustomEvent('frznforge:palette'));
+  });
+</script>

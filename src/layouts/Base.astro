@@ -5,8 +5,10 @@
  * Palette: `data-palette` from frznforge.config.ts.
  */
 import '../styles/global.css';
+import '../styles/repo.css';
 import IconSprite from '../components/IconSprite.astro';
 import Sidebar from '../components/Sidebar.astro';
+import CommandPalette from '../components/CommandPalette.svelte';
 import { getConfig, getData } from '../lib/site';
 
 interface Props {
@@ -42,6 +44,7 @@ const fullTitle = title === cfg.site.title ? title : `${title} · ${cfg.site.tit
   </head>
   <body>
     <IconSprite />
+    <CommandPalette client:load />
     <div class="hf-shell">
       <Sidebar active={active} repoCount={data.repos.length} />
       <main class="hf-main" id="main">
