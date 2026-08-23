@@ -1,0 +1,20 @@
+---
+import Base from '../../layouts/Base.astro';
+import RepoListing from '../../components/RepoListing.svelte';
+import { summarize } from '../../lib/listing';
+import { getConfig, getData } from '../../lib/site';
+
+const cfg = await getConfig();
+const data = await getData();
+const repos = data.repos.map(summarize);
+const now = Date.now();
+---
+<Base title="Repositories" description={`All ${repos.length} repositories by ${cfg.owner.name}`} active="repos">
+  <div class="hf-container">
+    <header class="hf-page-head">
+      <h1>Repositories</h1>
+      <p>{repos.length} repositor{repos.length === 1 ? 'y' : 'ies'} · search, filter and sort. Heat = how recently each repo moved.</p>
+    </header>
+    <RepoListing client:load repos={repos} pageSize={cfg.listing.pageSize} now={now} />
+  </div>
+</Base>

@@ -1,46 +1,54 @@
-# Astro Starter Kit: Basics
+# frznforge
 
-```sh
-npm create astro@latest -- --template basics
+A **read-only, static forge** for one person. Point it at your git repositories, run a
+build, and host the output anywhere static files go. No server, no accounts, no issues,
+no pull requests, no stars — just your projects, browsable and cloneable.
+
+It is for **source-available** projects, and for people who self-host a private forge
+(Forgejo, Gitea, GitLab…) but want a public, safe, always-up showcase of their work.
+
+- **Ingest** scans local git repositories (concurrently) into a JSON artifact — committed
+  content only, never your working tree.
+- **Build** turns that artifact into a fully static Astro site: profile page, repository
+  listing with search/filter/sort, and a repository overview per repo.
+- **Deploy** the `dist/` folder to GitHub Pages, Cloudflare Pages, Netlify, S3, a NAS…
+
+> Status: early. See [docs/dev/plans/plan-phases.md](docs/dev/plans/plan-phases.md) for
+> what exists and what's next.
+
+## Quick start
+
+```bash
+npm install
+# edit frznforge.config.ts: add your repos + owner details
+# edit content/profile.md: bio, links, pinned repos
+npm run ingest     # git → data/forge.json (+ blobs)
+npm run dev        # or: astro dev --background
+npm run build      # = ingest + astro build → dist/
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Configuration
 
-## 🚀 Project Structure
+Everything lives in [`frznforge.config.ts`](frznforge.config.ts) (site title, owner, palette,
+repos, ingest limits) and [`content/profile.md`](content/profile.md) (profile frontmatter +
+body). Per-repo metadata (description, links, tags, template flag, license) comes from a
+`.frznforge.json` committed inside each repo, overridable from the site config. See
+[docs/user/configuration.md](docs/user/configuration.md).
 
-Inside of your Astro project, you'll see the following folders and files:
+## Development
 
-```text
-/
-├── public/
-│   └── favicon.svg
-├── src
-│   ├── assets
-│   │   └── astro.svg
-│   ├── components
-│   │   └── Welcome.astro
-│   ├── layouts
-│   │   └── Layout.astro
-│   └── pages
-│       └── index.astro
-└── package.json
+```bash
+npm test            # vitest unit tests (ingest extractors, listing logic, schema)
+npm run test:e2e    # playwright, builds the site from a fixture artifact
+npm run check       # astro check
 ```
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+Data model: [docs/dev/data-model.md](docs/dev/data-model.md). Design explorations that led
+to the current look: [docs/dev/plans/design-options](docs/dev/plans/design-options).
 
-## 🧞 Commands
+Versioning: `VERSION` is the single source of truth; every change is logged in
+[CHANGELOG.md](CHANGELOG.md).
 
-All commands are run from the root of the project, from a terminal:
+## License
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+MIT — see [LICENSE](LICENSE).

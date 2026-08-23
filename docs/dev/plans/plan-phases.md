@@ -73,41 +73,41 @@ Tests
 
 ---
 
-## Phase 2 — Site skeleton: shell, profile, listing, repo overview *(current)*
+## Phase 2 — Site skeleton: shell, profile, listing, repo overview ✅ *(done 2026-08-23)*
 
 Goal: first deployable site. Thin, but every page that exists is real.
 
 Ships
-- [ ] Global layout from the chosen design: sidebar nav, header search box (static for now),
+- [x] Global layout from the chosen design: sidebar nav, header search box (static for now),
   light/dark theme, fire/ice token system in plain CSS.
-- [ ] **Profile overview** from `profile.md` (markdown body + frontmatter): rendered README,
+- [x] **Profile overview** from `profile.md` (markdown body + frontmatter): rendered README,
   links (sites, LinkedIn, email, location, workplace, school, other forges), pinned repos
   (≤10) rendered as cards. Contribution graph / top languages / event log are stubbed
   out with "coming in Phase 4" placeholders, *or* omitted entirely — no fake data.
-- [ ] **Repo listing** page: all repos as cards (name, short description, top 3 languages,
+- [x] **Repo listing** page: all repos as cards (name, short description, top 3 languages,
   last updated). Sorting (newest/oldest/name), filters (language, template/normal,
   tags), text search, 50-per-page pagination. Svelte island for the interactive parts;
   pre-rendered first page works without JS.
-- [ ] **Repo overview** page: metadata panel (description, links, tags, license, template
+- [x] **Repo overview** page: metadata panel (description, links, tags, license, template
   banner), language bar, contributor list, rendered README, clone panel (copyable
   `git clone` of the upstream URL, and/or pointer to the zip from Phase 3).
-- [ ] 404 page.
+- [x] 404 page.
 
 Done when
-- [ ] `astro build` produces a fully static site from the Phase 1 artifact with no runtime
+- [x] `astro build` produces a fully static site from the Phase 1 artifact with no runtime
   server and no network calls.
-- [ ] Lighthouse a11y ≥ 90 on the three page types.
+- [x] Lighthouse a11y ≥ 90 on the three page types. *(100 / 100 / 100)*
 
 Tests
-- [ ] Unit: listing filter/sort/search/pagination logic (pure functions, not components).
-- [ ] UI (Playwright or equivalent): listing filters work with and without JS; profile renders
+- [x] Unit: listing filter/sort/search/pagination logic (pure functions, not components).
+- [x] UI (Playwright or equivalent): listing filters work with and without JS; profile renders
   frontmatter links; repo page shows README and metadata from the fixture artifact.
-- [ ] Sync: a test that builds the site from the fixture artifact and asserts every repo in
+- [x] Sync: a test that builds the site from the fixture artifact and asserts every repo in
   the artifact has a generated page and appears in the listing.
 
 ---
 
-## Phase 3 — Repo depth: files, history, refs, downloads, releases
+## Phase 3 — Repo depth: files, history, refs, downloads, releases *(next)*
 
 Goal: the repo page becomes a real read-only forge view.
 

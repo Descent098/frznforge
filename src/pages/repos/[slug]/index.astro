@@ -1,0 +1,219 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { getRepoRoutes } from '../../../lib/routes';
+import { renderMarkdown, isMarkdownPath } from '../../../lib/markdown';
+import { formatInt, getConfig, getData, heatFor, initials, prettyUrl, relativeTime } from '../../../lib/site';
+import type { Repo } from '../../../lib/data/schema';
+
+export async function getStaticPaths() {
+  const data = await getData();
+  return getRepoRoutes(data).map(({ slug, repo }) => ({ params: { slug }, props: { repo } }));
+}
+
+interface Props { repo: Repo }
+const { repo } = Astro.props;
+const cfg = await getConfig();
+const now = new Date();
+
+const defaultBranch = repo.branches.find((b) => b.name === repo.defaultBranch) ?? null;
+const headCommit = defaultBranch ? repo.commits[defaultBranch.head] ?? null : null;
+const latestTag = repo.gitTags.length ? [...repo.gitTags].sort((a, b) => b.date.localeCompare(a.date))[0]! : null;
+
+/** Root-level entries of the default-branch tree (dirs first, then files). */
+const rootEntries = repo.tree
+  .filter((e) => !e.path.includes('/'))
+  .sort((a, b) => Number(b.type === 'tree') - Number(a.type === 'tree') || a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
+
+const readmeHtml = repo.readme
+  ? isMarkdownPath(repo.readme.path)
+    ? renderMarkdown(repo.readme.content)
+    : `<pre>${repo.readme.content.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</pre>`
+  : null;
+
+const links: Array<{ key: string; label: string; icon: string; url: string }> = [];
+if (repo.links.homepage) links.push({ key: 'homepage', label: 'Homepage', icon: '#i-globe', url: repo.links.homepage });
+if (repo.links.issues) links.push({ key: 'issues', label: 'Issue tracker', icon: '#i-bolt', url: repo.links.issues });
+if (repo.links.donations) links.push({ key: 'donations', label: 'Donations', icon: '#i-heart', url: repo.links.donations });
+if (repo.links.upstream) links.push({ key: 'upstream', label: 'Upstream', icon: /github\.com/.test(repo.links.upstream) ? '#i-github' : '#i-forge', url: repo.links.upstream });
+
+/** Clone URL: the upstream if it looks like a git host, else nothing (no running git server here). */
+const cloneUrl = repo.links.upstream ? repo.links.upstream.replace(/\/+$/, '') + (repo.links.upstream.endsWith('.git') ? '' : '.git') : null;
+const upstreamHost = repo.links.upstream ? new URL(repo.links.upstream).hostname.replace(/^www\./, '') : null;
+const heat = heatFor(repo.updatedAt, now);
+---
+<Base title={repo.name} description={repo.description ?? `${repo.name} — ${cfg.owner.name}`} active="repos">
+  <div class="hf-container">
+    <header class="hf-repo-head">
+      <div class="hf-repo-head-row">
+        <nav class="hf-crumb" aria-label="Breadcrumb">
+          <span class="hf-repo-icon"><svg class="hf-i"><use href="#i-repo" /></svg></span>
+          <a href="/">{cfg.owner.handle}</a>
+          <span class="hf-sep">/</span>
+          <strong>{repo.name}</strong>
+          {repo.template && <span class="hf-tag hf-tag--template">Template</span>}
+        </nav>
+        <div class="hf-actions">
+          {repo.links.upstream && <a class="hf-btn" href={repo.links.upstream} rel="noopener"><svg class="hf-i"><use href="#i-ext" /></svg> Open on {upstreamHost}</a>}
+        </div>
+      </div>
+      {repo.description && <p class="hf-repo-summary">{repo.description}</p>}
+      {repo.template && (
+        <p class="hf-banner hf-banner--template"><svg class="hf-i"><use href="#i-copy" /></svg> This is a <b>template repository</b> — clone it, rename it and make it yours rather than contributing back.</p>
+      )}
+      <div class="hf-badges">
+        {repo.license && <span class="hf-badge"><svg class="hf-i"><use href="#i-scale" /></svg> <b>{repo.license.spdx ?? 'Custom'}</b> license</span>}
+        {repo.defaultBranch && <span class="hf-badge"><svg class="hf-i"><use href="#i-branch" /></svg> default <code>{repo.defaultBranch}</code></span>}
+        <span class="hf-badge"><svg class="hf-i"><use href="#i-branch" /></svg> <b>{repo.branches.length}</b> branch{repo.branches.length === 1 ? '' : 'es'}</span>
+        <span class="hf-badge"><svg class="hf-i"><use href="#i-tag" /></svg> <b>{repo.gitTags.length}</b> tag{repo.gitTags.length === 1 ? '' : 's'}</span>
+        <span class="hf-badge"><svg class="hf-i"><use href="#i-people" /></svg> <b>{repo.contributors.length}</b> contributor{repo.contributors.length === 1 ? '' : 's'}</span>
+      </div>
+      <nav class="hf-tabs" aria-label="Repository sections">
+        <a href={`/repos/${repo.slug}/`} aria-current="page"><svg class="hf-i"><use href="#i-code" /></svg> Code</a>
+        <span class="hf-tab-soon" title="Coming in a later phase"><svg class="hf-i"><use href="#i-history" /></svg> Commits <span class="hf-count">{formatInt(repo.commitCount)}</span></span>
+        <span class="hf-tab-soon" title="Coming in a later phase"><svg class="hf-i"><use href="#i-package" /></svg> Releases <span class="hf-count">{repo.gitTags.length}</span></span>
+      </nav>
+    </header>
+
+    {repo.empty ? (
+      <section class="hf-card hf-empty" style="margin-top:16px">
+        <svg class="hf-i"><use href="#i-repo" /></svg>
+        <p><strong>This repository is empty.</strong> It has no commits on any branch yet.</p>
+      </section>
+    ) : (
+      <div class="hf-repo-body" style="margin-top:16px">
+        <div class="hf-repo-main">
+          <div class="hf-toolbar">
+            {repo.defaultBranch && <span class="hf-btn hf-branch-btn"><svg class="hf-i"><use href="#i-branch" /></svg> <code>{repo.defaultBranch}</code></span>}
+            <div class="hf-toolbar-right">
+              {cloneUrl && (
+                <details class="hf-clone">
+                  <summary class="hf-btn hf-btn--primary"><svg class="hf-i"><use href="#i-download" /></svg> Clone <svg class="hf-i hf-caret"><use href="#i-chev" /></svg></summary>
+                  <div class="hf-clone-pop" role="region" aria-label="Clone options">
+                    <h4>Clone <span class="hf-tabs-mini"><span class="is-on">HTTPS</span></span></h4>
+                    <div class="hf-clone-url"><code>{cloneUrl}</code><button type="button" aria-label="Copy URL" data-copy={cloneUrl}><svg class="hf-i"><use href="#i-copy" /></svg></button></div>
+                    <p>This site is a read-only mirror. Clone from the upstream on {upstreamHost}.</p>
+                  </div>
+                </details>
+              )}
+            </div>
+          </div>
+
+          {headCommit && (
+            <div class="hf-commit-bar">
+              <span class="hf-author"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">{initials(headCommit.author.name)}</span> {headCommit.author.name}</span>
+              <span class="hf-msg">{headCommit.subject}</span>
+              <span class="hf-dot">·</span>
+              <code class="hf-sha">{headCommit.sha.slice(0, 7)}</code>
+              <span class="hf-dot">·</span>
+              <span class={`hf-age t-${heatFor(headCommit.commitDate, now)}`} title={headCommit.commitDate}>{relativeTime(headCommit.commitDate, now)}</span>
+              <span class="hf-commits-link"><svg class="hf-i"><use href="#i-history" /></svg> <b>{formatInt(repo.commitCount)}</b> commits</span>
+            </div>
+          )}
+
+          {rootEntries.length > 0 ? (
+            <div class="hf-card hf-files">
+              <table>
+                <thead>
+                  <tr><th scope="col">Name</th><th scope="col">Last commit</th><th scope="col" style="text-align:right">Updated</th></tr>
+                </thead>
+                <tbody>
+                  {rootEntries.map((e) => {
+                    const c = repo.commits[e.lastCommit];
+                    return (
+                      <tr>
+                        <td><span class={`hf-fname${e.type === 'tree' ? ' is-dir' : ''}`}><svg class="hf-i"><use href={e.type === 'tree' ? '#i-folder' : '#i-file'} /></svg>{e.name}</span></td>
+                        <td class="hf-fmsg">{c?.subject ?? ''}</td>
+                        <td class="hf-fage"><span class={`hf-age t-${heatFor(c?.commitDate, now)}`} title={c?.commitDate}>{relativeTime(c?.commitDate, now)}</span></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div class="hf-card hf-empty">
+              <svg class="hf-i"><use href="#i-folder" /></svg>
+              <p><strong>No files on <code>{repo.defaultBranch}</code>.</strong> The latest commit left the tree empty.</p>
+            </div>
+          )}
+
+          {readmeHtml && repo.readme && (
+            <article class="hf-card hf-readme-card">
+              <div class="hf-card-head">
+                <svg class="hf-i"><use href="#i-note" /></svg>
+                <h2>README</h2>
+                <code>{repo.readme.path}</code>
+              </div>
+              <div class="hf-card-body hf-md" set:html={readmeHtml} />
+            </article>
+          )}
+        </div>
+
+        <aside class="hf-card hf-about" aria-labelledby="about-h">
+          <section class="hf-about-section">
+            <h3 id="about-h">About</h3>
+            {repo.description ? <p>{repo.description}</p> : <p class="hf-muted">No description provided.</p>}
+            {links.length > 0 && (
+              <ul class="hf-about-links">
+                {links.map((l) => (
+                  <li><svg class="hf-i"><use href={l.icon} /></svg><span class="hf-lbl">{l.label}</span><a href={l.url} rel="noopener">{prettyUrl(l.url)}</a></li>
+                ))}
+              </ul>
+            )}
+          </section>
+          {repo.tags.length > 0 && (
+            <section class="hf-about-section">
+              <h3>Tags</h3>
+              <div class="hf-about-tags">
+                {repo.tags.map((t) => <a class="hf-tag" href={`/repos/?tag=${encodeURIComponent(t)}`}>{t}</a>)}
+              </div>
+            </section>
+          )}
+          <section class="hf-about-section">
+            <ul class="hf-about-meta">
+              {repo.license && <li><svg class="hf-i"><use href="#i-scale" /></svg> <b>{repo.license.spdx ?? 'Custom'}</b>&nbsp;license{repo.license.file && <span class="hf-muted">&nbsp;· {repo.license.file}</span>}</li>}
+              <li><svg class="hf-i"><use href="#i-pulse" /></svg> <b>{formatInt(repo.commitCount)}</b>&nbsp;commits · last <span class={`hf-age t-${heat}`}>{relativeTime(repo.updatedAt, now)}</span></li>
+              {latestTag && <li><svg class="hf-i"><use href="#i-tag" /></svg> <b>{repo.gitTags.length}</b>&nbsp;tags · latest <code>{latestTag.name}</code></li>}
+              {repo.createdAt && <li><svg class="hf-i"><use href="#i-history" /></svg> created <span class="hf-age t-cold" title={repo.createdAt}>{relativeTime(repo.createdAt, now)}</span></li>}
+            </ul>
+          </section>
+          {repo.languages.length > 0 && (
+            <section class="hf-about-section">
+              <h3>Languages</h3>
+              <div class="hf-langbar" aria-hidden="true">
+                {repo.languages.map((l) => <span style={`width:${l.percent}%;background:${l.color ?? 'var(--hf-lang-other)'}`}></span>)}
+              </div>
+              <div class="hf-lang-legend">
+                <ul>
+                  {repo.languages.map((l) => <li><span><i class="hf-lang-dot" style={`background:${l.color ?? 'var(--hf-lang-other)'}`}></i><b>{l.name}</b></span><i>{l.percent}%</i></li>)}
+                </ul>
+              </div>
+            </section>
+          )}
+          {repo.contributors.length > 0 && (
+            <section class="hf-about-section">
+              <h3>Contributors <span class="hf-count hf-count--plain">{repo.contributors.length}</span></h3>
+              <div class="hf-contributors">
+                {repo.contributors.map((c) => (
+                  <span class="hf-contributor"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">{initials(c.name)}</span><strong>{c.name}</strong><small>{formatInt(c.commits)} commit{c.commits === 1 ? '' : 's'}</small></span>
+                ))}
+              </div>
+            </section>
+          )}
+        </aside>
+      </div>
+    )}
+  </div>
+
+  <script>
+    document.querySelectorAll<HTMLButtonElement>('button[data-copy]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.copy ?? '');
+          btn.classList.add('is-copied');
+          setTimeout(() => btn.classList.remove('is-copied'), 1200);
+        } catch {}
+      });
+    });
+  </script>
+</Base>

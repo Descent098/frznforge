@@ -1,0 +1,49 @@
+---
+import { getConfig } from '../lib/site';
+import { initials, prettyUrl } from '../lib/site';
+
+interface Props {
+  active: 'profile' | 'repos' | null;
+  repoCount: number;
+}
+const { active, repoCount } = Astro.props;
+const cfg = await getConfig();
+const siteHost = cfg.site.url ? prettyUrl(cfg.site.url) : null;
+---
+<aside class="hf-sidebar">
+  <div class="hf-sidebar-card">
+    <a class="hf-brand" href="/">
+      <span class="hf-brand-mark"><svg><use href="#i-flame" /></svg></span>
+      <span class="hf-brand-name">{cfg.site.title}{siteHost && <small>{siteHost}</small>}</span>
+    </a>
+
+    <!-- Phase 4 wires this to the search index + command palette; static affordance for now. -->
+    <a class="hf-search" href="/repos/">
+      <svg class="hf-i"><use href="#i-search" /></svg>
+      <span>Search repos…</span>
+      <kbd class="hf-kbd">Ctrl K</kbd>
+    </a>
+
+    <nav class="hf-nav" aria-label="Primary">
+      <a href="/" aria-current={active === 'profile' ? 'page' : undefined}>
+        <svg class="hf-i"><use href="#i-home" /></svg> Overview
+      </a>
+      <a href="/repos/" aria-current={active === 'repos' ? 'page' : undefined}>
+        <svg class="hf-i"><use href="#i-repo" /></svg> Repositories <span class="hf-count">{repoCount}</span>
+      </a>
+    </nav>
+
+    <div class="hf-sidebar-foot">
+      <button class="hf-theme-btn" type="button" id="hf-theme-toggle" aria-label="Theme — toggle light/dark">
+        <svg class="hf-i hf-i-sun"><use href="#i-sun" /></svg>
+        <svg class="hf-i hf-i-moon"><use href="#i-moon" /></svg>
+        <span>Theme</span>
+        <kbd class="hf-kbd">T</kbd>
+      </button>
+      <a class="hf-owner" href="/" aria-label={`${cfg.owner.name} (@${cfg.owner.handle}) — overview`}>
+        <span class="hf-avatar" aria-hidden="true">{initials(cfg.owner.name)}</span>
+        <span class="hf-owner-text"><strong>{cfg.owner.name}</strong><span>@{cfg.owner.handle}</span></span>
+      </a>
+    </div>
+  </div>
+</aside>

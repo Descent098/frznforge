@@ -20,3 +20,19 @@ Consult these guides before working on related tasks:
 - [Adding or managing content](https://docs.astro.build/en/guides/content-collections/)
 - [Adding styles or using Tailwind](https://docs.astro.build/en/guides/styling/)
 - [Supporting multiple languages](https://docs.astro.build/en/guides/internationalization/)
+
+## Project layout & commands
+
+- `frznforge.config.ts` — site config (owner, repos to ingest, palette). `content/profile.md` — profile page.
+- `npm run ingest` → `data/forge.json` + `data/blobs/` (gitignored). `npm run build` = ingest + `astro build`.
+- `src/lib/data/schema.ts` is the ingest ↔ site contract (zod). Bump `SCHEMA_VERSION` + `docs/dev/data-model.md` + snapshots on any change.
+- `src/lib/ingest/*` reads git via the CLI only (never the working tree). `src/lib/{site,format,listing,routes,markdown}.ts` are site helpers; `format.ts` and `listing.ts` must stay browser-safe (used by Svelte islands).
+- Styles: one plain-CSS file `src/styles/global.css` (Hearth design, `hf-` prefix, tokens at top). No Tailwind/Sass.
+
+## Testing
+
+- `npm test` — vitest unit tests (`tests/unit`), fixture git repos in temp dirs.
+- `npm run test:e2e` — Playwright; builds the site from fixture repos into `tests/.tmp/e2e` first.
+- `npm run check` — `astro check`. Keep all three green before committing.
+- Plans & phase checklist: `docs/dev/plans/plan-phases.md`.
+
