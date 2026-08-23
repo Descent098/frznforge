@@ -42,6 +42,10 @@ describe('commits', () => {
     expect(second.authorDate).toBe(at(60));
 
     expect(commits[c3]!.parents).toEqual([c2]);
+
+    expect(first.files).toEqual([{ path: 'a.txt', additions: 1, deletions: 0 }]);
+    expect(first.stats).toEqual({ filesChanged: 1, additions: 1, deletions: 0 });
+    expect(second.files).toEqual([{ path: 'b.txt', additions: 1, deletions: 0 }]);
   });
 
   it('returns an empty record for no shas', async () => {
@@ -67,5 +71,71 @@ describe('commits', () => {
     const res = await loadBranches(repo.dir, refs, 3);
     expect(res.branches[0]!.commits).toHaveLength(3);
     expect(res.warnings).toEqual([]);
+  });
+});
+
+describe('commit numstat (files + stats)', () => {
+  let r: FixtureRepo;
+  let root: string;
+  let multi: string;
+  let bin: string;
+  let merge: string;
+
+  beforeAll(() => {
+    r = FixtureRepo.create('numstat');
+    root = r.writeAndCommit(
+      { 'a.txt': 'one\ntwo\n', 'b.txt': 'x\n', 'img.bin': Buffer.from([0, 1, 2]) },
+      'root',
+      { date: at(0) },
+    );
+    multi = r.writeAndCommit(
+      { 'a.txt': 'one\nTWO\nthree\n', 'b.txt': 'x\ny\n' },
+      'touch two files',
+      { date: at(60) },
+    );
+    bin = r.writeAndCommit({ 'img.bin': Buffer.from([0, 9]) }, 'binary change', { date: at(120) });
+    r.checkout('side', true);
+    r.git('reset', '-q', '--hard', root);
+    r.writeAndCommit({ 'side.txt': 'side\n' }, 'side work', { date: at(180) });
+    r.checkout('main');
+    r.gitWith({ GIT_AUTHOR_DATE: at(240), GIT_COMMITTER_DATE: at(240) }, 'merge', '--no-ff', '--no-edit', '-q', 'side');
+    merge = r.head();
+  });
+  afterAll(() => r.cleanup());
+
+  it('root commit counts every file as additions', async () => {
+    const commits = await loadCommits(r.dir, [root]);
+    const c = commits[root]!;
+    expect(c.files).toEqual([
+      { path: 'a.txt', additions: 2, deletions: 0 },
+      { path: 'b.txt', additions: 1, deletions: 0 },
+      { path: 'img.bin', additions: null, deletions: null },
+    ]);
+    expect(c.stats).toEqual({ filesChanged: 3, additions: 3, deletions: 0 });
+  });
+
+  it('multi-file commit has per-file +/- counts and summed stats', async () => {
+    const commits = await loadCommits(r.dir, [multi]);
+    const c = commits[multi]!;
+    expect(c.files).toEqual([
+      { path: 'a.txt', additions: 2, deletions: 1 },
+      { path: 'b.txt', additions: 1, deletions: 0 },
+    ]);
+    expect(c.stats).toEqual({ filesChanged: 2, additions: 3, deletions: 1 });
+  });
+
+  it('binary changes get null counts but still count toward filesChanged', async () => {
+    const commits = await loadCommits(r.dir, [bin]);
+    const c = commits[bin]!;
+    expect(c.files).toEqual([{ path: 'img.bin', additions: null, deletions: null }]);
+    expect(c.stats).toEqual({ filesChanged: 1, additions: 0, deletions: 0 });
+  });
+
+  it('merge commits have no numstat records (documented)', async () => {
+    const commits = await loadCommits(r.dir, [merge]);
+    const c = commits[merge]!;
+    expect(c.parents).toHaveLength(2);
+    expect(c.files).toEqual([]);
+    expect(c.stats).toEqual({ filesChanged: 0, additions: 0, deletions: 0 });
   });
 });

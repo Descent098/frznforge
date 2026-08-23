@@ -1,0 +1,105 @@
+---
+import Base from '../../../../layouts/Base.astro';
+import RepoHeader from '../../../../components/RepoHeader.astro';
+import CopyScript from '../../../../components/CopyScript.astro';
+import { blobUrl, commitUrl } from '../../../../lib/routes';
+import { formatInt, getData, heatFor, initials, relativeTime } from '../../../../lib/site';
+import type { Commit, Repo } from '../../../../lib/data/schema';
+
+export async function getStaticPaths() {
+  const data = await getData();
+  return data.repos.flatMap((repo) =>
+    repo.empty
+      ? []
+      : Object.keys(repo.commits).map((sha) => ({
+          params: { slug: repo.slug, sha },
+          props: { repo },
+        })),
+  );
+}
+
+interface Props { repo: Repo }
+const { repo } = Astro.props;
+const commit: Commit = repo.commits[Astro.params.sha!]!;
+const now = new Date();
+
+const parents = commit.parents.filter((p) => !!repo.commits[p]);
+const sameAuthor = commit.author.name === commit.committer.name && commit.author.email === commit.committer.email;
+/** Link a changed path to its blob page on the DEFAULT branch when it still exists there. */
+const pathLink = (p: string) => (repo.defaultBranch && repo.files[p] ? blobUrl(repo.slug, repo.defaultBranch, p) : null);
+---
+<Base title={`${commit.subject} · ${repo.name}`} description={repo.description ?? undefined} active="repos">
+  <div class="hf-container">
+    <RepoHeader repo={repo} active="commits" />
+
+    <div class="hf-repo-main" style="margin-top:16px">
+      <article class="hf-card hf-commit-page">
+        <header class="hf-commit-page-head">
+          <h1>{commit.subject}</h1>
+          {commit.body && <pre class="hf-commit-body">{commit.body}</pre>}
+          <div class="hf-commit-page-meta">
+            <span class="hf-author"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">{initials(commit.author.name)}</span> <b>{commit.author.name}</b></span>
+            <span class="hf-dot">·</span>
+            <span>authored <span class={`hf-age t-${heatFor(commit.authorDate, now)}`} title={commit.authorDate}>{relativeTime(commit.authorDate, now)}</span></span>
+            {!sameAuthor && (
+              <>
+                <span class="hf-dot">·</span>
+                <span>committed by <b>{commit.committer.name}</b> <span class={`hf-age t-${heatFor(commit.commitDate, now)}`} title={commit.commitDate}>{relativeTime(commit.commitDate, now)}</span></span>
+              </>
+            )}
+          </div>
+          <div class="hf-commit-page-refs">
+            <span class="hf-badge">commit <button type="button" data-copy={commit.sha} aria-label="Copy full sha"><code>{commit.sha.slice(0, 12)}</code> <svg class="hf-i"><use href="#i-copy" /></svg></button></span>
+            {parents.length > 0 && (
+              <span class="hf-badge">
+                {parents.length === 1 ? 'parent' : 'parents'}{' '}
+                {parents.map((p, i) => (
+                  <>
+                    {i > 0 && <span class="hf-dot">·</span>}
+                    <a href={commitUrl(repo.slug, p)}><code>{p.slice(0, 7)}</code></a>
+                  </>
+                ))}
+              </span>
+            )}
+            {commit.parents.length === 0 && <span class="hf-badge">root commit</span>}
+          </div>
+        </header>
+
+        <div class="hf-commit-page-stats">
+          <b>{formatInt(commit.stats.filesChanged)}</b> file{commit.stats.filesChanged === 1 ? '' : 's'} changed
+          <span class="hf-adds">+{formatInt(commit.stats.additions)}</span>
+          <span class="hf-dels">−{formatInt(commit.stats.deletions)}</span>
+        </div>
+
+        {commit.files.length > 0 && (
+          <table class="hf-commit-files">
+            <thead>
+              <tr><th scope="col">File</th><th scope="col" style="text-align:right">Changes</th></tr>
+            </thead>
+            <tbody>
+              {commit.files.map((f) => {
+                const href = pathLink(f.path);
+                return (
+                  <tr>
+                    <td>{href ? <a class="hf-commit-file-path" href={href}><code>{f.path}</code></a> : <code>{f.path}</code>}</td>
+                    <td class="hf-commit-file-stats">
+                      {f.additions === null || f.deletions === null ? (
+                        <span class="hf-muted">binary</span>
+                      ) : (
+                        <>
+                          <span class="hf-adds">+{formatInt(f.additions)}</span>
+                          <span class="hf-dels">−{formatInt(f.deletions)}</span>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </article>
+    </div>
+  </div>
+  <CopyScript />
+</Base>

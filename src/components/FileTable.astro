@@ -1,0 +1,57 @@
+---
+/**
+ * File listing table for a directory of a ref: dirs first, name links to tree/blob pages,
+ * last-commit subject links to the commit page, heat-coloured age. Optional ".." parent row.
+ */
+import { blobUrl, commitUrl, treeUrl } from '../lib/routes';
+import { heatFor, relativeTime } from '../lib/site';
+import type { Repo, TreeEntry } from '../lib/data/schema';
+
+interface Props {
+  repo: Repo;
+  /** Ref NAME (not slugged) the entries belong to. */
+  refName: string;
+  entries: TreeEntry[];
+  /** URL for a ".." row (omit at the root). */
+  parentUrl?: string;
+}
+const { repo, refName, entries, parentUrl } = Astro.props;
+const now = new Date();
+const sorted = [...entries].sort(
+  (a, b) => Number(b.type === 'tree') - Number(a.type === 'tree') || a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }),
+);
+const hrefFor = (e: TreeEntry) => (e.type === 'tree' ? treeUrl(repo.slug, refName, e.path) : e.type === 'commit' ? null : blobUrl(repo.slug, refName, e.path));
+---
+<div class="hf-card hf-files">
+  <table>
+    <thead>
+      <tr><th scope="col">Name</th><th scope="col">Last commit</th><th scope="col" style="text-align:right">Updated</th></tr>
+    </thead>
+    <tbody>
+      {parentUrl && (
+        <tr class="hf-parent">
+          <td colspan="3"><a href={parentUrl} aria-label="Up a level">..</a></td>
+        </tr>
+      )}
+      {sorted.map((e) => {
+        const c = repo.commits[e.lastCommit];
+        const href = hrefFor(e);
+        return (
+          <tr>
+            <td>
+              {href ? (
+                <a href={href} class={`hf-fname${e.type === 'tree' ? ' is-dir' : ''}`}>
+                  <svg class="hf-i"><use href={e.type === 'tree' ? '#i-folder' : '#i-file'} /></svg>{e.name}
+                </a>
+              ) : (
+                <span class="hf-fname"><svg class="hf-i"><use href="#i-package" /></svg>{e.name} <small class="hf-muted">(submodule)</small></span>
+              )}
+            </td>
+            <td class="hf-fmsg">{c ? <a href={commitUrl(repo.slug, c.sha)}>{c.subject}</a> : ''}</td>
+            <td class="hf-fage"><span class={`hf-age t-${heatFor(c?.commitDate, now)}`} title={c?.commitDate}>{relativeTime(c?.commitDate, now)}</span></td>
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+</div>

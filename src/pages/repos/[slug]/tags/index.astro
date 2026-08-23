@@ -1,0 +1,63 @@
+---
+import Base from '../../../../layouts/Base.astro';
+import RepoHeader from '../../../../components/RepoHeader.astro';
+import { archiveUrl, commitUrl, releaseUrl } from '../../../../lib/routes';
+import { getData, heatFor, relativeTime } from '../../../../lib/site';
+import type { Repo } from '../../../../lib/data/schema';
+
+export async function getStaticPaths() {
+  const data = await getData();
+  return data.repos.filter((r) => !r.empty).map((repo) => ({ params: { slug: repo.slug }, props: { repo } }));
+}
+
+interface Props { repo: Repo }
+const { repo } = Astro.props;
+const now = new Date();
+const tags = [...repo.gitTags].sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
+const hasArchive = (name: string) => repo.archives.some((a) => a.kind === 'tag' && a.ref === name);
+---
+<Base title={`Tags · ${repo.name}`} description={repo.description ?? undefined} active="repos">
+  <div class="hf-container">
+    <RepoHeader repo={repo} active="tags" />
+
+    <div class="hf-repo-main" style="margin-top:16px">
+      {tags.length === 0 ? (
+        <div class="hf-card hf-empty">
+          <svg class="hf-i"><use href="#i-tag" /></svg>
+          <p><strong>No tags yet.</strong> Tags will appear here once the repository has some.</p>
+        </div>
+      ) : (
+        <div class="hf-card hf-reflist hf-taglist">
+          <table>
+            <thead>
+              <tr><th scope="col">Tag</th><th scope="col">Message</th><th scope="col">Target</th><th scope="col" style="text-align:right">Date</th><th scope="col" style="text-align:right">Links</th></tr>
+            </thead>
+            <tbody>
+              {tags.map((t) => (
+                <tr>
+                  <td>
+                    <span class="hf-ref-name"><svg class="hf-i"><use href="#i-tag" /></svg><code>{t.name}</code></span>
+                    <span class={`hf-tag ${t.annotated ? 'hf-tagkind--annotated' : 'hf-tagkind--light'}`}>{t.annotated ? 'annotated' : 'lightweight'}</span>
+                  </td>
+                  <td class="hf-fmsg">{t.annotated && t.message ? t.message.split('\n')[0] : ''}</td>
+                  <td>
+                    {repo.commits[t.target] ? (
+                      <a class="hf-sha-link" href={commitUrl(repo.slug, t.target)}><code>{t.target.slice(0, 7)}</code></a>
+                    ) : (
+                      <code>{t.target.slice(0, 7)}</code>
+                    )}
+                  </td>
+                  <td class="hf-fage"><span class={`hf-age t-${heatFor(t.date, now)}`} title={t.date}>{relativeTime(t.date, now)}</span></td>
+                  <td class="hf-ref-links">
+                    {hasArchive(t.name) && <a href={archiveUrl(repo.slug, t.name)} title="Download source zip"><svg class="hf-i"><use href="#i-zip" /></svg> zip</a>}
+                    {t.annotated && <a href={releaseUrl(repo.slug, t.name)}><svg class="hf-i"><use href="#i-package" /></svg> Release</a>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  </div>
+</Base>

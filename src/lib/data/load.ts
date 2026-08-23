@@ -32,10 +32,15 @@ export function resetForgeDataCache(): void {
   cache = null;
 }
 
-/** Read a stored blob by sha; null when not stored (binary / too large / unknown). */
-export function readBlob(outDir: string, sha: string): string | null {
+/** Read a stored blob by sha as raw bytes; null when not stored (too large / unknown). */
+export function readBlobBuffer(outDir: string, sha: string): Buffer | null {
   const file = path.join(outDir, BLOB_DIRNAME, sha);
-  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  return fs.existsSync(file) ? fs.readFileSync(file) : null;
+}
+
+/** Read a stored blob by sha as utf8 text; null when not stored (binary / too large / unknown). */
+export function readBlob(outDir: string, sha: string): string | null {
+  return readBlobBuffer(outDir, sha)?.toString('utf8') ?? null;
 }
 
 export function findRepo(data: ForgeData, slug: string): Repo | undefined {

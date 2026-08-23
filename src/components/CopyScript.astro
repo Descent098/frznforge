@@ -1,0 +1,15 @@
+---
+// Wires every `button[data-copy]` on the page to the clipboard (same behaviour as the
+// repo overview's inline script — the command palette relies on this selector too).
+---
+<script>
+  document.querySelectorAll<HTMLButtonElement>('button[data-copy]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy ?? '');
+        btn.classList.add('is-copied');
+        setTimeout(() => btn.classList.remove('is-copied'), 1200);
+      } catch {}
+    });
+  });
+</script>

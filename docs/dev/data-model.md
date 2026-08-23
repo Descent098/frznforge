@@ -13,18 +13,26 @@ source of truth for exact shapes.
 ```
 <ingest.outDir>/              (default ./data, git-ignored)
 ├── forge.json                the ForgeData artifact (pretty-printed, 2-space indent, trailing newline)
-└── blobs/
-    └── <sha>                 raw content of every *stored* file, keyed by git blob id
+├── blobs/
+│   └── <sha>                 raw content of every *stored* file, keyed by git blob id
+└── archives/
+    └── <slug>/
+        └── <ref-slug>.zip    zip source archive per ref (default branch + treed tags)
 ```
 
 - `forge.json` is read by `loadForgeData(outDir)` (`src/lib/data/load.ts`), which validates
   it with `parseForgeData`. A missing artifact is not an error — the site builds empty.
-- `blobs/<sha>` holds the bytes of each file whose `FileInfo.stored` is `true`. The sha is
-  the git blob object id, so identical content across repos/paths is stored once.
+- `blobs/<sha>` holds the bytes of each file whose `FileInfo.stored` is `true` — since
+  schema v2 this includes binary files within the size cap. The sha is the git blob object
+  id, so identical content across repos/paths/branches is stored once.
   `readBlob(outDir, sha)` returns it as UTF-8 text.
-- `writeArtifact` makes `blobs/` mirror the current artifact exactly: missing or
-  size-mismatched blobs are (re)written and any file not referenced by the current run
-  is deleted.
+- `archives/<slug>/<ref-slug>.zip` are produced with `git archive --format=zip <commit>`
+  (committed content only, never the working tree). `<ref-slug>` is the ref name with every
+  `/` replaced by `~` (git refnames can never contain `~`, so this is collision-free), e.g.
+  tag `rel/1.0` → `rel~1.0.zip`. The prefix inside the zip is `<slug>-<ref-slug>/`.
+- `writeArtifact(data, blobs, archives, outDir)` makes `blobs/` and `archives/` mirror the
+  current artifact exactly: missing or size-mismatched files are (re)written and any file
+  not referenced by the current run is deleted.
 
 ## Guarantees
 
@@ -53,7 +61,7 @@ unwritable output dir, invalid site config) fail `npm run ingest`.
 
 | field           | meaning                                                                          |
 | --------------- | -------------------------------------------------------------------------------- |
-| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `1`). The site refuses artifacts of another version. |
+| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `2`). The site refuses artifacts of another version. |
 | `repos`         | `Repo[]`, sorted by slug.                                                        |
 | `warnings`      | `Warning[]` — site-level warnings plus a mirror of every repo's own warnings (with `repo` set). |
 
@@ -85,7 +93,9 @@ Git-derived:
 | `commitCount`   | `Object.keys(commits).length`.                                                                       |
 | `tree`          | Flat listing of the default-branch HEAD tree — every blob, tree, symlink and submodule at every depth, sorted by path. |
 | `files`         | `FileInfo` for every blob/symlink in `tree`, keyed by path (sorted).                                 |
-| `languages`     | `LanguageStat[]` — see "Language stats".                                                             |
+| `refTrees`      | `Record<refName, RefTree>` — browsable trees for every **non-default** branch plus the newest `ingest.tagTrees` tags (schema v2). The default branch is only in `tree`/`files`. Keys: branches first (name order), then treed tags (name order). |
+| `archives`      | `Archive[]` — zip source archives for the default branch + every treed tag (schema v2). `[]` when `ingest.archives` is `false` or the repo is empty. Order: default branch first, then tags by name. |
+| `languages`     | `LanguageStat[]` — see "Language stats". Computed from the **default branch** only, as are `contributors`, `readme`, license detection and `.frznforge.json`. |
 | `contributors`  | Authors grouped by lower-cased email.                                                                |
 | `readme`        | Root `README.md` (preferred) / `README` / `README.*`, with inlined content; `null` if absent, binary, or over `maxBlobBytes`. |
 | `createdAt`     | Earliest commit date (committer date) among `commits`.                                               |
@@ -123,6 +133,8 @@ Tags that point at trees or blobs (not commits) are not representable and are sk
 | `committer`, `commitDate`   | `{ name, email }`, ISO UTC.                                   |
 | `subject`                   | First paragraph of the message (`%s`).                         |
 | `body`                      | Everything after the first blank line, trimmed; `''` if none. |
+| `files`                     | `CommitFileChange[]` (schema v2): the files touched by the commit vs its **first parent**, from `git log --numstat`, in git's diff order. Each is `{ path, additions, deletions }`; binary files have `null` counts. Renames record the **target** path. **Merge commits have `files: []`** — plain `git log` emits no numstat for merges, and this is the documented behaviour, not an omission. Root commits count every file as added. |
+| `stats`                     | `{ filesChanged, additions, deletions }` — sums over `files`. Binary files count toward `filesChanged` but not the line sums. |
 
 ### `TreeEntry`
 
@@ -145,8 +157,35 @@ Tags that point at trees or blobs (not commits) are not representable and are sk
 | `size`     | Bytes.                                                                        |
 | `binary`   | A NUL byte occurs in the first 8000 bytes (git's heuristic).                  |
 | `tooLarge` | `size > ingest.maxBlobBytes`; content not stored.                             |
-| `stored`   | `!binary && !tooLarge` — content written to `blobs/<sha>`.                    |
+| `stored`   | `size <= ingest.maxBlobBytes` — content written to `blobs/<sha>`. Since schema v2 this **includes binary files** within the cap (for raw file serving / image previews); before v2 binaries were never stored. |
 | `language` | Language name from the extension/filename map (`src/lib/ingest/languages.ts`) or `null`. |
+
+### `RefTree` (schema v2)
+
+`{ kind, name, commit, tree, files }` — one entry per non-default ref in `Repo.refTrees`:
+
+- `kind` is `'branch'` or `'tag'`; `name` is the short ref name (also the record key);
+  `commit` is the commit the ref points at (annotated tags are peeled).
+- `tree`/`files` have exactly the same shape and rules as `Repo.tree`/`Repo.files`, but
+  `TreeEntry.lastCommit` is computed by walking history from **that ref's** head. Stored
+  blobs land in the same content-addressed `blobs/` store, so files unchanged across
+  branches cost nothing extra.
+- Every non-default branch gets a tree. Tags are capped at the newest `ingest.tagTrees`
+  (by tag date desc — tagger date for annotated tags, target commit date for lightweight
+  ones; ties broken by name). When tags are skipped by the cap, the repo gets one
+  `tag-trees-capped` warning. When a tag peels to a commit whose tree was already computed
+  (the default branch head or another ref), the tree/files are reused rather than rescanned.
+- In the pathological case of a branch and a tag sharing a name, the branch keeps the key
+  and the tag gets no tree.
+
+### `Archive` (schema v2)
+
+`{ ref, kind, commit, file, bytes }` — one entry per zip in `Repo.archives`, covering the
+default branch plus every tag that has a `RefTree`. `file` is the outDir-relative path
+`archives/<slug>/<ref-slug>.zip` (`<ref-slug>`: `/` → `~`); `bytes` is the zip size.
+Produced with `git archive --format=zip --prefix=<slug>-<ref-slug>/ <commit>` — mtimes
+inside the zip come from the commit, so output is deterministic for a fixed commit.
+Disabled entirely (`archives: []`) by `ingest.archives: false`.
 
 ### `LanguageStat` / language stats
 
@@ -191,6 +230,7 @@ repo overview). Candidates are root-level only; `README.md` is preferred over `R
 | `repo-meta-invalid`         | repo  | `.frznforge.json` exists in the tree but is not valid JSON / does not match `RepoMetaInput`; ignored. |
 | `description-truncated`     | repo  | In-repo description exceeded 300 characters and was truncated.                           |
 | `commits-capped`            | repo  | One or more branch commit lists were truncated to `ingest.maxCommits`.                   |
+| `tag-trees-capped`          | repo  | More tags than `ingest.tagTrees`; only the newest N have browsable trees / archives ("N of M tags have browsable trees"). |
 | `repo-not-found`            | site  | A configured path is not a git repository (or is a path inside one); the entry was skipped. |
 | `slug-collision`            | site  | Two configured repos resolved to the same slug; the later one (config order) was suffixed. `repo` holds the new slug. |
 
@@ -199,6 +239,15 @@ repo overview). Candidates are root-level only; `README.md` is preferred over `R
 Read from the default branch's HEAD tree (`<branch>:.frznforge.json`), never from disk.
 Shape is `RepoMetaInput`: `{ name?, description?, links?, tags?, template?, license?,
 releaseMode? }`. The site config's `overrides` for that repo win field-by-field.
+
+## Version history
+
+- **v2** — `Commit.files` + `Commit.stats` (numstat vs first parent; merges empty),
+  `Repo.refTrees` (non-default branches + newest `ingest.tagTrees` tags),
+  `Repo.archives` + the `archives/` directory (`git archive` zips, `ingest.archives`),
+  `FileInfo.stored` now also true for binary files within `maxBlobBytes`, new warning
+  `tag-trees-capped`.
+- **v1** — initial schema.
 
 ## Bumping `SCHEMA_VERSION`
 

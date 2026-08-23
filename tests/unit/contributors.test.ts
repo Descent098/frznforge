@@ -12,6 +12,8 @@ function commit(sha: string, name: string, email: string, date: string): Commit 
     commitDate: date,
     subject: 's',
     body: '',
+    files: [],
+    stats: { filesChanged: 0, additions: 0, deletions: 0 },
   };
 }
 

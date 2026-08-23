@@ -1,0 +1,66 @@
+---
+/**
+ * Branch/tag switcher dropdown (no JS — a <details> popup). Links every browsable ref;
+ * when `path` (a directory path) exists on the target ref it links to the same path there,
+ * otherwise to the ref root.
+ */
+import { browsableRefs, treeUrl, type BrowsableRef } from '../lib/routes';
+import type { Repo } from '../lib/data/schema';
+
+interface Props {
+  repo: Repo;
+  current: BrowsableRef;
+  /** Directory path being browsed ('' = root). */
+  path?: string;
+}
+const { repo, current, path = '' } = Astro.props;
+const refs = browsableRefs(repo);
+const branches = refs.filter((r) => r.kind === 'branch');
+const tags = refs.filter((r) => r.kind === 'tag');
+
+function target(ref: BrowsableRef): string {
+  if (!path) return treeUrl(repo.slug, ref.name);
+  const has = ref.tree.some((e) => e.type === 'tree' && e.path === path);
+  return treeUrl(repo.slug, ref.name, has ? path : '');
+}
+---
+<details class="hf-refsw">
+  <summary class="hf-btn hf-branch-btn" aria-label={`Switch ${current.kind}: ${current.name}`}>
+    <svg class="hf-i"><use href={current.kind === 'tag' ? '#i-tag' : '#i-branch'} /></svg>
+    <code>{current.name}</code>
+    <svg class="hf-i hf-caret"><use href="#i-chev" /></svg>
+  </summary>
+  <div class="hf-refsw-pop" role="region" aria-label="Switch branches and tags">
+    {branches.length > 0 && (
+      <div class="hf-refsw-group">
+        <h4>Branches</h4>
+        <ul>
+          {branches.map((r) => (
+            <li>
+              <a href={target(r)} class:list={{ 'is-current': r.name === current.name }} aria-current={r.name === current.name ? 'true' : undefined}>
+                <svg class="hf-i"><use href="#i-branch" /></svg>
+                <code>{r.name}</code>
+                {r.isDefault && <span class="hf-refsw-default">default</span>}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+    {tags.length > 0 && (
+      <div class="hf-refsw-group">
+        <h4>Tags</h4>
+        <ul>
+          {tags.map((r) => (
+            <li>
+              <a href={target(r)} class:list={{ 'is-current': r.name === current.name }} aria-current={r.name === current.name ? 'true' : undefined}>
+                <svg class="hf-i"><use href="#i-tag" /></svg>
+                <code>{r.name}</code>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+  </div>
+</details>

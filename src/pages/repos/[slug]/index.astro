@@ -1,6 +1,9 @@
 ---
 import Base from '../../../layouts/Base.astro';
-import { getRepoRoutes } from '../../../lib/routes';
+import RepoHeader from '../../../components/RepoHeader.astro';
+import RefSwitcher from '../../../components/RefSwitcher.astro';
+import FileTable from '../../../components/FileTable.astro';
+import { archiveUrl, browsableRefs, commitUrl, commitsUrl, getRepoRoutes } from '../../../lib/routes';
 import { renderMarkdown, isMarkdownPath } from '../../../lib/markdown';
 import { formatInt, getConfig, getData, heatFor, initials, prettyUrl, relativeTime } from '../../../lib/site';
 import type { Repo } from '../../../lib/data/schema';
@@ -18,11 +21,19 @@ const now = new Date();
 const defaultBranch = repo.branches.find((b) => b.name === repo.defaultBranch) ?? null;
 const headCommit = defaultBranch ? repo.commits[defaultBranch.head] ?? null : null;
 const latestTag = repo.gitTags.length ? [...repo.gitTags].sort((a, b) => b.date.localeCompare(a.date))[0]! : null;
+const defaultRef = repo.defaultBranch ? browsableRefs(repo).find((r) => r.isDefault) ?? null : null;
+const defaultArchive = repo.defaultBranch
+  ? repo.archives.find((a) => a.kind === 'branch' && a.ref === repo.defaultBranch) ?? null
+  : null;
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 /** Root-level entries of the default-branch tree (dirs first, then files). */
-const rootEntries = repo.tree
-  .filter((e) => !e.path.includes('/'))
-  .sort((a, b) => Number(b.type === 'tree') - Number(a.type === 'tree') || a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
+const rootEntries = repo.tree.filter((e) => !e.path.includes('/'));
 
 const readmeHtml = repo.readme
   ? isMarkdownPath(repo.readme.path)
@@ -43,36 +54,7 @@ const heat = heatFor(repo.updatedAt, now);
 ---
 <Base title={repo.name} description={repo.description ?? `${repo.name} — ${cfg.owner.name}`} active="repos">
   <div class="hf-container">
-    <header class="hf-repo-head">
-      <div class="hf-repo-head-row">
-        <nav class="hf-crumb" aria-label="Breadcrumb">
-          <span class="hf-repo-icon"><svg class="hf-i"><use href="#i-repo" /></svg></span>
-          <a href="/">{cfg.owner.handle}</a>
-          <span class="hf-sep">/</span>
-          <strong>{repo.name}</strong>
-          {repo.template && <span class="hf-tag hf-tag--template">Template</span>}
-        </nav>
-        <div class="hf-actions">
-          {repo.links.upstream && <a class="hf-btn" href={repo.links.upstream} rel="noopener"><svg class="hf-i"><use href="#i-ext" /></svg> Open on {upstreamHost}</a>}
-        </div>
-      </div>
-      {repo.description && <p class="hf-repo-summary">{repo.description}</p>}
-      {repo.template && (
-        <p class="hf-banner hf-banner--template"><svg class="hf-i"><use href="#i-copy" /></svg> This is a <b>template repository</b> — clone it, rename it and make it yours rather than contributing back.</p>
-      )}
-      <div class="hf-badges">
-        {repo.license && <span class="hf-badge"><svg class="hf-i"><use href="#i-scale" /></svg> <b>{repo.license.spdx ?? 'Custom'}</b> license</span>}
-        {repo.defaultBranch && <span class="hf-badge"><svg class="hf-i"><use href="#i-branch" /></svg> default <code>{repo.defaultBranch}</code></span>}
-        <span class="hf-badge"><svg class="hf-i"><use href="#i-branch" /></svg> <b>{repo.branches.length}</b> branch{repo.branches.length === 1 ? '' : 'es'}</span>
-        <span class="hf-badge"><svg class="hf-i"><use href="#i-tag" /></svg> <b>{repo.gitTags.length}</b> tag{repo.gitTags.length === 1 ? '' : 's'}</span>
-        <span class="hf-badge"><svg class="hf-i"><use href="#i-people" /></svg> <b>{repo.contributors.length}</b> contributor{repo.contributors.length === 1 ? '' : 's'}</span>
-      </div>
-      <nav class="hf-tabs" aria-label="Repository sections">
-        <a href={`/repos/${repo.slug}/`} aria-current="page"><svg class="hf-i"><use href="#i-code" /></svg> Code</a>
-        <span class="hf-tab-soon" title="Coming in a later phase"><svg class="hf-i"><use href="#i-history" /></svg> Commits <span class="hf-count">{formatInt(repo.commitCount)}</span></span>
-        <span class="hf-tab-soon" title="Coming in a later phase"><svg class="hf-i"><use href="#i-package" /></svg> Releases <span class="hf-count">{repo.gitTags.length}</span></span>
-      </nav>
-    </header>
+    <RepoHeader repo={repo} active="code" />
 
     {repo.empty ? (
       <section class="hf-card hf-empty" style="margin-top:16px">
@@ -83,17 +65,28 @@ const heat = heatFor(repo.updatedAt, now);
       <div class="hf-repo-body" style="margin-top:16px">
         <div class="hf-repo-main">
           <div class="hf-toolbar">
-            {repo.defaultBranch && <span class="hf-btn hf-branch-btn"><svg class="hf-i"><use href="#i-branch" /></svg> <code>{repo.defaultBranch}</code></span>}
+            {defaultRef && <RefSwitcher repo={repo} current={defaultRef} path="" />}
             <div class="hf-toolbar-right">
-              {cloneUrl && (
-                <details class="hf-clone">
+              {cloneUrl ? (
+                <details class="hf-clone" data-clone-url={cloneUrl}>
                   <summary class="hf-btn hf-btn--primary"><svg class="hf-i"><use href="#i-download" /></svg> Clone <svg class="hf-i hf-caret"><use href="#i-chev" /></svg></summary>
                   <div class="hf-clone-pop" role="region" aria-label="Clone options">
                     <h4>Clone <span class="hf-tabs-mini"><span class="is-on">HTTPS</span></span></h4>
                     <div class="hf-clone-url"><code>{cloneUrl}</code><button type="button" aria-label="Copy URL" data-copy={cloneUrl}><svg class="hf-i"><use href="#i-copy" /></svg></button></div>
                     <p>This site is a read-only mirror. Clone from the upstream on {upstreamHost}.</p>
+                    {defaultArchive && (
+                      <a class="hf-clone-item" href={archiveUrl(repo.slug, defaultArchive.ref)}>
+                        <svg class="hf-i"><use href="#i-zip" /></svg> Download ZIP <small>{formatBytes(defaultArchive.bytes)}</small>
+                      </a>
+                    )}
                   </div>
                 </details>
+              ) : (
+                defaultArchive && (
+                  <a class="hf-btn" href={archiveUrl(repo.slug, defaultArchive.ref)}>
+                    <svg class="hf-i"><use href="#i-zip" /></svg> Download ZIP <small class="hf-muted">{formatBytes(defaultArchive.bytes)}</small>
+                  </a>
+                )
               )}
             </div>
           </div>
@@ -101,35 +94,19 @@ const heat = heatFor(repo.updatedAt, now);
           {headCommit && (
             <div class="hf-commit-bar">
               <span class="hf-author"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">{initials(headCommit.author.name)}</span> {headCommit.author.name}</span>
-              <span class="hf-msg">{headCommit.subject}</span>
+              <a class="hf-msg" href={commitUrl(repo.slug, headCommit.sha)}>{headCommit.subject}</a>
               <span class="hf-dot">·</span>
               <code class="hf-sha">{headCommit.sha.slice(0, 7)}</code>
               <span class="hf-dot">·</span>
               <span class={`hf-age t-${heatFor(headCommit.commitDate, now)}`} title={headCommit.commitDate}>{relativeTime(headCommit.commitDate, now)}</span>
-              <span class="hf-commits-link"><svg class="hf-i"><use href="#i-history" /></svg> <b>{formatInt(repo.commitCount)}</b> commits</span>
+              {repo.defaultBranch && (
+                <a class="hf-commits-link" href={commitsUrl(repo.slug, repo.defaultBranch)}><svg class="hf-i"><use href="#i-history" /></svg> <b>{formatInt(repo.commitCount)}</b> commits</a>
+              )}
             </div>
           )}
 
-          {rootEntries.length > 0 ? (
-            <div class="hf-card hf-files">
-              <table>
-                <thead>
-                  <tr><th scope="col">Name</th><th scope="col">Last commit</th><th scope="col" style="text-align:right">Updated</th></tr>
-                </thead>
-                <tbody>
-                  {rootEntries.map((e) => {
-                    const c = repo.commits[e.lastCommit];
-                    return (
-                      <tr>
-                        <td><span class={`hf-fname${e.type === 'tree' ? ' is-dir' : ''}`}><svg class="hf-i"><use href={e.type === 'tree' ? '#i-folder' : '#i-file'} /></svg>{e.name}</span></td>
-                        <td class="hf-fmsg">{c?.subject ?? ''}</td>
-                        <td class="hf-fage"><span class={`hf-age t-${heatFor(c?.commitDate, now)}`} title={c?.commitDate}>{relativeTime(c?.commitDate, now)}</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          {rootEntries.length > 0 && repo.defaultBranch ? (
+            <FileTable repo={repo} refName={repo.defaultBranch} entries={rootEntries} />
           ) : (
             <div class="hf-card hf-empty">
               <svg class="hf-i"><use href="#i-folder" /></svg>

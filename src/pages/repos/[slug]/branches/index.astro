@@ -1,0 +1,55 @@
+---
+import Base from '../../../../layouts/Base.astro';
+import RepoHeader from '../../../../components/RepoHeader.astro';
+import { commitUrl, commitsUrl, treeUrl } from '../../../../lib/routes';
+import { formatInt, getData, heatFor, relativeTime } from '../../../../lib/site';
+import type { Repo } from '../../../../lib/data/schema';
+
+export async function getStaticPaths() {
+  const data = await getData();
+  return data.repos.filter((r) => !r.empty).map((repo) => ({ params: { slug: repo.slug }, props: { repo } }));
+}
+
+interface Props { repo: Repo }
+const { repo } = Astro.props;
+const now = new Date();
+
+/** Default branch first, then most recently committed. */
+const branches = [...repo.branches].sort(
+  (a, b) =>
+    Number(b.name === repo.defaultBranch) - Number(a.name === repo.defaultBranch) ||
+    b.lastCommitDate.localeCompare(a.lastCommitDate) ||
+    a.name.localeCompare(b.name),
+);
+---
+<Base title={`Branches · ${repo.name}`} description={repo.description ?? undefined} active="repos">
+  <div class="hf-container">
+    <RepoHeader repo={repo} active="branches" />
+
+    <div class="hf-repo-main" style="margin-top:16px">
+      <div class="hf-card hf-reflist">
+        <table>
+          <thead>
+            <tr><th scope="col">Branch</th><th scope="col">Last commit</th><th scope="col" style="text-align:right">Commits</th><th scope="col" style="text-align:right">Updated</th></tr>
+          </thead>
+          <tbody>
+            {branches.map((b) => {
+              const head = repo.commits[b.head];
+              return (
+                <tr>
+                  <td>
+                    <a class="hf-ref-name" href={treeUrl(repo.slug, b.name)}><svg class="hf-i"><use href="#i-branch" /></svg><code>{b.name}</code></a>
+                    {b.name === repo.defaultBranch && <span class="hf-tag hf-ref-default">default</span>}
+                  </td>
+                  <td class="hf-fmsg">{head ? <a href={commitUrl(repo.slug, head.sha)}>{head.subject}</a> : ''}</td>
+                  <td class="hf-ref-count"><a href={commitsUrl(repo.slug, b.name)}>{formatInt(b.commits.length)}</a></td>
+                  <td class="hf-fage"><span class={`hf-age t-${heatFor(b.lastCommitDate, now)}`} title={b.lastCommitDate}>{relativeTime(b.lastCommitDate, now)}</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</Base>

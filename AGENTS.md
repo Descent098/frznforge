@@ -27,7 +27,7 @@ Consult these guides before working on related tasks:
 - `npm run ingest` → `data/forge.json` + `data/blobs/` (gitignored). `npm run build` = ingest + `astro build`.
 - `src/lib/data/schema.ts` is the ingest ↔ site contract (zod). Bump `SCHEMA_VERSION` + `docs/dev/data-model.md` + snapshots on any change.
 - `src/lib/ingest/*` reads git via the CLI only (never the working tree). `src/lib/{site,format,listing,routes,markdown}.ts` are site helpers; `format.ts` and `listing.ts` must stay browser-safe (used by Svelte islands).
-- Styles: one plain-CSS file `src/styles/global.css` (Hearth design, `hf-` prefix, tokens at top). No Tailwind/Sass.
+- Styles: plain CSS only, `hf-` prefix, tokens at the top of `src/styles/global.css` (site-wide) + `src/styles/repo.css` (repo sub-pages). No Tailwind/Sass.
 
 ## Testing
 

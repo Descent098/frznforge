@@ -14,7 +14,7 @@
  */
 import { z } from 'astro/zod';
 
-export const SCHEMA_VERSION = 1 as const;
+export const SCHEMA_VERSION = 2 as const;
 
 /* ---- primitives -------------------------------------------------------- */
 
@@ -61,6 +61,16 @@ export const Person = z.object({
 });
 export type Person = z.infer<typeof Person>;
 
+export const CommitFileChange = z.object({
+  /** Path after the change (rename target). */
+  path: z.string(),
+  /** Added lines; null for binary files. */
+  additions: z.number().int().nonnegative().nullable(),
+  /** Deleted lines; null for binary files. */
+  deletions: z.number().int().nonnegative().nullable(),
+});
+export type CommitFileChange = z.infer<typeof CommitFileChange>;
+
 export const Commit = z.object({
   sha: Sha,
   parents: z.array(Sha),
@@ -72,6 +82,14 @@ export const Commit = z.object({
   subject: z.string(),
   /** Everything after the first blank line, trimmed. Empty string if none. */
   body: z.string(),
+  /** Files touched by this commit (vs first parent), with numstat line counts. */
+  files: z.array(CommitFileChange),
+  /** Sums over `files` (binary files count toward filesChanged only). */
+  stats: z.object({
+    filesChanged: z.number().int().nonnegative(),
+    additions: z.number().int().nonnegative(),
+    deletions: z.number().int().nonnegative(),
+  }),
 });
 export type Commit = z.infer<typeof Commit>;
 
@@ -121,7 +139,7 @@ export const FileInfo = z.object({
   binary: z.boolean(),
   /** Over `ingest.maxBlobBytes`; content not stored. */
   tooLarge: z.boolean(),
-  /** Content was written to `<outDir>/blobs/<sha>` (text, within size cap). */
+  /** Content was written to `<outDir>/blobs/<sha>` (any file within the size cap, binary included since schema v2). */
   stored: z.boolean(),
   /** Detected language name (from extension/filename map) or null. */
   language: z.string().nullable(),
@@ -183,6 +201,8 @@ export const WarningCode = z.enum([
   'slug-collision',
   /** Commit list was capped by `ingest.maxCommits`. */
   'commits-capped',
+  /** More tags than `ingest.tagTrees`; older tags have no browsable tree / archive. */
+  'tag-trees-capped',
 ]);
 export type WarningCode = z.infer<typeof WarningCode>;
 
@@ -193,6 +213,30 @@ export const Warning = z.object({
   message: z.string(),
 });
 export type Warning = z.infer<typeof Warning>;
+
+/* ---- per-ref trees & archives (schema v2) -------------------------------- */
+
+/** Browsable tree of a non-default ref (branches always; the newest `ingest.tagTrees` tags). */
+export const RefTree = z.object({
+  kind: z.enum(['branch', 'tag']),
+  name: z.string(),
+  /** The commit the ref peels to. */
+  commit: Sha,
+  tree: z.array(TreeEntry),
+  files: z.record(z.string(), FileInfo),
+});
+export type RefTree = z.infer<typeof RefTree>;
+
+/** A source archive produced at ingest time with `git archive` (zip). */
+export const Archive = z.object({
+  ref: z.string(),
+  kind: z.enum(['branch', 'tag']),
+  commit: Sha,
+  /** Path relative to the ingest outDir, e.g. "archives/<slug>/<ref-slug>.zip". */
+  file: z.string(),
+  bytes: z.number().int().nonnegative(),
+});
+export type Archive = z.infer<typeof Archive>;
 
 /* ---- repo -------------------------------------------------------------- */
 
@@ -225,6 +269,10 @@ export const Repo = z.object({
   tree: z.array(TreeEntry),
   /** Per-file info for every blob in `tree`, keyed by path. */
   files: z.record(z.string(), FileInfo),
+  /** Trees of NON-default refs (all branches; the newest `ingest.tagTrees` tags), keyed by ref name. */
+  refTrees: z.record(z.string(), RefTree),
+  /** Source archives (default branch + tags with trees), produced with `git archive`. */
+  archives: z.array(Archive),
   languages: z.array(LanguageStat),
   contributors: z.array(Contributor),
   readme: Readme.nullable(),

@@ -50,7 +50,7 @@ describe('artifact ↔ site sync', () => {
       os.tmpdir(),
     );
     const result = await ingest(config);
-    await writeArtifact(result.data, result.blobs, outDir);
+    await writeArtifact(result.data, result.blobs, result.archives, outDir);
     resetForgeDataCache();
     data = loadForgeData(outDir);
   });

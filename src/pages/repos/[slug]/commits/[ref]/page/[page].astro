@@ -1,0 +1,38 @@
+---
+import Base from '../../../../../../layouts/Base.astro';
+import RepoHeader from '../../../../../../components/RepoHeader.astro';
+import CommitList from '../../../../../../components/CommitList.astro';
+import CopyScript from '../../../../../../components/CopyScript.astro';
+import { commitsPageCount, refFromSlug, refSlug } from '../../../../../../lib/routes';
+import { getData } from '../../../../../../lib/site';
+import type { Repo } from '../../../../../../lib/data/schema';
+
+export async function getStaticPaths() {
+  const data = await getData();
+  const paths: Array<{ params: { slug: string; ref: string; page: string }; props: { repo: Repo } }> = [];
+  for (const repo of data.repos) {
+    if (repo.empty) continue;
+    for (const b of repo.branches) {
+      const count = commitsPageCount(repo, b.name);
+      for (let p = 2; p <= count; p++) {
+        paths.push({ params: { slug: repo.slug, ref: refSlug(b.name), page: String(p) }, props: { repo } });
+      }
+    }
+  }
+  return paths;
+}
+
+interface Props { repo: Repo }
+const { repo } = Astro.props;
+const refName = refFromSlug(Astro.params.ref!);
+const page = Number(Astro.params.page);
+---
+<Base title={`Commits on ${refName} (page ${page}) · ${repo.name}`} description={repo.description ?? undefined} active="repos">
+  <div class="hf-container">
+    <RepoHeader repo={repo} active="commits" />
+    <div class="hf-repo-main" style="margin-top:16px">
+      <CommitList repo={repo} refName={refName} page={page} />
+    </div>
+  </div>
+  <CopyScript />
+</Base>

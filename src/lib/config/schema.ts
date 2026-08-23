@@ -41,6 +41,10 @@ export const FrznforgeConfigSchema = z.object({
     maxBlobBytes: z.number().int().positive().default(512 * 1024),
     maxCommits: z.number().int().positive().nullable().default(null),
     concurrency: z.number().int().positive().default(4),
+    /** Newest N tags get browsable trees + archives (schema v2). 0 disables tag trees. */
+    tagTrees: z.number().int().nonnegative().default(25),
+    /** Produce zip source archives with `git archive` for the default branch + tag-tree tags. */
+    archives: z.boolean().default(true),
   }).prefault({}),
   listing: z.object({
     pageSize: z.number().int().positive().default(50),

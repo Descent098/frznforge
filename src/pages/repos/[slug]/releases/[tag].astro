@@ -1,0 +1,69 @@
+---
+import Base from '../../../../layouts/Base.astro';
+import RepoHeader from '../../../../components/RepoHeader.astro';
+import { archiveUrl, commitUrl, refFromSlug, refSlug, releasesOf, releasesUrl, treeUrl } from '../../../../lib/routes';
+import { renderMarkdown } from '../../../../lib/markdown';
+import { getData, heatFor, relativeTime } from '../../../../lib/site';
+import type { Repo } from '../../../../lib/data/schema';
+
+export async function getStaticPaths() {
+  const data = await getData();
+  return data.repos.flatMap((repo) =>
+    releasesOf(repo).map((t) => ({
+      params: { slug: repo.slug, tag: refSlug(t.name) },
+      props: { repo },
+    })),
+  );
+}
+
+interface Props { repo: Repo }
+const { repo } = Astro.props;
+const now = new Date();
+const tagName = refFromSlug(Astro.params.tag!);
+const rel = releasesOf(repo).find((t) => t.name === tagName)!;
+const isLatest = releasesOf(repo)[0]?.name === rel.name;
+const archive = repo.archives.find((a) => a.kind === 'tag' && a.ref === rel.name) ?? null;
+const hasTree = !!repo.refTrees[rel.name];
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+---
+<Base title={`${rel.name} · Releases · ${repo.name}`} description={repo.description ?? undefined} active="repos">
+  <div class="hf-container">
+    <RepoHeader repo={repo} active="releases" />
+
+    <div class="hf-repo-main" style="margin-top:16px">
+      <p class="hf-release-backlink"><a href={releasesUrl(repo.slug)}><svg class="hf-i"><use href="#i-arrow-left" /></svg> All releases</a></p>
+      <article class="hf-card hf-release-card hf-release-page">
+        <header class="hf-release-head">
+          <h1>{rel.name}</h1>
+          {isLatest && <span class="hf-tag hf-release-latest">Latest</span>}
+          <span class={`hf-age t-${heatFor(rel.date, now)}`} title={rel.date}>{relativeTime(rel.date, now)}</span>
+        </header>
+        <div class="hf-release-meta">
+          {rel.tagger && <span><svg class="hf-i"><use href="#i-people" /></svg> {rel.tagger.name}</span>}
+          {repo.commits[rel.target] ? (
+            <span><svg class="hf-i"><use href="#i-commit" /></svg> target <a href={commitUrl(repo.slug, rel.target)}><code>{rel.target.slice(0, 7)}</code></a></span>
+          ) : (
+            <span><svg class="hf-i"><use href="#i-commit" /></svg> target <code>{rel.target.slice(0, 7)}</code></span>
+          )}
+          {hasTree && <span><svg class="hf-i"><use href="#i-code" /></svg> <a href={treeUrl(repo.slug, rel.name)}>Browse source</a></span>}
+        </div>
+        {rel.message && <div class="hf-md hf-release-notes" set:html={renderMarkdown(rel.message)} />}
+        <footer class="hf-release-assets">
+          <h3>Assets</h3>
+          {archive ? (
+            <a class="hf-btn" href={archiveUrl(repo.slug, rel.name)}>
+              <svg class="hf-i"><use href="#i-zip" /></svg> Source code (zip) <small>{formatBytes(archive.bytes)}</small>
+            </a>
+          ) : (
+            <p class="hf-muted">No downloadable assets for this release.</p>
+          )}
+        </footer>
+      </article>
+    </div>
+  </div>
+</Base>

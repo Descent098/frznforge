@@ -1,0 +1,188 @@
+---
+import Base from '../../../../../layouts/Base.astro';
+import RepoHeader from '../../../../../components/RepoHeader.astro';
+import CopyScript from '../../../../../components/CopyScript.astro';
+import { blobRoutes, blobUrl, findRef, rawUrl, treeUrl } from '../../../../../lib/routes';
+import { readBlob } from '../../../../../lib/data/load';
+import { countLines, highlightToHtml } from '../../../../../lib/highlight';
+import { isMarkdownPath, renderMarkdown } from '../../../../../lib/markdown';
+import { formatInt, getConfig, getData } from '../../../../../lib/site';
+import type { Repo } from '../../../../../lib/data/schema';
+
+export async function getStaticPaths() {
+  const data = await getData();
+  return data.repos.flatMap((repo) =>
+    blobRoutes(repo).map(({ ref, entry }) => ({
+      params: { slug: repo.slug, ref: ref.slugged, path: entry.path },
+      props: { repo, filePath: entry.path },
+    })),
+  );
+}
+
+interface Props { repo: Repo; filePath: string }
+const { repo, filePath } = Astro.props;
+const cfg = await getConfig();
+const ref = findRef(repo, Astro.params.ref!)!;
+const entry = ref.tree.find((e) => e.path === filePath)!;
+const info = ref.files[filePath];
+
+const HIGHLIGHT_MAX_BYTES = 500 * 1024;
+const HIGHLIGHT_MAX_LINES = 5000;
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|ico)$/i;
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const stored = info?.stored ?? false;
+const size = info?.size ?? entry.size ?? 0;
+const raw = stored ? rawUrl(repo.slug, ref.name, filePath) : null;
+
+const isSymlink = entry.type === 'symlink';
+const isBinary = info?.binary ?? false;
+/** Images render inline: known image extensions (binary or not — svg is text) when stored. */
+const showImage = !isSymlink && stored && IMAGE_EXT.test(filePath);
+const isMarkdown = !isSymlink && !isBinary && stored && isMarkdownPath(filePath);
+
+/** Text content (stored, non-binary files only). */
+const text = !isSymlink && stored && !isBinary ? readBlob(cfg.outDir, info!.sha) : null;
+const symlinkTarget = isSymlink && stored ? readBlob(cfg.outDir, info!.sha)?.trim() ?? null : null;
+const symlinkTargetUrl = symlinkTarget && ref.tree.some((e) => e.path === symlinkTarget && e.type !== 'tree')
+  ? blobUrl(repo.slug, ref.name, symlinkTarget)
+  : symlinkTarget && ref.tree.some((e) => e.path === symlinkTarget && e.type === 'tree')
+    ? treeUrl(repo.slug, ref.name, symlinkTarget)
+    : null;
+
+const lineCount = text !== null ? countLines(text) : null;
+const tooBigToHighlight = text !== null && (size > HIGHLIGHT_MAX_BYTES || (lineCount ?? 0) > HIGHLIGHT_MAX_LINES);
+
+/** Highlight only this page's own blob (cached per language inside highlightToHtml). */
+const codeHtml = text !== null && !tooBigToHighlight && !isMarkdown ? await highlightToHtml(text, info!.language, filePath) : null;
+const mdPreviewHtml = isMarkdown && text !== null ? renderMarkdown(text) : null;
+const mdSourceHtml = isMarkdown && text !== null && !tooBigToHighlight ? await highlightToHtml(text, 'Markdown', filePath) : null;
+
+/** Breadcrumb. */
+const segments = filePath.split('/');
+const dirs = segments.slice(0, -1);
+const fileName = segments[segments.length - 1]!;
+const crumbs = dirs.map((name, i) => ({ name, url: treeUrl(repo.slug, ref.name, dirs.slice(0, i + 1).join('/')) }));
+---
+<Base title={`${filePath} · ${repo.name} at ${ref.name}`} description={repo.description ?? undefined} active="repos">
+  <div class="hf-container">
+    <RepoHeader repo={repo} active="code" />
+
+    <div class="hf-repo-main" style="margin-top:16px">
+      <div class="hf-toolbar">
+        <nav class="hf-path-crumb" aria-label="Path">
+          <a href={treeUrl(repo.slug, ref.name)}>{repo.name}</a>
+          {crumbs.map((c) => (
+            <>
+              <span class="hf-sep">/</span>
+              <a href={c.url}>{c.name}</a>
+            </>
+          ))}
+          <span class="hf-sep">/</span>
+          <strong>{fileName}</strong>
+        </nav>
+        <span class="hf-blob-ref"><svg class="hf-i"><use href={ref.kind === 'tag' ? '#i-tag' : '#i-branch'} /></svg> <code>{ref.name}</code></span>
+      </div>
+
+      <div class="hf-card hf-blob">
+        {isMarkdown ? (
+          <>
+            <input type="radio" name="hf-mdview" id="hf-md-preview" class="hf-mdview-input" checked />
+            <input type="radio" name="hf-mdview" id="hf-md-source" class="hf-mdview-input" />
+            <div class="hf-blob-head">
+              <div class="hf-blob-meta">
+                {lineCount !== null && <span><b>{formatInt(lineCount)}</b> lines</span>}
+                <span class="hf-dot">·</span>
+                <span>{formatBytes(size)}</span>
+                {info?.language && <span class="hf-badge hf-lang-badge">{info.language}</span>}
+                {info?.tooLarge && <span class="hf-badge">too large</span>}
+              </div>
+              <div class="hf-blob-actions">
+                {mdSourceHtml && (
+                  <span class="hf-seg hf-mdview-seg" role="group" aria-label="View as">
+                    <label for="hf-md-preview" class="hf-mdview-lbl" data-for="preview">Preview</label>
+                    <label for="hf-md-source" class="hf-mdview-lbl" data-for="source">Source</label>
+                  </span>
+                )}
+                {raw && <a class="hf-btn hf-btn--sm" href={raw}>Raw</a>}
+                {raw && <a class="hf-btn hf-btn--sm" href={raw} download={fileName}><svg class="hf-i"><use href="#i-download" /></svg> Download</a>}
+                <button type="button" class="hf-btn hf-btn--sm" data-copy={filePath} aria-label="Copy path"><svg class="hf-i"><use href="#i-copy" /></svg> Copy path</button>
+              </div>
+            </div>
+            <div class="hf-blob-body hf-mdview-preview">
+              <div class="hf-md hf-blob-md" set:html={mdPreviewHtml} />
+            </div>
+            <div class="hf-blob-body hf-mdview-source">
+              {mdSourceHtml ? (
+                <div class="hf-code" set:html={mdSourceHtml} />
+              ) : (
+                <div class="hf-code"><pre class="hf-code-plain"><code>{text}</code></pre></div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div class="hf-blob-head">
+              <div class="hf-blob-meta">
+                {lineCount !== null && <span><b>{formatInt(lineCount)}</b> lines</span>}
+                {lineCount !== null && <span class="hf-dot">·</span>}
+                <span>{formatBytes(size)}</span>
+                {info?.language && <span class="hf-badge hf-lang-badge">{info.language}</span>}
+                {isSymlink && <span class="hf-badge">symlink</span>}
+                {isBinary && !isSymlink && <span class="hf-badge">binary</span>}
+              </div>
+              <div class="hf-blob-actions">
+                {raw && <a class="hf-btn hf-btn--sm" href={raw}>Raw</a>}
+                {raw && <a class="hf-btn hf-btn--sm" href={raw} download={fileName}><svg class="hf-i"><use href="#i-download" /></svg> Download</a>}
+                <button type="button" class="hf-btn hf-btn--sm" data-copy={filePath} aria-label="Copy path"><svg class="hf-i"><use href="#i-copy" /></svg> Copy path</button>
+              </div>
+            </div>
+
+            {isSymlink ? (
+              <div class="hf-blob-body">
+                <div class="hf-empty hf-blob-fallback">
+                  <svg class="hf-i"><use href="#i-link" /></svg>
+                  <p>
+                    <strong>Symbolic link</strong> →{' '}
+                    {symlinkTarget ? (symlinkTargetUrl ? <a href={symlinkTargetUrl}><code>{symlinkTarget}</code></a> : <code>{symlinkTarget}</code>) : <em>unknown target</em>}
+                  </p>
+                </div>
+              </div>
+            ) : showImage ? (
+              <div class="hf-blob-body hf-blob-image">
+                <img src={raw} alt={fileName} />
+              </div>
+            ) : codeHtml ? (
+              <div class="hf-blob-body">
+                <div class="hf-code" set:html={codeHtml} />
+              </div>
+            ) : text !== null ? (
+              <div class="hf-blob-body">
+                <p class="hf-code-note">Syntax highlighting skipped — file exceeds {formatInt(HIGHLIGHT_MAX_LINES)} lines / {formatBytes(HIGHLIGHT_MAX_BYTES)}.</p>
+                <div class="hf-code"><pre class="hf-code-plain"><code>{text}</code></pre></div>
+              </div>
+            ) : (
+              <div class="hf-blob-body">
+                <div class="hf-empty hf-blob-fallback">
+                  <svg class="hf-i"><use href="#i-file" /></svg>
+                  {info?.tooLarge ? (
+                    <p><strong>File too large to display.</strong> {formatBytes(size)}.</p>
+                  ) : (
+                    <p><strong>Binary file</strong> · {formatBytes(size)}</p>
+                  )}
+                  {raw && <a class="hf-btn" href={raw} download={fileName}><svg class="hf-i"><use href="#i-download" /></svg> Download</a>}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  </div>
+  <CopyScript />
+</Base>

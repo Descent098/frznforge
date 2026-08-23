@@ -6,7 +6,7 @@ import path from 'node:path';
 const [, , rootArg, portArg] = process.argv;
 const root = path.resolve(rootArg ?? 'dist');
 const port = Number(portArg ?? 4399);
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain', '.ts': 'text/plain', '.md': 'text/plain', '.zip': 'application/zip' };
 
 http
   .createServer((req, res) => {

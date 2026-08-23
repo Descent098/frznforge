@@ -16,7 +16,7 @@ if (config.repos.length === 0) {
   console.log('  (no repos configured — writing an empty artifact)');
 }
 
-const { data, blobs } = await ingest(config, {
+const { data, blobs, archives } = await ingest(config, {
   onRepoStart: (slug) => console.log(`  ▸ ${slug}`),
   onRepoDone: (repo) =>
     console.log(
@@ -26,7 +26,7 @@ const { data, blobs } = await ingest(config, {
     ),
 });
 
-await writeArtifact(data, blobs, config.outDir);
+await writeArtifact(data, blobs, archives, config.outDir);
 
 for (const w of data.warnings) {
   console.warn(`  ⚠ [${w.code}]${w.repo ? ` ${w.repo}:` : ''} ${w.message}`);
@@ -34,5 +34,5 @@ for (const w of data.warnings) {
 
 const ms = Math.round(performance.now() - started);
 console.log(
-  `done: ${data.repos.length} repo(s), ${blobs.size} blob(s), ${data.warnings.length} warning(s) in ${ms}ms`,
+  `done: ${data.repos.length} repo(s), ${blobs.size} blob(s), ${archives.size} archive(s), ${data.warnings.length} warning(s) in ${ms}ms`,
 );

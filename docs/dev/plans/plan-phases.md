@@ -107,57 +107,58 @@ Tests
 
 ---
 
-## Phase 3 — Repo depth: files, history, refs, downloads, releases *(next)*
+## Phase 3 — Repo depth: files, history, refs, downloads, releases ✅ *(done 2026-08-23)*
 
 Goal: the repo page becomes a real read-only forge view.
 
 Ships
-- [ ] File browser: directory listing with last-commit per entry; file view with
+- [x] File browser: directory listing with last-commit per entry; file view with
   syntax highlighting (build-time, e.g. Shiki), line numbers, line-anchor links,
   raw view, markdown preview/source toggle, image preview, "binary/too large" fallback.
-- [ ] Commit history page (paginated) and single commit page (message, stats, diff —
-  diff can be a stretch goal inside this phase).
-- [ ] Branches page and tags page; branch switcher on the repo overview/file browser.
-- [ ] Source zip download per branch/tag (generated at build, written into `public/` or
-  `dist/`), plus size shown in the UI.
-- [ ] Releases: from annotated tags (tag message rendered as markdown) for plain repos.
+- [x] Commit history page (paginated) and single commit page (message, stats, per-file ±).
+  *Diff body was the documented stretch goal — deferred.*
+- [x] Branches page and tags page; branch switcher on the repo overview/file browser.
+- [x] Source zip download (via `git archive` at ingest) for the default branch and the
+  newest `ingest.tagTrees` tags, size shown in the UI. *Per-non-default-branch zips
+  deliberately skipped (rarely used; browsable trees exist for all branches).*
+- [x] Releases: from annotated tags (tag message rendered as markdown) for plain repos.
   Forge-imported releases come in Phase 5; the UI and data shape are built here.
 
 Done when
-- [ ] Every path in the fixture repo's tree is reachable by URL and renders.
-- [ ] Build time for a ~1k-file repo stays reasonable (set a budget, e.g. < 60 s) and is
-  tracked in CI output.
+- [x] Every path in the fixture repo's tree is reachable by URL and renders.
+- [x] Build time budget < 60 s: self-build (151 pages) ≈ 9 s; ingest + astro print timings
+  in build output. *(No CI yet — timings live in the build log.)*
 
 Tests
-- [ ] Unit: path → route mapping, highlighting language detection, zip manifest.
-- [ ] UI: navigate tree → file → raw; switch branch; download link resolves.
-- [ ] Sync: artifact tree ↔ generated file routes 1:1; tags in artifact ↔ release pages.
+- [x] Unit: path → route mapping, highlighting language detection, zip manifest.
+- [x] UI: navigate tree → file → raw; switch branch; download link resolves.
+- [x] Sync: artifact tree ↔ generated file routes 1:1; tags in artifact ↔ release pages.
 
 ---
 
-## Phase 4 — Profile extras, search & command palette
+## Phase 4 — Profile extras, search & command palette ✅ *(done 2026-08-23)*
 
 Goal: the parts that make it feel like *your* page rather than a directory.
 
 Ships
-- [ ] Contribution graph (from commit dates across all repos, owner's identities configured
+- [x] Contribution graph (from commit dates across all repos, owner's identities configured
   in `profile.md`).
-- [ ] Top languages (aggregate of per-repo breakdowns).
-- [ ] Recent commits event log on the profile.
-- [ ] Build-time search index (repos, files by path, notes later) + Svelte search UI.
-- [ ] `Ctrl/Cmd+K` command palette: jump to repo, file, page; theme toggle; "copy clone URL".
+- [x] Top languages (aggregate of per-repo breakdowns).
+- [x] Recent commits event log on the profile.
+- [x] Build-time search index (repos, files by path, notes later) + Svelte search UI.
+- [x] `Ctrl/Cmd+K` command palette: jump to repo, file, page; theme toggle; "copy clone URL".
 
 Done when
-- [ ] Profile page matches the plan's GitHub-style reference without placeholders.
-- [ ] Palette is keyboard-only operable and works offline.
+- [x] Profile page matches the plan's GitHub-style reference without placeholders.
+- [x] Palette is keyboard-only operable and works offline.
 
 Tests
-- [ ] Unit: contribution bucketing by day/week, language aggregation, search index ranking.
-- [ ] UI: palette opens/closes/navigates; graph renders for the fixture.
+- [x] Unit: contribution bucketing by day/week, language aggregation, search index ranking.
+- [x] UI: palette opens/closes/navigates; graph renders for the fixture.
 
 ---
 
-## Phase 5 — Importers
+## Phase 5 — Importers *(next)*
 
 Goal: repos that live elsewhere can be pulled in on every build.
 

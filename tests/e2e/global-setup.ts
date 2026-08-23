@@ -58,12 +58,34 @@ export default async function globalSetup() {
     fs.writeFileSync(path.join(d, '.frznforge.json'), JSON.stringify({ description: 'Alpha fixture: a static site generator.', tags: ['ssg', 'astro'], links: { homepage: 'https://example.com/alpha', upstream: 'https://github.com/example/alpha' } }, null, 2));
     fs.writeFileSync(path.join(d, 'LICENSE'), 'MIT License\n\nCopyright (c) 2024 Fixture\n\nPermission is hereby granted, free of charge, to any person obtaining a copy...');
     fs.mkdirSync(path.join(d, 'src'));
+    fs.mkdirSync(path.join(d, 'src', 'lib'));
+    fs.writeFileSync(path.join(d, 'src', 'lib', 'index.ts'), 'export {};\n');
     fs.writeFileSync(path.join(d, 'src', 'index.ts'), 'export const answer: number = 42;\n'.repeat(20));
     fs.writeFileSync(path.join(d, 'src', 'style.css'), 'body { margin: 0; }\n'.repeat(5));
+    fs.mkdirSync(path.join(d, 'docs'));
+    fs.writeFileSync(path.join(d, 'docs', 'guide.md'), '# Guide\n\nSome **bold** fixture text.\n\n- step one\n- step two\n');
+    fs.mkdirSync(path.join(d, 'assets'));
+    // a few PNG header bytes (incl. NULs) so ingest classifies it as a binary image
+    fs.writeFileSync(path.join(d, 'assets', 'dot.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01]));
     commitAll(d, 'initial commit', '2024-01-01T00:00:00Z');
+    // feature branch with an extra file (branched before the last main commit)
+    git(d, ['checkout', '-q', '-b', 'feature/extra'], '2024-01-15T00:00:00Z');
+    fs.writeFileSync(path.join(d, 'src', 'extra.ts'), 'export const extra = true;\n');
+    commitAll(d, 'add extra feature file', '2024-01-15T00:00:00Z');
+    // one RECENT commit (feature branch only) so relative-to-today features
+    // (contribution graph, heat colours) have something inside their window
+    const recent = new Date(Date.now() - 2 * 86_400_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    fs.writeFileSync(path.join(d, 'src', 'extra.ts'), 'export const extra = true;\nexport const more = 1;\n');
+    git(d, ['add', '-A'], recent);
+    // authored by the owner identity from content/profile.md so the contribution graph has data
+    git(d, ['commit', '-q', '-m', 'tweak the extra feature', '--author=Kieran Wood <kieran@canadiancoding.ca>'], recent);
+    git(d, ['checkout', '-q', 'main'], '2024-01-15T00:00:00Z');
+    // 'bump the answer' stays the LAST commit on main (existing assertions rely on it)
     fs.writeFileSync(path.join(d, 'src', 'index.ts'), 'export const answer: number = 43;\n'.repeat(20));
     commitAll(d, 'bump the answer', '2024-02-01T00:00:00Z');
     git(d, ['tag', '-a', 'v1.0.0', '-m', 'First release'], '2024-02-01T00:00:00Z');
+    git(d, ['tag', '-a', '--cleanup=verbatim', 'v1.1.0', '-m', 'Second release\n\n## Highlights\n\n- adds a *guide*\n- new `extra` module\n'], '2024-03-01T00:00:00Z');
+    git(d, ['tag', 'light'], '2024-03-02T00:00:00Z');
   });
 
   // bravo — template repo, Go, tags
@@ -94,8 +116,8 @@ export default async function globalSetup() {
     ROOT,
   );
   delete process.env.FRZNFORGE_OUT_DIR; // resolveConfig honours the env; be explicit here
-  const { data, blobs } = await ingest({ ...cfg, outDir: DATA });
-  await writeArtifact(data, blobs, DATA);
+  const { data, blobs, archives } = await ingest({ ...cfg, outDir: DATA });
+  await writeArtifact(data, blobs, archives, DATA);
 
   execFileSync('npx', ['astro', 'build', '--outDir', DIST], {
     cwd: ROOT,

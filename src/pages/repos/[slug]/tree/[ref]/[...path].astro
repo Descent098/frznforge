@@ -1,0 +1,88 @@
+---
+import Base from '../../../../../layouts/Base.astro';
+import RepoHeader from '../../../../../components/RepoHeader.astro';
+import RefSwitcher from '../../../../../components/RefSwitcher.astro';
+import FileTable from '../../../../../components/FileTable.astro';
+import { findRef, treeRoutes, treeUrl } from '../../../../../lib/routes';
+import { readBlob } from '../../../../../lib/data/load';
+import { isMarkdownPath, renderMarkdown } from '../../../../../lib/markdown';
+import { getConfig, getData } from '../../../../../lib/site';
+import type { Repo } from '../../../../../lib/data/schema';
+
+export async function getStaticPaths() {
+  const data = await getData();
+  return data.repos.flatMap((repo) =>
+    treeRoutes(repo).map(({ ref, path }) => ({
+      params: { slug: repo.slug, ref: ref.slugged, path: path === '' ? undefined : path },
+      props: { repo, dirPath: path },
+    })),
+  );
+}
+
+interface Props { repo: Repo; dirPath: string }
+const { repo, dirPath } = Astro.props;
+const cfg = await getConfig();
+const ref = findRef(repo, Astro.params.ref!)!;
+
+/** Entries directly inside this directory. */
+const prefix = dirPath === '' ? '' : dirPath + '/';
+const entries = ref.tree.filter((e) => {
+  if (!e.path.startsWith(prefix)) return false;
+  const rest = e.path.slice(prefix.length);
+  return rest.length > 0 && !rest.includes('/');
+});
+
+/** Breadcrumb segments: each intermediate dir links to its own tree page. */
+const segments = dirPath === '' ? [] : dirPath.split('/');
+const crumbs = segments.map((name, i) => ({ name, url: treeUrl(repo.slug, ref.name, segments.slice(0, i + 1).join('/')) }));
+const parentUrl = dirPath === '' ? undefined : treeUrl(repo.slug, ref.name, segments.slice(0, -1).join('/'));
+
+/** README in this directory (GitHub-style, rendered below the listing). */
+const readmeEntry = entries.find((e) => (e.type === 'blob' || e.type === 'symlink') && /^readme(\.|$)/i.test(e.name));
+const readmeInfo = readmeEntry ? ref.files[readmeEntry.path] : undefined;
+const readmeContent = readmeInfo?.stored && !readmeInfo.binary ? readBlob(cfg.outDir, readmeInfo.sha) : null;
+const readmeHtml = readmeEntry && readmeContent !== null
+  ? isMarkdownPath(readmeEntry.path)
+    ? renderMarkdown(readmeContent)
+    : `<pre>${readmeContent.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</pre>`
+  : null;
+
+const title = dirPath === '' ? `${repo.name} at ${ref.name}` : `${dirPath} · ${repo.name} at ${ref.name}`;
+---
+<Base title={title} description={repo.description ?? undefined} active="repos">
+  <div class="hf-container">
+    <RepoHeader repo={repo} active="code" />
+
+    <div class="hf-repo-main" style="margin-top:16px">
+      <div class="hf-toolbar">
+        <RefSwitcher repo={repo} current={ref} path={dirPath} />
+        <nav class="hf-path-crumb" aria-label="Path">
+          <a href={treeUrl(repo.slug, ref.name)}>{repo.name}</a>
+          {crumbs.map((c, i) => (
+            <>
+              <span class="hf-sep">/</span>
+              {i === crumbs.length - 1 ? <strong>{c.name}</strong> : <a href={c.url}>{c.name}</a>}
+            </>
+          ))}
+        </nav>
+      </div>
+
+      <FileTable repo={repo} refName={ref.name} entries={entries} parentUrl={parentUrl} />
+
+      {readmeHtml && readmeEntry ? (
+        <article class="hf-card hf-readme-card">
+          <div class="hf-card-head">
+            <svg class="hf-i"><use href="#i-note" /></svg>
+            <h2>README</h2>
+            <code>{readmeEntry.path}</code>
+          </div>
+          <div class="hf-card-body hf-md" set:html={readmeHtml} />
+        </article>
+      ) : (
+        dirPath !== '' && (
+          <p class="hf-dir-noreadme hf-muted">No README in this directory.</p>
+        )
+      )}
+    </div>
+  </div>
+</Base>

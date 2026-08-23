@@ -26,10 +26,12 @@ export default defineConfig({
       overrides: { template: true, tags: ['python', 'resume'] } },
   ],
   ingest: {
-    outDir: './data',        // forge.json + blobs/ are written here (gitignored)
-    maxBlobBytes: 524288,    // text files above this are listed but not stored
+    outDir: './data',        // forge.json + blobs/ + archives/ are written here (gitignored)
+    maxBlobBytes: 524288,    // files above this are listed but not stored
     maxCommits: null,        // cap per repo (null = all)
     concurrency: 4,          // repos scanned in parallel
+    tagTrees: 25,            // newest N tags get browsable trees + archives (0 = none)
+    archives: true,          // zip source archives (git archive) for default branch + tags
   },
   listing: { pageSize: 50 },
 });
@@ -37,6 +39,9 @@ export default defineConfig({
 
 Notes
 - `path` is absolute or relative to the config file. Bare repos work too.
+- `tagTrees`: every branch is always browsable; tags beyond the newest N lose their file
+  tree and download archive (a `tag-trees-capped` warning tells you when that happens).
+- `archives: false` skips zip generation entirely (no download links on the site).
 - `overrides` has the same shape as `.frznforge.json` and wins over it.
 - The env var `FRZNFORGE_OUT_DIR` overrides `ingest.outDir` (used by the test suite).
 - Only **committed** content on **branches** is read. Uncommitted, staged, stashed or

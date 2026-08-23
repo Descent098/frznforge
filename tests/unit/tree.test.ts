@@ -63,7 +63,8 @@ describe('tree', () => {
     expect(res.tree.find((e) => e.path === 'src/index.ts')!.lastCommit).toBe(c1);
 
     expect(Object.keys(res.files)).toEqual(['README.md', 'assets/logo.png', 'big.txt', 'src/index.ts', 'src/lib/util.ts']);
-    expect(res.files['assets/logo.png']).toMatchObject({ binary: true, tooLarge: false, stored: false, language: null, size: 10 });
+    // schema v2: small binaries are stored too (raw serving / image preview)
+    expect(res.files['assets/logo.png']).toMatchObject({ binary: true, tooLarge: false, stored: true, language: null, size: 10 });
     expect(res.files['big.txt']).toMatchObject({ binary: false, tooLarge: true, stored: false, language: 'Text', size: 201 });
     expect(res.files['src/index.ts']).toMatchObject({ binary: false, tooLarge: false, stored: true, language: 'TypeScript' });
     expect(res.files['README.md']).toMatchObject({ stored: true, language: 'Markdown' });
@@ -71,7 +72,7 @@ describe('tree', () => {
     const storedShas = Object.values(res.files).filter((f) => f.stored).map((f) => f.sha).sort();
     expect([...res.blobs.keys()].sort()).toEqual(storedShas);
     expect(res.blobs.get(res.files['src/index.ts']!.sha)!.toString('utf8')).toBe('export const a = 1;\n');
-    expect(res.blobs.has(res.files['assets/logo.png']!.sha)).toBe(false);
+    expect(res.blobs.get(res.files['assets/logo.png']!.sha)).toEqual(png); // byte-identical
     expect(res.blobs.has(res.files['big.txt']!.sha)).toBe(false);
   });
 
@@ -83,6 +84,7 @@ describe('tree', () => {
       r.writeAndCommit({ 'blob.bin': big, 'text.txt': 'hello\n' }, 'init');
       const res = await scanTree(r.dir, r.head(), { maxBlobBytes: 10 });
       expect(res.files['blob.bin']).toMatchObject({ binary: true, tooLarge: true, stored: false });
+      expect(res.blobs.has(res.files['blob.bin']!.sha)).toBe(false); // over the cap ⇒ not stored
       expect(res.files['text.txt']).toMatchObject({ binary: false, tooLarge: false, stored: true });
     } finally {
       r.cleanup();

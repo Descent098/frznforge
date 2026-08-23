@@ -136,7 +136,8 @@ export async function scanTree(
     const tooLarge = size > opts.maxBlobBytes;
     const content = contents.get(e.sha);
     const binary = tooLarge ? (bigBinary.get(e.sha) ?? false) : content ? looksBinary(content) : false;
-    const stored = !binary && !tooLarge && content !== undefined;
+    // schema v2: any file within the size cap is stored, binary included (raw serving / previews)
+    const stored = !tooLarge && content !== undefined;
     files[e.path] = {
       path: e.path,
       sha: e.sha,

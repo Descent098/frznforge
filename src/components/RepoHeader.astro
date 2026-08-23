@@ -1,0 +1,59 @@
+---
+/**
+ * Shared repo page header: breadcrumb, description, badges and the section tabs.
+ * Used by the overview and every Phase 3 sub-page (`active` picks the current tab).
+ */
+import { branchesUrl, commitsUrl, releasesOf, releasesUrl, repoUrl, tagsUrl } from '../lib/routes';
+import { formatInt, getConfig } from '../lib/site';
+import type { Repo } from '../lib/data/schema';
+
+interface Props {
+  repo: Repo;
+  active: 'code' | 'commits' | 'branches' | 'tags' | 'releases';
+}
+const { repo, active } = Astro.props;
+const cfg = await getConfig();
+const releases = releasesOf(repo);
+const upstreamHost = repo.links.upstream ? new URL(repo.links.upstream).hostname.replace(/^www\./, '') : null;
+const cur = (tab: string) => (tab === active ? 'page' : undefined);
+---
+<header class="hf-repo-head">
+  <div class="hf-repo-head-row">
+    <nav class="hf-crumb" aria-label="Breadcrumb">
+      <span class="hf-repo-icon"><svg class="hf-i"><use href="#i-repo" /></svg></span>
+      <a href="/">{cfg.owner.handle}</a>
+      <span class="hf-sep">/</span>
+      {active === 'code' ? <strong>{repo.name}</strong> : <a class="hf-crumb-repo" href={repoUrl(repo.slug)}><strong>{repo.name}</strong></a>}
+      {repo.template && <span class="hf-tag hf-tag--template">Template</span>}
+    </nav>
+    <div class="hf-actions">
+      {repo.links.upstream && <a class="hf-btn" href={repo.links.upstream} rel="noopener"><svg class="hf-i"><use href="#i-ext" /></svg> Open on {upstreamHost}</a>}
+    </div>
+  </div>
+  {repo.description && <p class="hf-repo-summary">{repo.description}</p>}
+  {repo.template && active === 'code' && (
+    <p class="hf-banner hf-banner--template"><svg class="hf-i"><use href="#i-copy" /></svg> This is a <b>template repository</b> — clone it, rename it and make it yours rather than contributing back.</p>
+  )}
+  <div class="hf-badges">
+    {repo.license && <span class="hf-badge"><svg class="hf-i"><use href="#i-scale" /></svg> <b>{repo.license.spdx ?? 'Custom'}</b> license</span>}
+    {repo.defaultBranch && <span class="hf-badge"><svg class="hf-i"><use href="#i-branch" /></svg> default <code>{repo.defaultBranch}</code></span>}
+    <span class="hf-badge"><svg class="hf-i"><use href="#i-branch" /></svg> <b>{repo.branches.length}</b> branch{repo.branches.length === 1 ? '' : 'es'}</span>
+    <span class="hf-badge"><svg class="hf-i"><use href="#i-tag" /></svg> <b>{repo.gitTags.length}</b> tag{repo.gitTags.length === 1 ? '' : 's'}</span>
+    <span class="hf-badge"><svg class="hf-i"><use href="#i-people" /></svg> <b>{repo.contributors.length}</b> contributor{repo.contributors.length === 1 ? '' : 's'}</span>
+  </div>
+  <nav class="hf-tabs" aria-label="Repository sections">
+    <a href={repoUrl(repo.slug)} aria-current={cur('code')}><svg class="hf-i"><use href="#i-code" /></svg> Code</a>
+    {!repo.empty && repo.defaultBranch && (
+      <a href={commitsUrl(repo.slug, repo.defaultBranch)} aria-current={cur('commits')}><svg class="hf-i"><use href="#i-history" /></svg> Commits <span class="hf-count">{formatInt(repo.commitCount)}</span></a>
+    )}
+    {!repo.empty && (
+      <a href={branchesUrl(repo.slug)} aria-current={cur('branches')}><svg class="hf-i"><use href="#i-branch" /></svg> Branches <span class="hf-count">{repo.branches.length}</span></a>
+    )}
+    {!repo.empty && (
+      <a href={tagsUrl(repo.slug)} aria-current={cur('tags')}><svg class="hf-i"><use href="#i-tag" /></svg> Tags <span class="hf-count">{repo.gitTags.length}</span></a>
+    )}
+    {!repo.empty && (
+      <a href={releasesUrl(repo.slug)} aria-current={cur('releases')}><svg class="hf-i"><use href="#i-package" /></svg> Releases <span class="hf-count">{releases.length}</span></a>
+    )}
+  </nav>
+</header>
