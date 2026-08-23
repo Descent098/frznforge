@@ -48,44 +48,102 @@ const months = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', '
           <a class="hf-pill" href="#"><svg class="hf-i"><use href="#i-forge" /></svg> Forgejo <small>(self-hosted)</small></a>
         </div>
       </div>
-      <div class="hf-hero-stats">
-        <div class="hf-stat hf-stat--ember"><b>42</b><span>Repositories</span></div>
-        <div class="hf-stat hf-stat--ember"><b>1,204</b><span>Commits this year</span></div>
-        <div class="hf-stat hf-stat--ice"><b>6</b><span>Years of history</span></div>
+      <div class="hf-hero-kpis" aria-label="Profile statistics">
+        <div class="hf-kpi hf-kpi--ember">
+          <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-repo" /></svg> Repositories</div>
+          <div class="hf-kpi-value">42</div>
+          <div class="hf-kpi-sub"><span class="t-hot">3 touched</span> this week · 2 templates</div>
+        </div>
+        <div class="hf-kpi hf-kpi--ember">
+          <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-commit" /></svg> Commits this year</div>
+          <div class="hf-kpi-value">1,204</div>
+          <div class="hf-kpi-sub"><span class="t-hot">+38</span> in the last 7 days</div>
+        </div>
+        <div class="hf-kpi hf-kpi--ice">
+          <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-history" /></svg> Years of history</div>
+          <div class="hf-kpi-value">6</div>
+          <div class="hf-kpi-sub">first commit <span class="t-cold">Sep 2020</span></div>
+        </div>
+        <div class="hf-kpi hf-kpi-langs">
+          <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-code" /></svg> Top languages</div>
+          <div class="hf-langbar" aria-hidden="true">
+            <span class="lang-py" style="width:41%"></span>
+            <span class="lang-ts" style="width:33%"></span>
+            <span class="lang-go" style="width:11%"></span>
+            <span class="lang-svelte" style="width:8%"></span>
+            <span class="lang-other" style="width:7%"></span>
+          </div>
+          <div class="hf-lang-legend">
+            <ul>
+              <li><i class="hf-lang-dot lang-py"></i><b>Python</b><i>41%</i></li>
+              <li><i class="hf-lang-dot lang-ts"></i><b>TypeScript</b><i>33%</i></li>
+              <li><i class="hf-lang-dot lang-go"></i><b>Go</b><i>11%</i></li>
+              <li><i class="hf-lang-dot lang-svelte"></i><b>Svelte</b><i>8%</i></li>
+              <li><i class="hf-lang-dot lang-other"></i><b>Other</b><i>7%</i></li>
+            </ul>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- ===== STATS STRIP ===== -->
-    <section class="hf-stats-grid" aria-label="Profile statistics" style="margin-top:16px">
-      <div class="hf-card hf-kpi">
-        <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-repo" /></svg> Repositories</div>
-        <div class="hf-kpi-value">42</div>
-        <div class="hf-kpi-sub"><span class="t-hot">3 touched</span> this week · 2 templates</div>
-      </div>
-      <div class="hf-card hf-kpi">
-        <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-commit" /></svg> Commits this year</div>
-        <div class="hf-kpi-value">1,204</div>
-        <div class="hf-kpi-sub"><span class="t-hot">+38</span> in the last 7 days</div>
-      </div>
-      <div class="hf-card hf-kpi-langs">
-        <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-code" /></svg> Top languages</div>
-        <div class="hf-langbar" aria-hidden="true">
-          <span class="lang-py" style="width:41%"></span>
-          <span class="lang-ts" style="width:33%"></span>
-          <span class="lang-go" style="width:11%"></span>
-          <span class="lang-svelte" style="width:8%"></span>
-          <span class="lang-other" style="width:7%"></span>
-        </div>
-        <div class="hf-lang-legend">
+    <!-- ===== README + ACTIVITY ===== -->
+    <section class="hf-two-col" style="margin-top:16px">
+      <article class="hf-card hf-readme" aria-label="Profile README">
+        <div class="hf-md">
+          <h1>Hi, I'm Kieran 👋</h1>
+          <p>I make small, sturdy software: things that keep working when the Wi-Fi drops, the vendor shuts down, or the server is a folder of HTML. Most of what's here is source-available — browse it, clone it, take what's useful.</p>
+          <h2>What I'm working on</h2>
           <ul>
-            <li><i class="hf-lang-dot lang-py"></i><b>Python</b><i>41%</i></li>
-            <li><i class="hf-lang-dot lang-ts"></i><b>TypeScript</b><i>33%</i></li>
-            <li><i class="hf-lang-dot lang-go"></i><b>Go</b><i>11%</i></li>
-            <li><i class="hf-lang-dot lang-svelte"></i><b>Svelte</b><i>8%</i></li>
-            <li><i class="hf-lang-dot lang-other"></i><b>Other</b><i>7%</i></li>
+            <li><a href="/designs/hearth/repo">useful</a> — a local-first toolbox (timers, notes, generators, SQL playground) that lives entirely in your browser.</li>
+            <li><a href="#">frznforge</a> — this site. A read-only forge you can rebuild from a pile of git repos and host anywhere.</li>
+            <li>Writing about offline-first design and why "works without a server" is a feature, not a constraint.</li>
+          </ul>
+          <h2>Stack</h2>
+          <ul class="hf-stack">
+            <li><code>Python</code></li><li><code>TypeScript</code></li><li><code>Astro</code></li><li><code>Svelte</code></li><li><code>Go</code></li><li><code>SQLite</code></li>
           </ul>
         </div>
-      </div>
+      </article>
+
+      <aside class="hf-card hf-activity" aria-labelledby="activity-h">
+        <div class="hf-card-head">
+          <svg class="hf-i" style="color:var(--hf-ember)"><use href="#i-pulse" /></svg>
+          <h2 id="activity-h">Recent activity</h2>
+          <a class="hf-more" href="#">All activity</a>
+        </div>
+        <ul class="hf-activity-list">
+          <li>
+            <span class="hf-act-icon t-hot"><svg class="hf-i"><use href="#i-commit" /></svg></span>
+            <span class="hf-act-text">Pushed 3 commits to <a href="/designs/hearth/repo">useful</a>/<code>main</code></span>
+            <span class="hf-age t-hot">2h</span>
+          </li>
+          <li>
+            <span class="hf-act-icon t-hot"><svg class="hf-i"><use href="#i-tag" /></svg></span>
+            <span class="hf-act-text">Tagged <code>v0.3.0</code> in <a href="#">frznforge</a></span>
+            <span class="hf-age t-hot">1d</span>
+          </li>
+          <li>
+            <span class="hf-act-icon t-warm"><svg class="hf-i"><use href="#i-commit" /></svg></span>
+            <span class="hf-act-text">Pushed 1 commit to <a href="#">ezcv</a>/<code>main</code></span>
+            <span class="hf-age t-warm">3w</span>
+          </li>
+          <li>
+            <span class="hf-act-icon t-warm"><svg class="hf-i"><use href="#i-branch" /></svg></span>
+            <span class="hf-act-text">Created branch <code>feat/zip-export</code> in <a href="/designs/hearth/repo">useful</a></span>
+            <span class="hf-age t-warm">3w</span>
+          </li>
+          <li>
+            <span class="hf-act-icon t-neutral"><svg class="hf-i"><use href="#i-tag" /></svg></span>
+            <span class="hf-act-text">Tagged <code>v2.1.0</code> in <a href="#">sdu</a></span>
+            <span class="hf-age t-neutral">4mo</span>
+          </li>
+          <li>
+            <span class="hf-act-icon t-cold"><svg class="hf-i"><use href="#i-commit" /></svg></span>
+            <span class="hf-act-text">Pushed 2 commits to <a href="#">ahd</a>/<code>main</code></span>
+            <span class="hf-age t-cold">1y</span>
+          </li>
+        </ul>
+      </aside>
     </section>
 
     <!-- ===== PINNED ===== -->
@@ -175,66 +233,6 @@ const months = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', '
           </div>
         </article>
       </div>
-    </section>
-
-    <!-- ===== README + ACTIVITY ===== -->
-    <section class="hf-two-col" style="margin-top:28px">
-      <article class="hf-card hf-readme" aria-label="Profile README">
-        <div class="hf-md">
-          <h1>Hi, I'm Kieran 👋</h1>
-          <p>I make small, sturdy software: things that keep working when the Wi-Fi drops, the vendor shuts down, or the server is a folder of HTML. Most of what's here is source-available — browse it, clone it, take what's useful.</p>
-          <h2>What I'm working on</h2>
-          <ul>
-            <li><a href="/designs/hearth/repo">useful</a> — a local-first toolbox (timers, notes, generators, SQL playground) that lives entirely in your browser.</li>
-            <li><a href="#">frznforge</a> — this site. A read-only forge you can rebuild from a pile of git repos and host anywhere.</li>
-            <li>Writing about offline-first design and why "works without a server" is a feature, not a constraint.</li>
-          </ul>
-          <h2>Stack</h2>
-          <ul class="hf-stack">
-            <li><code>Python</code></li><li><code>TypeScript</code></li><li><code>Astro</code></li><li><code>Svelte</code></li><li><code>Go</code></li><li><code>SQLite</code></li>
-          </ul>
-        </div>
-      </article>
-
-      <aside class="hf-card hf-activity" aria-labelledby="activity-h">
-        <div class="hf-card-head">
-          <svg class="hf-i" style="color:var(--hf-ember)"><use href="#i-pulse" /></svg>
-          <h2 id="activity-h">Recent activity</h2>
-          <a class="hf-more" href="#">All activity</a>
-        </div>
-        <ul class="hf-activity-list">
-          <li>
-            <span class="hf-act-icon t-hot"><svg class="hf-i"><use href="#i-commit" /></svg></span>
-            <span class="hf-act-text">Pushed 3 commits to <a href="/designs/hearth/repo">useful</a>/<code>main</code></span>
-            <span class="hf-age t-hot">2h</span>
-          </li>
-          <li>
-            <span class="hf-act-icon t-hot"><svg class="hf-i"><use href="#i-tag" /></svg></span>
-            <span class="hf-act-text">Tagged <code>v0.3.0</code> in <a href="#">frznforge</a></span>
-            <span class="hf-age t-hot">1d</span>
-          </li>
-          <li>
-            <span class="hf-act-icon t-warm"><svg class="hf-i"><use href="#i-commit" /></svg></span>
-            <span class="hf-act-text">Pushed 1 commit to <a href="#">ezcv</a>/<code>main</code></span>
-            <span class="hf-age t-warm">3w</span>
-          </li>
-          <li>
-            <span class="hf-act-icon t-warm"><svg class="hf-i"><use href="#i-branch" /></svg></span>
-            <span class="hf-act-text">Created branch <code>feat/zip-export</code> in <a href="/designs/hearth/repo">useful</a></span>
-            <span class="hf-age t-warm">3w</span>
-          </li>
-          <li>
-            <span class="hf-act-icon t-neutral"><svg class="hf-i"><use href="#i-tag" /></svg></span>
-            <span class="hf-act-text">Tagged <code>v2.1.0</code> in <a href="#">sdu</a></span>
-            <span class="hf-age t-neutral">4mo</span>
-          </li>
-          <li>
-            <span class="hf-act-icon t-cold"><svg class="hf-i"><use href="#i-commit" /></svg></span>
-            <span class="hf-act-text">Pushed 2 commits to <a href="#">ahd</a>/<code>main</code></span>
-            <span class="hf-age t-cold">1y</span>
-          </li>
-        </ul>
-      </aside>
     </section>
 
     <!-- ===== CONTRIBUTIONS ===== -->

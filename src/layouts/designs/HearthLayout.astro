@@ -2,21 +2,23 @@
 // "Hearth" design exploration — shell layout (sidebar + main). All CSS lives in
 // src/styles/designs/hearth.css. Content is static; see src/pages/designs/hearth/*.
 import '../../styles/designs/hearth.css';
+import config from '../../../frznforge.config';
 
 interface Props {
   title: string;
   active: 'profile' | 'repo';
 }
 const { title, active } = Astro.props;
+const palette = config.theme.palette;
 ---
 <!doctype html>
-<html lang="en">
+<html lang="en" data-palette={palette}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <meta name="color-scheme" content="light dark" />
-    <title>{title} · frznforge (hearth)</title>
+    <title>{title} · frznforge (hearth · {palette})</title>
     <script is:inline>
       (function () {
         try {
@@ -120,7 +122,7 @@ const { title, active } = Astro.props;
         <div class="hf-topbar">
           <a class="hf-designs-link" href="/designs/"><svg class="hf-i"><use href="#i-arrow-left" /></svg> All designs</a>
           <span class="hf-spacer"></span>
-          <span class="hf-design-tag">design: <b>hearth</b> · ember → ice</span>
+          <span class="hf-design-tag">design: <b>hearth</b> · palette: <b>{palette}</b></span>
         </div>
         <slot />
       </main>
