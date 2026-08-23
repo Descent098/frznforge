@@ -1,0 +1,20 @@
+- [ ] Review `plan.md`
+  - [ ] Write a file called `plan-phases.md` which phases out the delivery of the project
+  - [ ] Work on 4 designs, for now just design the profile page, and repo page for each design to see the direction you're going
+
+Ensure for each change:
+
+- if data model is updated
+    - There are no sync issues/regressions with the changes
+    - There are adequete tests for the system to ensure no synchronization issues, and that the system works both from the UI and has unit tests
+    - Features that touch frontend and backend have testing and validation for both peices
+- Add Changes to the CHANGELOG.md
+    - If a version exists and does not have a release date yet, keep adding to it, if there's no versions without a release date, then bump version (e.g. `v0.1.0 -> v0.2.0`) in the version file, and add a new main heading to CHANGELOG.md for it (e.g. `v0.2.0 (unreleased)`) and add the changes under there.
+    - Add all changes under the following categories as sub-headings:
+      - Features
+      - Bug Fixes
+      - Other
+        - For things like
+          - Documentation improvements
+          - Refinements to existing systems that weren't bugs
+          - anything else that doesn't fit in the other sections
