@@ -25,6 +25,13 @@
  *   npm run smoke:remote                 # all four providers
  *   npm run smoke:remote -- github gitea # only the named ones
  *   npm run smoke:remote -- --keep-cache # reuse the mirrors from the last run (fast re-run)
+ *   npm run smoke:remote -- --branch-trees=all   # vary the Phase 7 page-count cap
+ *
+ * `--branch-trees=<n|all>` overrides `ingest.branchTrees` for the run. Its only purpose is
+ * measurement: these four repos have 27+22+7+2 branches between them, which makes them the
+ * standing benchmark for the per-ref page multiplier. Run it twice — once with `all`, once at
+ * the default — and feed each artifact to `scripts/measure-build.ts`. See
+ * `docs/dev/performance.md`.
  *
  * Then, to check the generated pages:
  *   npx astro build --outDir tests/.tmp/smoke/dist     (with FRZNFORGE_OUT_DIR=tests/.tmp/smoke/data)
@@ -161,6 +168,13 @@ async function githubRateLimit(): Promise<string | null> {
 
 const args = process.argv.slice(2);
 const keepCache = args.includes('--keep-cache');
+const branchTreesArg = args.find((a) => a.startsWith('--branch-trees='))?.split('=')[1];
+const branchTrees: number | 'all' | undefined =
+  branchTreesArg === undefined ? undefined : branchTreesArg === 'all' ? 'all' : Number(branchTreesArg);
+if (typeof branchTrees === 'number' && !Number.isInteger(branchTrees)) {
+  console.error(`--branch-trees must be a non-negative integer or 'all', got '${branchTreesArg}'`);
+  process.exit(2);
+}
 const wanted = args.filter((a) => !a.startsWith('--'));
 const targets = wanted.length > 0 ? TARGETS.filter((t) => wanted.includes(t.provider)) : TARGETS;
 
@@ -172,7 +186,10 @@ if (targets.length === 0) {
 console.log('frznforge remote smoke test — LIVE NETWORK, public repos, no stubs');
 console.log(`  out   ${DATA}`);
 console.log(`  cache ${CACHE}${keepCache ? ' (reused)' : ' (fresh)'}`);
-console.log(`  caps  maxCommits=${INGEST_LIMITS.maxCommits}, tagTrees=${INGEST_LIMITS.tagTrees} — histories are`);
+console.log(
+  `  caps  maxCommits=${INGEST_LIMITS.maxCommits}, tagTrees=${INGEST_LIMITS.tagTrees}` +
+    `${branchTrees === undefined ? '' : `, branchTrees=${branchTrees}`} — histories are`,
+);
 console.log('        deliberately truncated so a run stays quick; this is a wiring check, not a full ingest.');
 for (const t of targets) console.log(`  ▸ ${pad(t.provider, 8)} ${t.note}`);
 console.log('');
@@ -199,6 +216,7 @@ const config: ResolvedConfig = resolveConfig(
       cacheDir: CACHE,
       maxCommits: INGEST_LIMITS.maxCommits,
       tagTrees: INGEST_LIMITS.tagTrees,
+      ...(branchTrees === undefined ? {} : { branchTrees }),
       archives: true,
       concurrency: 4,
     },

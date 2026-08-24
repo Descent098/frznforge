@@ -97,7 +97,17 @@
     active = 0;
   });
 
+  /**
+   * The control that had focus when the palette opened, so closing can hand focus back.
+   *
+   * Without this, `open = false` drops focus onto `<body>` and the next Tab starts again from
+   * the top of the page — a keyboard user forty tab stops down a commits list who opens the
+   * palette and changes their mind loses their place entirely (WCAG 2.4.3 Focus Order).
+   */
+  let returnTo: HTMLElement | null = null;
+
   async function openPalette() {
+    if (!open) returnTo = (document.activeElement as HTMLElement | null) ?? null;
     open = true;
     actions = actionDocs();
     if (!docs && !loadError) {
@@ -112,8 +122,20 @@
     inputEl?.focus();
     inputEl?.select();
   }
-  function close() {
+  /**
+   * Close and put focus back where it came from.
+   *
+   * `navigating` skips the restore for the one case where it would be wrong: `run()` is about
+   * to replace the document, and focusing a control on a page that is being torn down just
+   * fights the new page for it.
+   */
+  function close(navigating = false) {
     open = false;
+    if (navigating) return;
+    const target = returnTo;
+    returnTo = null;
+    // after the {#if} tears the dialog down, or the focus lands inside a removed subtree
+    tick().then(() => target?.isConnected && target.focus());
   }
 
   function run(doc: SearchDoc) {
@@ -128,7 +150,7 @@
       close();
       return;
     }
-    close();
+    close(true);
     window.location.href = doc.url;
   }
 
@@ -182,8 +204,11 @@
           <p class="hf-palette-msg">No matches for “{query}”.</p>
         {:else}
           {#each groups as group (group.kind)}
-            <div class="hf-palette-group">
-              <h4>{group.label}</h4>
+            <!-- Group labels inside the dialog, not sections of the page: as headings they
+                 injected h4s into whatever page the palette was opened on. The list of
+                 buttons carries the name instead. -->
+            <div class="hf-palette-group" role="group" aria-label={group.label}>
+              <p class="hf-palette-grouphead" aria-hidden="true">{group.label}</p>
               {#each group.items as r (r.doc.url)}
                 {@const idx = flat.indexOf(r)}
                 <button type="button" class="hf-palette-item" class:is-active={idx === active} onclick={() => run(r.doc)} onmousemove={() => (active = idx)}>

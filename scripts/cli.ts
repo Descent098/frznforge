@@ -436,13 +436,27 @@ export interface CliFlags {
   port?: number;
   /** Do not launch a browser for `--web`. */
   noOpen: boolean;
+  /** `new`: write into a directory that already has files in it. Never overwrites a file. */
+  force: boolean;
+  /** `new`: print the file list and exit without writing anything. */
+  dryRun: boolean;
 }
 
 export interface ParsedArgs {
   command: string | null;
+  /** The second positional. Only `new` takes one (the directory to scaffold into). */
+  target: string | null;
   flags: CliFlags;
   errors: string[];
 }
+
+/** Commands that take a second positional argument, and what it is called in messages. */
+const COMMAND_TARGETS: Record<string, string> = { new: '<dir>' };
+
+/** Everything `new` accepts. Every other option belongs to `init`. */
+const NEW_FLAGS = new Set(['--force', '--dry-run', '--help']);
+/** …and the subset of those that `init` must reject rather than ignore. */
+const NEW_ONLY = new Set(['--force', '--dry-run']);
 
 const VALUE_FLAGS = ['provider', 'host', 'account', 'select', 'releases', 'config', 'port'] as const;
 
@@ -453,16 +467,31 @@ const BOOL_FLAGS = {
   help: 'help',
   web: 'web',
   'no-open': 'noOpen',
+  force: 'force',
+  'dry-run': 'dryRun',
 } as const satisfies Record<string, keyof CliFlags>;
 
 export const USAGE = `frznforge — static read-only forge site generator
 
 Usage
+  npm run frznforge -- new <dir> [options]
   npm run frznforge -- init [options]
   npm run frznforge -- --help
 
 Commands
+  new <dir>   Scaffold a fresh site (config, profile, notes, orgs, .gitignore, README).
   init        Discover repositories on a provider and add them to frznforge.config.ts.
+
+Options (new)
+  --force                                    Write into a directory that already has files in
+                                             it. Existing files are never overwritten — they
+                                             are reported and left alone.
+  --dry-run                                  Print the files that would be created; write
+                                             nothing.
+
+  There is no published npm package yet, so \`new\` writes only the files you author; the
+  engine (src/, package.json, astro.config.mjs, …) comes from a frznforge checkout.
+  See docs/user/starting-a-site.md.
 
 Options (init)
   --provider=<github|gitlab|gitea|forgejo>   Provider to query.
@@ -497,10 +526,21 @@ Without a token only public repositories are listed. See docs/user/importing.md.
  * are collected into `errors` rather than thrown, so the caller can print usage once.
  */
 export function parseArgs(argv: string[]): ParsedArgs {
-  const flags: CliFlags = { print: false, yes: false, help: false, web: false, noOpen: false };
+  const flags: CliFlags = {
+    print: false,
+    yes: false,
+    help: false,
+    web: false,
+    noOpen: false,
+    force: false,
+    dryRun: false,
+  };
   const errors: string[] = [];
   let command: string | null = null;
+  let target: string | null = null;
   const raw: Record<string, string> = {};
+  /** `--key` spellings actually given, so a flag can be reported as belonging to another command. */
+  const seen = new Set<string>();
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]!;
@@ -509,7 +549,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
     if (!arg.startsWith('--')) {
+      // Only commands listed in COMMAND_TARGETS take a second positional, so `init extra` stays
+      // the error it has always been rather than becoming a silently ignored argument.
       if (command === null) command = arg;
+      else if (target === null && COMMAND_TARGETS[command] !== undefined) target = arg;
       else errors.push(`unexpected argument: ${arg}`);
       continue;
     }
@@ -518,6 +561,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     const key = eq === -1 ? body : body.slice(0, eq);
     let value = eq === -1 ? undefined : body.slice(eq + 1);
 
+    seen.add(`--${key}`);
     const boolKey = (BOOL_FLAGS as Record<string, keyof CliFlags | undefined>)[key];
     if (boolKey !== undefined) {
       if (value !== undefined && value !== 'true' && value !== 'false') {
@@ -561,6 +605,18 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (raw.select !== undefined) flags.select = raw.select;
   if (raw.config !== undefined) flags.config = raw.config;
 
+  // Flags are per-command. Without this, `init --dry-run` and `new --print` are accepted and
+  // silently do nothing, which is the worst of the three possible behaviours.
+  if (command === 'new') {
+    for (const flag of seen) {
+      if (!NEW_FLAGS.has(flag)) errors.push(`${flag} is an init option; new takes ${[...NEW_FLAGS].join(', ')}`);
+    }
+  } else if (command !== null) {
+    for (const flag of seen) {
+      if (NEW_ONLY.has(flag)) errors.push(`${flag} is an option of new: npm run frznforge -- new <dir> ${flag}`);
+    }
+  }
+
   // --print is the "never touch anything, just show me" form and --web is a browser session
   // that exists to write the config: honouring both would mean picking one silently.
   if (flags.web && flags.print) {
@@ -570,7 +626,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     );
   }
 
-  return { command, flags, errors };
+  return { command, target, flags, errors };
 }
 
 /* ------------------------------------------------------------------ config entries */
@@ -1569,6 +1625,35 @@ async function runInit(flags: CliFlags, io: Io): Promise<number> {
   }
 }
 
+/* ------------------------------------------------------------------ new command */
+
+/**
+ * `new <dir>` — scaffold a fresh site. The real work is in `./lib/scaffold`, imported lazily so
+ * a plain `init` run never loads it; this function is only argument handling and reporting.
+ */
+async function runNew(target: string | null, flags: CliFlags, io: Io): Promise<number> {
+  if (target === null) {
+    io.error('error: new needs a directory: npm run frznforge -- new my-site');
+    io.error('');
+    io.error(USAGE);
+    return 1;
+  }
+  const { runScaffold, ScaffoldError } = await import('./lib/scaffold');
+  try {
+    await runScaffold(
+      { dir: path.resolve(io.cwd, target), force: flags.force, dryRun: flags.dryRun, cwd: io.cwd },
+      (line) => io.log(line),
+    );
+    return 0;
+  } catch (error) {
+    if (error instanceof ScaffoldError) {
+      io.error(`error: ${error.message}`);
+      return 1;
+    }
+    throw error;
+  }
+}
+
 /* ------------------------------------------------------------------ entry point */
 
 export function defaultIo(): Io {
@@ -1583,7 +1668,7 @@ export function defaultIo(): Io {
 
 /** Dispatch. Returns the process exit code instead of calling `process.exit` (testable). */
 export async function main(argv: string[], io: Io = defaultIo()): Promise<number> {
-  const { command, flags, errors } = parseArgs(argv);
+  const { command, target, flags, errors } = parseArgs(argv);
   if (flags.help || command === 'help') {
     io.log(USAGE);
     return 0;
@@ -1598,14 +1683,14 @@ export async function main(argv: string[], io: Io = defaultIo()): Promise<number
     io.error(USAGE);
     return 1;
   }
-  if (command !== 'init') {
+  if (command !== 'init' && command !== 'new') {
     io.error(`error: unknown command "${command}"`);
     io.error('');
     io.error(USAGE);
     return 1;
   }
   try {
-    return await runInit(flags, io);
+    return command === 'new' ? await runNew(target, flags, io) : await runInit(flags, io);
   } catch (error) {
     if (error instanceof CliError) {
       io.error(`error: ${error.message}`);

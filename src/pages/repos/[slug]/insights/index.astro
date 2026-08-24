@@ -1,0 +1,246 @@
+---
+/**
+ * Per-repo Insights (schema v5): the monthly series `ingest` computed in `repo.insights`,
+ * drawn as three build-time inline SVGs. No client JS and no chart library — see
+ * `src/components/InsightsChart.astro` for the drawing and the accessibility model.
+ *
+ * `getStaticPaths` gates on `hasInsights` — the same predicate `repoRoutes()` and the
+ * Insights tab in `RepoHeader.astro` use, so the tab, the route list and this page can never
+ * disagree. The body still handles a null/empty series rather than throwing, so a repo that
+ * somehow reaches this URL renders an honest empty state instead of failing the build.
+ */
+import Base from '../../../../layouts/Base.astro';
+import RepoHeader from '../../../../components/RepoHeader.astro';
+import InsightsChart from '../../../../components/InsightsChart.astro';
+import { hasInsights } from '../../../../lib/routes';
+import { formatBytes, formatInt, getData } from '../../../../lib/site';
+import type { Repo } from '../../../../lib/data/schema';
+import '../../../../styles/insights.css';
+
+export async function getStaticPaths() {
+  const data = await getData();
+  return data.repos.filter(hasInsights).map((repo) => ({ params: { slug: repo.slug }, props: { repo } }));
+}
+
+interface Props { repo: Repo }
+const { repo } = Astro.props;
+
+const insights = repo.insights;
+const commitPoints = insights?.commits ?? [];
+const codePoints = insights?.codeSize ?? [];
+/** Length of the SPAN: the series is contiguous, so quiet months are in here as zeros. */
+const months = commitPoints.length;
+/**
+ * Months that actually saw a commit — always ≤ `months`.
+ *
+ * The two are not interchangeable and saying "active" when you mean "span" is a lie the
+ * reader can check: ingest only ever measures a code-size checkpoint in a month that has a
+ * commit, so this is the number `sampleCount` should be compared against.
+ */
+const activeMonths = commitPoints.reduce((n, p) => n + (p.commits > 0 ? 1 : 0), 0);
+
+/* ---- derived numbers ------------------------------------------------------ */
+const totalCommits = commitPoints.reduce((sum, p) => sum + p.commits, 0);
+
+/**
+ * Distinct authors ON THE DEFAULT BRANCH — not `repo.contributors`, which is every author on
+ * every ref.
+ *
+ * This page is scoped to one branch everywhere else (the header, the Commits KPI, both
+ * series), so borrowing the all-refs total here put a number on the tile that the sub-line
+ * right beneath it ("peak N authors in …") flatly contradicted. The series cannot be summed
+ * to get it — a person active in three months would count three times — so it is recomputed
+ * from the same commit list ingest bucketed.
+ */
+const defaultBranch = repo.branches.find((b) => b.name === repo.defaultBranch) ?? null;
+const branchAuthors = new Set<string>();
+for (const sha of defaultBranch?.commits ?? []) {
+  const email = repo.commits[sha]?.author.email;
+  if (email) branchAuthors.add(email.trim().toLowerCase());
+}
+const branchContributors = branchAuthors.size;
+/** Authors who only ever landed on other refs — worth a word, since the listing counts them. */
+const elsewhereContributors = Math.max(0, repo.contributors.length - branchContributors);
+const busiest = commitPoints.reduce<typeof commitPoints[number] | null>(
+  (best, p) => (best === null || p.commits > best.commits ? p : best),
+  null,
+);
+const peopleMonth = commitPoints.reduce<typeof commitPoints[number] | null>(
+  (best, p) => (best === null || p.contributors > best.contributors ? p : best),
+  null,
+);
+const firstMonth = months ? commitPoints[0]!.month : null;
+const lastMonth = months ? commitPoints[months - 1]!.month : null;
+
+/* Lines are only honest when EVERY checkpoint managed to count them; one point over the
+ * ingest byte budget (`lines: null`) makes the whole series bytes-only. */
+const hasLines = codePoints.length > 0 && codePoints.every((p) => p.lines !== null);
+const latestSize = codePoints.length ? codePoints[codePoints.length - 1]! : null;
+const sizeLabel = hasLines ? 'Lines of code' : 'Code size';
+const sizePoints: Array<{ month: string; value: number }> = codePoints.map((p) => ({
+  month: p.month,
+  value: hasLines ? (p.lines as number) : p.bytes,
+}));
+
+const only = (n: number, one: string, many = `${one}s`) => `${formatInt(n)} ${n === 1 ? one : many}`;
+
+/* ---- honesty notes -------------------------------------------------------- */
+const sizeNotes: string[] = [];
+if (!hasLines && codePoints.length > 0) {
+  sizeNotes.push(
+    'Sampled by size: counting lines means reading every text file at that checkpoint, so a checkpoint over the ingest byte budget records bytes only.',
+  );
+}
+if (insights?.sampled && codePoints.length > 0 && codePoints.length < activeMonths) {
+  sizeNotes.push(
+    `Measured at ${only(codePoints.length, 'checkpoint')} out of ${only(activeMonths, 'month')} with commits — evenly spaced, always including the first and the last.`,
+  );
+}
+if (codePoints.length === 1) sizeNotes.push('Only one checkpoint was measured, so there is no trend to read yet.');
+const sizeNote = sizeNotes.length ? sizeNotes.join(' ') : null;
+/* Shared by the bar chart and the line chart, so the wording cannot say "bar". */
+const singleMonthNote = months === 1 ? 'One month of history so far — a single point is all there is to plot.' : null;
+
+const rangeText = firstMonth && lastMonth ? (firstMonth === lastMonth ? firstMonth : `${firstMonth} → ${lastMonth}`) : '—';
+---
+<Base title={`Insights · ${repo.name}`} description={repo.description ?? undefined} active="repos">
+  <div class="hf-container">
+    <RepoHeader repo={repo} active="insights" ownHeading />
+
+    <div class="hf-repo-main hf-insights" style="margin-top:16px">
+      <div class="hf-section-head">
+        <h1>Insights</h1>
+        <p>
+          Monthly activity and code size on <code>{repo.defaultBranch}</code> — {rangeText}
+        </p>
+      </div>
+
+      {!insights || months === 0 ? (
+        <section class="hf-empty">
+          <svg class="hf-i" aria-hidden="true"><use href="#i-chart" /></svg>
+          <p><strong>No insights for this repository.</strong> Nothing on <code>{repo.defaultBranch}</code> produced a monthly series to plot.</p>
+        </section>
+      ) : (
+        <>
+          {insights.approximate && (
+            <p class="hf-banner">
+              <svg class="hf-i" aria-hidden="true"><use href="#i-bolt" /></svg>
+              <span>
+                Code size is <b>approximate</b>: at least one checkpoint held more content than
+                <code>ingest.insights.maxBytesPerSample</code> allows to be read, so its lines were not counted and
+                its byte total may include binary files — the blobs past the budget were never read, so they could
+                not be classified. Commit and contributor counts are exact.
+              </span>
+            </p>
+          )}
+
+          <div class="hf-insight-kpis">
+            <div class="hf-kpi hf-kpi--ember">
+              <span class="hf-kpi-label"><svg class="hf-i" aria-hidden="true"><use href="#i-pulse" /></svg> Commits</span>
+              <span class="hf-kpi-value">{formatInt(totalCommits)}</span>
+              <span class="hf-kpi-sub">on <code>{repo.defaultBranch}</code></span>
+            </div>
+            <div class="hf-kpi hf-kpi--ice">
+              <span class="hf-kpi-label"><svg class="hf-i" aria-hidden="true"><use href="#i-people" /></svg> Contributors</span>
+              <span class="hf-kpi-value">{formatInt(branchContributors)}</span>
+              <span class="hf-kpi-sub">
+                on <code>{repo.defaultBranch}</code>
+                {elsewhereContributors > 0 && <> · {formatInt(elsewhereContributors)} more on other branches</>}
+              </span>
+            </div>
+            <div class="hf-kpi">
+              {/* The VALUE is the span, so the label says span. When quiet months sit inside
+                  it, the sub-line says how many actually saw a commit rather than letting the
+                  headline number imply continuous work. */}
+              <span class="hf-kpi-label"><svg class="hf-i" aria-hidden="true"><use href="#i-history" /></svg> Months of history</span>
+              <span class="hf-kpi-value">{formatInt(months)}</span>
+              <span class="hf-kpi-sub">{activeMonths < months ? `${formatInt(activeMonths)} with commits` : rangeText}</span>
+            </div>
+            <div class="hf-kpi">
+              <span class="hf-kpi-label"><svg class="hf-i" aria-hidden="true"><use href="#i-code" /></svg> Code size</span>
+              <span class="hf-kpi-value">{latestSize ? formatBytes(latestSize.bytes) : '—'}</span>
+              <span class="hf-kpi-sub">
+                {latestSize
+                  ? latestSize.lines !== null
+                    ? <>{only(latestSize.lines, 'line')} at {latestSize.month}</>
+                    : <>at {latestSize.month} — over the read budget, may include binaries</>
+                  : 'not sampled'}
+              </span>
+            </div>
+          </div>
+
+          <InsightsChart
+            id="chart-commits"
+            kind="bars"
+            tone="ember"
+            heading="Commits per month"
+            caption={`Every commit on ${repo.defaultBranch}, bucketed by the month it was authored (UTC). Exact — no sampling.`}
+            valueLabel="Commits"
+            unit="count"
+            noun="commit"
+            points={commitPoints.map((p) => ({ month: p.month, value: p.commits }))}
+            summary={
+              busiest
+                ? `${only(totalCommits, 'commit')} across ${only(months, 'month')}, peaking at ${busiest.commits} in ${busiest.month}.`
+                : 'No commits to plot.'
+            }
+            note={singleMonthNote}
+          />
+
+          <InsightsChart
+            id="chart-contributors"
+            kind="line"
+            tone="ice"
+            heading="Contributors per month"
+            caption="Distinct author email addresses that landed a commit in each month. People who come and go are counted only in the months they were active."
+            valueLabel="Contributors"
+            unit="count"
+            noun="author"
+            points={commitPoints.map((p) => ({ month: p.month, value: p.contributors }))}
+            summary={
+              peopleMonth
+                ? `Distinct monthly authors across ${only(months, 'month')}, peaking at ${only(peopleMonth.contributors, 'author')} in ${peopleMonth.month}.`
+                : 'No contributors to plot.'
+            }
+            note={singleMonthNote}
+          />
+
+          {codePoints.length > 0 ? (
+            <InsightsChart
+              id="chart-size"
+              kind="area"
+              tone="ice"
+              heading={hasLines ? 'Lines of code over time' : 'Code size over time'}
+              caption={
+                hasLines
+                  ? `Lines in every non-vendored, non-binary tracked file at the sampled checkpoints — a wider set than the language bar, which counts only source files in a detected language. Checkpoints are dated by when the commit landed on ${repo.defaultBranch}.`
+                  : `Bytes of every non-vendored, non-binary tracked file at the sampled checkpoints — a wider set than the language bar, which counts only source files in a detected language. Checkpoints are dated by when the commit landed on ${repo.defaultBranch}.`
+              }
+              valueLabel={sizeLabel}
+              unit={hasLines ? 'count' : 'bytes'}
+              noun={hasLines ? 'line' : ''}
+              points={sizePoints}
+              summary={
+                sizePoints.length > 1
+                  ? `${sizeLabel} at ${only(sizePoints.length, 'checkpoint')}, from ${
+                      hasLines ? only(sizePoints[0]!.value, 'line') : formatBytes(sizePoints[0]!.value)
+                    } in ${sizePoints[0]!.month} to ${
+                      hasLines ? only(sizePoints[sizePoints.length - 1]!.value, 'line') : formatBytes(sizePoints[sizePoints.length - 1]!.value)
+                    } in ${sizePoints[sizePoints.length - 1]!.month}.`
+                  : `${sizeLabel}: a single checkpoint of ${
+                      hasLines ? only(sizePoints[0]!.value, 'line') : formatBytes(sizePoints[0]!.value)
+                    } in ${sizePoints[0]!.month}.`
+              }
+              note={sizeNote}
+            />
+          ) : (
+            <section class="hf-empty">
+              <svg class="hf-i" aria-hidden="true"><use href="#i-code" /></svg>
+              <p><strong>No code-size checkpoints.</strong> Sampling is off, or every checkpoint on <code>{repo.defaultBranch}</code> was vendored or binary.</p>
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  </div>
+</Base>

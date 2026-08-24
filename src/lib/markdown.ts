@@ -21,6 +21,27 @@ import { Marked, type Tokens } from 'marked';
 
 const OPTIONS = { gfm: true, breaks: false } as const;
 
+/**
+ * Every heading in rendered markdown drops one level: `#` becomes `<h2>`, `##` becomes
+ * `<h3>`, and `######` stays `<h6>` because there is nowhere lower to go.
+ *
+ * Rendered markdown never owns a page here. A README is inside a card whose own head is an
+ * `<h2>README</h2>`, on a page whose `<h1>` is the repo (`RepoHeader.astro`); a note's body
+ * sits under the note title and the file name; release notes sit under the release. Letting
+ * user markdown emit an `<h1>` gave those pages two `<h1>`s and — when a README was a lone
+ * title with no `##` in it, which is the most common README there is — a document that
+ * stepped `h1 → h3` straight into the About sidebar and failed `heading-order`.
+ *
+ * The visual result is unchanged: `.hf-md`'s heading sizes are shifted by the same one level
+ * in `styles/global.css`, so a `#` still renders as a title. The same demotion is applied to
+ * the profile and organization markdown, which goes through Astro's own pipeline — see the
+ * rehype plugin in `astro.config.mjs`. Change one and you must change the other.
+ */
+function demoteHeading(token: Tokens.Heading): false {
+  token.depth = Math.min(6, token.depth + 1);
+  return false;
+}
+
 /** URL schemes a link or image may use; everything else becomes an inert `#`. */
 const SAFE_SCHEMES = new Set(['http', 'https', 'mailto']);
 
@@ -53,7 +74,7 @@ export function safeUrl(href: string): string {
   return SAFE_SCHEMES.has(scheme[1]!) ? href : '#';
 }
 
-const trusted = new Marked(OPTIONS);
+const trusted = new Marked(OPTIONS).use({ renderer: { heading: demoteHeading } });
 
 /**
  * Renderer overrides for content frznforge did not author. Returning `false` from an override
@@ -66,6 +87,7 @@ const untrusted = new Marked(OPTIONS).use({
     html(): string {
       return '';
     },
+    heading: demoteHeading,
     link(token: Tokens.Link): false {
       token.href = safeUrl(token.href);
       return false;
@@ -85,9 +107,27 @@ export interface RenderOptions {
   trusted?: boolean;
 }
 
+/**
+ * Make a rendered `<pre>` reachable from the keyboard.
+ *
+ * `.hf-md pre` is `overflow-x: auto`, so a long line makes it a scrollable region — and a
+ * scrollable region with no focusable content and no tabindex cannot be scrolled at all
+ * without a mouse in Firefox or Safari (Chromium ships focusable scrollers; the other two do
+ * not). Shiki-highlighted blocks already carry `tabindex="0"` from `highlight.ts`; marked's
+ * do not, which left every fenced block in a README, a note preview and a release body
+ * stranded (axe `scrollable-region-focusable`, WCAG 2.1.1).
+ *
+ * A string pass rather than a renderer override: marked emits code blocks as a bare `<pre>`
+ * with no attributes, so this touches exactly those and never a `<pre>` that already carries
+ * one (which, in trusted raw HTML, the author is free to set themselves).
+ */
+export function focusableCodeBlocks(html: string): string {
+  return html.replace(/<pre>/g, '<pre tabindex="0">');
+}
+
 export function renderMarkdown(src: string, options: RenderOptions = {}): string {
   const engine = options.trusted === false ? untrusted : trusted;
-  return engine.parse(src, { async: false }) as string;
+  return focusableCodeBlocks(engine.parse(src, { async: false }) as string);
 }
 
 /**

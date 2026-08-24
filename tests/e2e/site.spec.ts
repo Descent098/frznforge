@@ -8,7 +8,8 @@ test.describe('profile page', () => {
     const repoKpi = page.locator('.hf-kpi', { hasText: 'Repositories' });
     await expect(repoKpi.locator('.hf-kpi-value')).toHaveText('5');
     // profile README body rendered from content/profile.md
-    await expect(page.locator('.hf-readme .hf-md h1')).toContainText(/Hi, I.m Kieran/);
+    // user markdown is demoted a level so the page chrome keeps the only <h1>
+    await expect(page.locator('.hf-readme .hf-md h2')).toContainText(/Hi, I.m Kieran/);
     // frontmatter links
     await expect(page.locator('.hf-hero-links a', { hasText: 'kieranwood.ca' })).toHaveAttribute('href', 'https://kieranwood.ca');
     // pinned slug 'frznforge' is not in the fixture → falls back to listing first repos
@@ -83,7 +84,7 @@ test.describe('repo overview', () => {
     await expect(page.locator('.hf-crumb strong')).toHaveText('alpha');
     await expect(page.locator('.hf-repo-summary')).toContainText('Alpha fixture');
     // README rendered from the COMMITTED content, not the modified working copy
-    await expect(page.locator('.hf-readme-card .hf-md h1')).toHaveText('Alpha');
+    await expect(page.locator('.hf-readme-card .hf-md h2')).toHaveText('Alpha');
     await expect(page.locator('.hf-readme-card')).not.toContainText('MODIFIED BUT NOT COMMITTED');
     // uncommitted/untracked file never appears
     await expect(page.locator('.hf-files')).not.toContainText('UNTRACKED-SECRET');

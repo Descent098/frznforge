@@ -110,8 +110,24 @@ export const commitUrl = (slug: string, sha: string) => `/repos/${slug}/commit/$
 export const branchesUrl = (slug: string) => `/repos/${slug}/branches/`;
 export const tagsUrl = (slug: string) => `/repos/${slug}/tags/`;
 export const releasesUrl = (slug: string) => `/repos/${slug}/releases/`;
+/** The insights page (schema v5). Only built when `hasInsights(repo)` — see there. */
+export const insightsUrl = (slug: string) => `/repos/${slug}/insights/`;
 export const releaseUrl = (slug: string, tag: string) => `/repos/${slug}/releases/${refSlug(tag)}/`;
 export const archiveUrl = (slug: string, ref: string) => `/repos/${slug}/archive/${refSlug(ref)}.zip`;
+
+/* ---- insights (schema v5) --------------------------------------------------- */
+
+/**
+ * Whether a repo has an insights page — and therefore an Insights tab.
+ *
+ * `Repo.insights` is `null` for an empty repo and whenever `ingest.insights.enabled` is off,
+ * and a repo whose history produced no monthly buckets has nothing to plot. One helper so the
+ * page's `getStaticPaths`, `repoRoutes()`, the sync test and `RepoHeader.astro` cannot drift
+ * apart: a tab without a page is a dead link, a page without a tab is unreachable.
+ */
+export function hasInsights(repo: Repo): boolean {
+  return !repo.empty && repo.insights !== null && repo.insights.commits.length > 0;
+}
 
 /* ---- releases ------------------------------------------------------------- */
 
@@ -384,6 +400,7 @@ export function repoRoutes(repo: Repo): string[] {
   const urls = [repoUrl(repo.slug)];
   if (repo.empty) return urls;
   urls.push(branchesUrl(repo.slug), tagsUrl(repo.slug), releasesUrl(repo.slug));
+  if (hasInsights(repo)) urls.push(insightsUrl(repo.slug));
   for (const t of treeRoutes(repo)) urls.push(t.url);
   for (const b of blobRoutes(repo)) urls.push(b.url);
   for (const r of rawRoutes(repo)) urls.push(r.url);

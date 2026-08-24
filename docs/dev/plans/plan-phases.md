@@ -209,28 +209,78 @@ Tests
 
 ---
 
-## Phase 7 — Insights, polish, 1.0 *(next)*
+## Phase 7 — Insights, polish, 1.0 ✅ *(done 2026-08-24)*
 
 Goal: make it something other people can adopt.
 
+0.1.0 is cut and every box below is settled, but two are settled as **deliberately not done**
+rather than shipped, and one acceptance box stays open on something outside this repository.
+They are left unticked on purpose — read the annotations before assuming the phase is closed.
+
 Ships
-- [ ] Insights page per repo: commits over time, contributors over time, lines-of-code over
-  time (computed at ingest from sampled commits to keep builds bounded).
-- [ ] Performance pass: build caching between runs, lazy-generated heavy pages, asset
-  budgets. **Measured 2026-08-23:** four real remote repos (534 files, 27+22+7+2 branches)
-  generate **15,988 pages in 5m23s** — the multiplier is tree/blob/raw routes *per branch*.
-  Options: cap browsable branches like `ingest.tagTrees` does for tags, generate blob pages
-  only for the default branch (others via a client-side viewer), or make it configurable.
-- [ ] Accessibility and responsive pass across all pages.
-- [ ] User docs in `docs/user/`: quick start, config reference, deploy guides (GitHub Pages,
-  Cloudflare Pages, any static host), migrating from a forge.
-- [ ] `create-frznforge` / template repo for new users.
-- [ ] Cut `v0.1.0`.
+- [x] Insights page per repo: commits over time, contributors over time, lines-of-code over
+  time (computed at ingest from sampled commits to keep builds bounded). Schema v5
+  `Repo.insights`; commits/contributors are exact (bucketed from the commit list already in
+  the artifact), code size is sampled at `ingest.insights.samples` checkpoints, each one an
+  `ls-tree` plus a `cat-file --batch` bounded by `ingest.insights.maxBytesPerSample`. A
+  checkpoint over that budget reports bytes with `lines: null` and raises
+  `insights-approximate`; the page says so rather than pretending.
+- [x] Performance pass — **narrowed to page count, which is what the measurement said the
+  problem was.** `ingest.branchTrees` (default `10`, or `'all'`) caps how many non-default
+  branches get a browsable tree, exactly as `ingest.tagTrees` does for tags; capped branches
+  stay listed with a "not browsable" pill and a `branch-trees-capped` warning instead of a
+  dead link. Re-measured on the same four remote repos: **16,388 pages / 5m01 → 13,164 pages
+  / 3m24 (−32% build, −31% `dist/`)**. The arithmetic, the numbers, every knob and every
+  rejected option are in [performance.md](../performance.md); `npm run measure` reproduces
+  the breakdown against any artifact.
+- [ ] The rest of what "performance pass" floated — **incremental build caching between runs,
+  lazy/client-side generation of the heavy blob pages, asset budgets** — was considered and
+  deliberately **not built**. Caching needs an artifact→page dependency graph that has to be
+  *right*, because a stale page is a silently wrong site, and Astro has no supported partial
+  output; the caching that pays for itself (mirror clones, the content-addressed blob store)
+  already exists. A client-side file viewer would delete most of the build and also break
+  no-JS reading, filesystem-resolved deep links and every accessibility guarantee currently
+  under test. No asset budget is enforced; `deploying.md` documents the size instead.
+  Reasoning recorded in [performance.md § "What we did not do, and why"](../performance.md);
+  revisit only with a measured build where ingest, not rendering, dominates.
+- [x] Accessibility and responsive pass across all pages. Lighthouse a11y **100 with zero
+  failing audits on every page type in both themes** (30 URLs, `data-theme` pinned): light
+  palette ink retuned to clear AA, Shiki moved to github's high-contrast themes, one `<h1>`
+  per page with no skipped levels (all rendered user markdown demoted a level), focus
+  returned by the palette, keyboard-reachable scroll regions, and no sideways scroll at
+  380px. Gated by `tests/e2e/a11y.spec.ts` (every page type × both themes) and
+  `tests/unit/contrast.test.ts` (the palette tokens themselves, in all four palettes).
+- [x] User docs in `docs/user/`: [quick start](../../user/quick-start.md),
+  [starting a site](../../user/starting-a-site.md),
+  [config reference](../../user/configuration.md),
+  [importing from a forge](../../user/importing.md),
+  [deploy guides](../../user/deploying.md) (GitHub Pages, Cloudflare Pages, Netlify, S3,
+  nginx, plus a working Actions workflow), [migrating from a forge](../../user/migrating.md).
+- [ ] `create-frznforge` / template repo for new users. **Shipped as
+  `npm run frznforge -- new <dir>` instead** — an in-repo scaffolder that writes the six files
+  a user authors (`frznforge.config.ts`, `content/profile.md`, `content/notes/`,
+  `content/orgs/`, `.gitignore`, `README.md`), never overwrites, and has `--dry-run` /
+  `--force`. Left unticked because the plan's actual deliverable was a *published* package or
+  template repo, and neither exists: there is no npm publish, and `new` cannot install the
+  engine — you still clone this repository. See
+  [starting-a-site.md](../../user/starting-a-site.md).
+- [x] Cut `v0.1.0`. `VERSION`, `package.json` and the `CHANGELOG.md` heading all read `0.1.0`
+  (2026-08-24); `docs/dev/release-checklist.md` holds the by-hand steps that cannot be
+  verified from inside the repo.
 
 Done when
-- [ ] Documentation is enough for someone to go from zero to a deployed site without reading
-  source.
-- [ ] All tests green; no open "must fix" items.
+- [x] Documentation is enough for someone to go from zero to a deployed site without reading
+  source. *(The transcripts in `quick-start.md` are literal and were re-run against a real
+  build; `release-checklist.md` says to re-verify them whenever the ingest summary, sidebar
+  or repo page changes.)*
+- [ ] All tests green; no open "must fix" items. **Tests are green** — `astro check` 0 errors,
+  480 unit + 156 e2e passing, `npm run build` 561 pages / 0 warnings, ingest byte-identical
+  across runs — but **one blocking item is open and cannot be closed from inside this
+  repository**: the clone URL in `quick-start.md`, `starting-a-site.md` and this repo's
+  `.frznforge.json` (`links.homepage` / `issues` / `upstream`) does not resolve, so a stranger
+  fails on the guide's first command. Tracked in
+  [release-checklist.md](../release-checklist.md); tick this once the repository is published
+  at that URL (or all five places point at the real one) and the container check passes.
 
 ---
 

@@ -43,6 +43,7 @@ function repo(slug: string, name: string, description: string | null, tags: stri
     archives: [],
     languages: [{ name: 'TypeScript', bytes: 10, percent: 100, color: '#3178c6' }],
     contributors: [],
+    insights: null,
     readme: null,
     createdAt: '2026-08-19T09:00:00Z',
     updatedAt: '2026-08-20T10:00:00Z',
@@ -105,7 +106,7 @@ const organizations: Organization[] = [
 ];
 
 const data: ForgeData = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   repos: [repo('alpha', 'alpha', 'Alpha repo', ['ssg']), repo('beacon', 'beacon', 'Beacon repo')],
   notes,
   organizations,

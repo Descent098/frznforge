@@ -1,11 +1,12 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import Base from '../layouts/Base.astro';
 import ContributionGraph from '../components/ContributionGraph.astro';
 import RepoCard from '../components/RepoCard.svelte';
 import { buildActivity } from '../lib/activity';
 import { buildContribGraph } from '../lib/contrib';
 import { summarize } from '../lib/listing';
+import { renderMarkdown } from '../lib/markdown';
 import { commitsUrl, tagsUrl } from '../lib/routes';
 import { heatFor, relativeTimeShort } from '../lib/format';
 import {
@@ -28,7 +29,18 @@ const now = new Date();
 const entries = await getCollection('profile');
 const profile = entries[0] ?? null;
 const fm = profile?.data;
-const Content = profile ? (await render(profile)).Content : null;
+/**
+ * Rendered with the site's own `renderMarkdown()` rather than Astro's markdown pipeline.
+ *
+ * One engine for every piece of markdown on the site — READMEs, notes, release bodies and
+ * these two — means one set of rules, and in particular one place where headings are demoted
+ * a level so the page chrome keeps sole ownership of the `<h1>`. Astro's pipeline would need
+ * a rehype plugin to do the same, and reaching for one now means installing
+ * `@astrojs/markdown-remark`, which this project does not ship.
+ *
+ * `entry.body` is the markdown with the frontmatter already stripped by the collection.
+ */
+const profileHtml = profile?.body?.trim() ? renderMarkdown(profile.body) : null;
 
 const repoCount = data.repos.length;
 const commitsThisYear = commitsSince(data.repos, 365, now);
@@ -123,9 +135,14 @@ const forges = Object.entries(fm?.forges ?? {}).filter(([, url]) => Boolean(url)
     </section>
 
     <section class:list={['hf-two-col', { 'hf-two-col--single': activity.length === 0 }]} style="margin-top:16px">
-      {Content ? (
-        <article class="hf-card hf-readme" aria-label="Profile README">
-          <div class="hf-md"><Content /></div>
+      {profileHtml ? (
+        <article class="hf-card hf-readme" aria-labelledby="profile-readme-h">
+          {/* The card owns an h2 so the outline cannot skip a level into the body: user
+              markdown starts wherever the author started it, and a profile.md whose first
+              line is `## …` would otherwise step h1 -> h3. Hidden, because the card is
+              obviously the profile README on screen. */}
+          <h2 class="hf-sr" id="profile-readme-h">Profile README</h2>
+          <div class="hf-md" set:html={profileHtml} />
         </article>
       ) : (
         <div></div>

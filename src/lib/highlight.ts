@@ -80,7 +80,17 @@ let highlighterPromise: Promise<Highlighter> | null = null;
 
 function getHighlighter(): Promise<Highlighter> {
   return (highlighterPromise ??= createHighlighter({
-    themes: ['github-light', 'github-dark'],
+    // The HIGH-CONTRAST github themes, not the plain ones.
+    //
+    // `github-light` ships four token colours that miss WCAG AA even on its own #ffffff —
+    // keywords #D73A49 at 4.6:1 there and 4.5:1 on this site's warmer card, variables #E36209
+    // at 3.5:1, strings #22863A, comments #6A737D — and `github-dark`'s comment grey lands at
+    // 3.2:1 on Hearth's dark surface. That is the single most-read text on the site failing
+    // the floor, and patching individual literals out of a theme (which this file used to do
+    // for the dark comment grey) is a game of whack-a-mole against a bundled JSON file.
+    // The high-contrast variants are github's own answer to exactly this and clear AA on every
+    // surface this site paints code on. `tests/e2e/a11y.spec.ts` measures it.
+    themes: ['github-light-high-contrast', 'github-dark-high-contrast'],
     langs: [],
   }));
 }
@@ -90,9 +100,21 @@ const loaded = new Set<string>();
 /**
  * Highlight source to HTML: `<pre class="shiki ..."><code><span class="line" id="Ln">…`
  * Both themes are emitted (CSS variables); `.hf-code` CSS picks per theme. Every line gets
- * an id `L<n>` so `#L12` anchors work with pure CSS `:target`.
+ * an id `<idPrefix>L<n>` so `#L12` anchors work with pure CSS `:target`.
+ *
+ * @param idPrefix Namespace for the per-line ids. A page that highlights ONE file can leave
+ *   it empty and get the documented `L12`. A page that highlights several — a multi-file note
+ *   renders one card per file — **must** pass a per-file prefix: without it every card emitted
+ *   `id="L1"…"L30"` again, so `#L5` resolved to the first file only and the lines of every
+ *   later file were permanently unlinkable. `NoteFileView` passes its section anchor, giving
+ *   `f-netlify-toml-L5`.
  */
-export async function highlightToHtml(code: string, language: string | null, path?: string): Promise<string> {
+export async function highlightToHtml(
+  code: string,
+  language: string | null,
+  path?: string,
+  idPrefix = '',
+): Promise<string> {
   const hl = await getHighlighter();
   // Shiki emits one `.line` per newline-separated segment, so a file that ends with a
   // trailing newline (almost all of them) gets an extra empty line and a phantom gutter
@@ -110,12 +132,12 @@ export async function highlightToHtml(code: string, language: string | null, pat
   }
   return hl.codeToHtml(source, {
     lang: loaded.has(lang) ? lang : 'text',
-    themes: { light: 'github-light', dark: 'github-dark' },
+    themes: { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' },
     defaultColor: false,
     transformers: [
       {
         line(node, line) {
-          node.properties['id'] = `L${line}`;
+          node.properties['id'] = `${idPrefix}L${line}`;
         },
       },
     ],

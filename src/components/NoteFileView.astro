@@ -78,11 +78,11 @@ const lineCount = text !== null ? countLines(text) : null;
 const tooBigToHighlight = text !== null && (file.size > HIGHLIGHT_MAX_BYTES || (lineCount ?? 0) > HIGHLIGHT_MAX_LINES);
 
 const codeHtml = text !== null && !tooBigToHighlight && !isMarkdown && !showImage
-  ? await highlightToHtml(text, file.language, file.path)
+  ? await highlightToHtml(text, file.language, file.path, `${anchor}-`)
   : null;
 const mdPreviewHtml = isMarkdown && text !== null ? renderMarkdown(previewSource(text)) : null;
 const mdSourceHtml = isMarkdown && text !== null && !tooBigToHighlight
-  ? await highlightToHtml(text, 'Markdown', file.path)
+  ? await highlightToHtml(text, 'Markdown', file.path, `${anchor}-`)
   : null;
 
 const previewId = `hf-nv-${group}-preview`;

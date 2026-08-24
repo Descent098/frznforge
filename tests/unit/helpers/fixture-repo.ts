@@ -23,6 +23,14 @@ export function at(n: number): string {
 
 export interface CommitOptions {
   date?: string;
+  /**
+   * Committer date, when it must differ from `date` (the author date).
+   *
+   * Defaults to `date`, which is what a plain `git commit` produces. Set it to model a
+   * rebase or a cherry-pick: an old patch replayed onto a new tip keeps its author date and
+   * gets a fresh committer date.
+   */
+  committerDate?: string;
   author?: { name: string; email: string };
   /** Set to true to write a multi-line message verbatim (subject + body). */
   raw?: boolean;
@@ -95,7 +103,7 @@ export class FixtureRepo {
   /** Commit whatever is staged with deterministic dates; returns the sha. */
   commit(message: string, opts: CommitOptions = {}): string {
     const date = opts.date ?? at(this.seq++ * 60);
-    const env: Record<string, string> = { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date };
+    const env: Record<string, string> = { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: opts.committerDate ?? date };
     if (opts.author) {
       env.GIT_AUTHOR_NAME = opts.author.name;
       env.GIT_AUTHOR_EMAIL = opts.author.email;

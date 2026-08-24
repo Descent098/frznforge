@@ -181,8 +181,11 @@ Every exclusion flag is `n` + the initial of what it drops. They are case-insens
 (`ALL-NF` works), and an unknown one is refused by name rather than silently ignored:
 
 ```
---select: unknown filter 'nx' in 'all-nx'; known: nf = forks, na = archived, np = private
+--select: unknown filter 'nx' in 'all-nx'; known: nf = forks, na = archived, np = private, and no listed repository is named 'all-nx'
 ```
+
+(The trailing clause is there because an exact repository name wins over the filter grammar —
+see the `all-contributors` case above.)
 
 Exclusions apply **only** to the `all` form: `1,3` and `ezcv,sdu` name repositories outright,
 so a fork or an archived repo you asked for by name is still added. They also cannot be mixed
@@ -383,6 +386,11 @@ fail the same `Host` check.
   the repo from there instead of publishing it stripped of its metadata.
 - Configured with `ingest.cacheDir` (default `./.frznforge-cache`, relative to the config
   file). `FRZNFORGE_CACHE_DIR` overrides it, mostly for tests.
+- **On Windows**, a deep project path plus the mirror's own directory depth can cross
+  `MAX_PATH`, and the clone fails with `⚠ [remote-fetch-failed] … fatal: cannot stat
+  '…/hooks/applypatch-msg.sample': Filename too long`. Fix it with
+  `git config --global core.longpaths true`, or point `ingest.cacheDir` at a shallow
+  directory such as `C:/ff-cache`.
 - Git-ignored and completely disposable. **To clear it**, delete the directory:
 
 ```bash

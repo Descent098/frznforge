@@ -97,7 +97,8 @@ test.describe('releases from annotated tags', () => {
     await expect(page.locator('.hf-release-pre')).toHaveCount(0);
 
     // markdown, this time actually rendered
-    await expect(page.locator('.hf-release-notes h2')).toHaveText('Highlights');
+    // user markdown is demoted a level: `## Highlights` renders as an <h3>
+    await expect(page.locator('.hf-release-notes h3')).toHaveText('Highlights');
     await expect(page.locator('.hf-release-notes em')).toHaveText('guide');
     await expect(page.locator('.hf-release-notes code')).toHaveText('extra');
 

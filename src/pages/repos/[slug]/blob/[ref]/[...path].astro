@@ -66,7 +66,7 @@ const crumbs = dirs.map((name, i) => ({ name, url: treeUrl(repo.slug, ref.name, 
 ---
 <Base title={`${filePath} · ${repo.name} at ${ref.name}`} description={repo.description ?? undefined} active="repos">
   <div class="hf-container">
-    <RepoHeader repo={repo} active="code" />
+    <RepoHeader repo={repo} active="code" heading={`${filePath} · ${repo.name} at ${ref.name}`} />
 
     <div class="hf-repo-main" style="margin-top:16px">
       <div class="hf-toolbar">
@@ -110,6 +110,10 @@ const crumbs = dirs.map((name, i) => ({ name, url: treeUrl(repo.slug, ref.name, 
               </div>
             </div>
             <div class="hf-blob-body hf-mdview-preview">
+              {/* A heading the chrome owns, so the outline cannot skip a level into content
+                  nobody here wrote: a README that opens at `##` renders an h3, and this page's
+                  only other heading is the h1 in RepoHeader. */}
+              <h2 class="hf-sr">Preview of {filePath}</h2>
               <div class="hf-md hf-blob-md" set:html={mdPreviewHtml} />
             </div>
             <div class="hf-blob-body hf-mdview-source">

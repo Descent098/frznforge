@@ -90,7 +90,9 @@ export async function ingest(
     maxBlobBytes: config.ingest.maxBlobBytes,
     maxCommits: config.ingest.maxCommits,
     tagTrees: config.ingest.tagTrees,
+    branchTrees: config.ingest.branchTrees,
     archives: config.ingest.archives,
+    insights: config.ingest.insights,
   };
 
   const results = await pool(config.repos, config.ingest.concurrency, async (src) => {

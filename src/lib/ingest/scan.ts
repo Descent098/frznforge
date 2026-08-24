@@ -16,6 +16,7 @@ import type {
 import { contributorsFromCommits } from './contributors';
 import { loadCommits } from './commits';
 import { gitBuffer, isGitRepo, looksBinary, readBlob } from './git';
+import { computeInsights, DEFAULT_INSIGHTS_OPTIONS, type InsightsOptions } from './insights';
 import { languageStats } from './languages';
 import { detectSpdx, findLicenseEntry, resolveLicense } from './license';
 import { mergeMeta, readRepoMetaFile, repoBasename, slugFor } from './meta';
@@ -65,8 +66,19 @@ export interface ScanOptions {
   maxCommits: number | null;
   /** Newest N tags get browsable trees + archives (0 = none). Default 25. */
   tagTrees?: number;
+  /**
+   * How many NON-default branches get browsable trees, most recently updated first;
+   * `'all'` for every branch, `0` for none. Default 10 (schema v5).
+   *
+   * The default branch always has a tree (`Repo.tree`/`Repo.files`) and never counts against
+   * this cap. Tree/blob/raw pages are emitted per browsable ref, so this is the main control
+   * on build size.
+   */
+  branchTrees?: number | 'all';
   /** Produce zip source archives with `git archive`. Default true. */
   archives?: boolean;
+  /** Insights knobs (schema v5). Defaults to `DEFAULT_INSIGHTS_OPTIONS`. */
+  insights?: InsightsOptions;
 }
 
 export type ScanResult =
@@ -123,8 +135,9 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
     });
   }
 
-  // per-ref trees: every non-default branch + the newest `tagTrees` tags
+  // per-ref trees: the newest `branchTrees` non-default branches + the newest `tagTrees` tags
   const tagTreeCap = opts.tagTrees ?? 25;
+  const branchTreeCap = opts.branchTrees ?? 10;
   const blobs = new Map<string, Buffer>(treeRes.blobs);
   const treeCache = new Map<string, { tree: typeof treeRes.tree; files: typeof treeRes.files }>();
   if (head) treeCache.set(head, { tree: treeRes.tree, files: treeRes.files });
@@ -139,9 +152,31 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
     return entry;
   };
 
+  // Branch trees are capped exactly like tag trees, and for the same reason: tree/blob/raw
+  // pages are generated per browsable ref, so N branches multiply the page count by N. The
+  // default branch is always browsable (it is `tree`/`files`, not a refTree) and is never
+  // counted against the cap; the rest are kept most-recently-updated first, then emitted in
+  // name order so `refTrees` key order stays deterministic.
+  const nonDefaultBranches = branchRefs.filter((b) => b.name !== def.name);
+  const branchesByDateDesc = [...nonDefaultBranches].sort((a, b) =>
+    a.headDate > b.headDate ? -1 : a.headDate < b.headDate ? 1 : a.name < b.name ? -1 : 1,
+  );
+  const treedBranches = (
+    branchTreeCap === 'all' ? branchesByDateDesc : branchesByDateDesc.slice(0, branchTreeCap)
+  ).sort((a, b) => (a.name < b.name ? -1 : 1));
+  const browsableBranchCount = treedBranches.length + (def.name ? 1 : 0);
+  if (browsableBranchCount < branchRefs.length) {
+    warn({
+      code: 'branch-trees-capped',
+      repo: null,
+      message:
+        `${browsableBranchCount} of ${branchRefs.length} branches have browsable trees ` +
+        `(ingest.branchTrees = ${branchTreeCap})`,
+    });
+  }
+
   const refTrees: Record<string, RefTree> = {};
-  for (const ref of branchRefs) {
-    if (ref.name === def.name) continue;
+  for (const ref of treedBranches) {
     const t = await treeFor(ref.head);
     refTrees[ref.name] = { kind: 'branch', name: ref.name, commit: ref.head, tree: t.tree, files: t.files };
   }
@@ -254,6 +289,18 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
     if (updatedAt === null || c.commitDate > updatedAt) updatedAt = c.commitDate;
   }
 
+  // insights (schema v5): monthly commits/contributors + a sampled code-size series over the
+  // default branch. Sampling is bounded by `ingest.insights` and derived from the commit list,
+  // never from a clock, so the artifact stays deterministic.
+  const defaultBranch = def.name ? (branchesRes.branches.find((b) => b.name === def.name) ?? null) : null;
+  const insightsRes = await computeInsights(repoPath, {
+    commits,
+    branchCommits: defaultBranch?.commits ?? null,
+    head,
+    options: opts.insights ?? DEFAULT_INSIGHTS_OPTIONS,
+  });
+  insightsRes.warnings.forEach(warn);
+
   const repo: Repo = {
     slug,
     name: meta.name,
@@ -277,6 +324,7 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
     archives,
     languages: languageStats(Object.values(treeRes.files)),
     contributors: contributorsFromCommits(commitList),
+    insights: insightsRes.insights,
     readme,
     createdAt,
     updatedAt,

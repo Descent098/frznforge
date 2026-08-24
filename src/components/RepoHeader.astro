@@ -3,22 +3,55 @@
  * Shared repo page header: breadcrumb, description, badges and the section tabs.
  * Used by the overview and every Phase 3 sub-page (`active` picks the current tab).
  */
-import { branchesUrl, commitsUrl, releasesUrl, repoUrl, resolveReleases, tagsUrl } from '../lib/routes';
+import { branchesUrl, commitsUrl, hasInsights, insightsUrl, releasesUrl, repoUrl, resolveReleases, tagsUrl } from '../lib/routes';
 import { formatInt, getConfig } from '../lib/site';
 import type { Repo } from '../lib/data/schema';
 
 interface Props {
   repo: Repo;
-  active: 'code' | 'commits' | 'branches' | 'tags' | 'releases';
+  active: 'code' | 'commits' | 'branches' | 'tags' | 'releases' | 'insights';
+  /**
+   * Overrides the generated page heading. Blob and tree pages pass the path being browsed,
+   * which is a far more useful "where am I" than the repo name they all share.
+   */
+  heading?: string;
+  /** True when the page renders its own visible `<h1>` (only Insights does). */
+  ownHeading?: boolean;
 }
-const { repo, active } = Astro.props;
+const { repo, active, heading, ownHeading = false } = Astro.props;
+
+/**
+ * Every repo sub-page needs exactly one `<h1>`, and until now none of them had one: the repo
+ * name is a `<strong>` inside the breadcrumb `<nav>`, so a screen-reader user pressing `1` or
+ * `H` on a branches, tags, commits or blob page found nothing at all — several of those pages
+ * had no heading of any level. Lighthouse does not score `page-has-heading-one`, which is
+ * exactly why it went unnoticed.
+ *
+ * It is visually hidden rather than drawn: the breadcrumb and the tab strip already say all
+ * of this on screen, and adding a second visible title to eleven page types would be a
+ * redesign, not an accessibility fix.
+ */
+const SECTION_LABEL: Record<Props['active'], string | null> = {
+  code: null,
+  commits: 'Commits',
+  branches: 'Branches',
+  tags: 'Tags',
+  releases: 'Releases',
+  insights: 'Insights',
+};
+const label = SECTION_LABEL[active];
+const pageHeading = heading ?? (label ? `${repo.name} · ${label}` : repo.name);
 const cfg = await getConfig();
 // same source the releases pages render from, so the tab count can never disagree with them
 const releases = resolveReleases(repo);
+// same predicate `repoRoutes()` and the insights page's getStaticPaths use, so the tab can
+// never point at a page that was not built (or hide one that was)
+const showInsights = hasInsights(repo);
 const upstreamHost = repo.links.upstream ? new URL(repo.links.upstream).hostname.replace(/^www\./, '') : null;
 const cur = (tab: string) => (tab === active ? 'page' : undefined);
 ---
 <header class="hf-repo-head">
+  {!ownHeading && <h1 class="hf-sr">{pageHeading}</h1>}
   <div class="hf-repo-head-row">
     <nav class="hf-crumb" aria-label="Breadcrumb">
       <span class="hf-repo-icon"><svg class="hf-i"><use href="#i-repo" /></svg></span>
@@ -55,6 +88,9 @@ const cur = (tab: string) => (tab === active ? 'page' : undefined);
     )}
     {!repo.empty && (
       <a href={releasesUrl(repo.slug)} aria-current={cur('releases')}><svg class="hf-i"><use href="#i-package" /></svg> Releases <span class="hf-count">{releases.length}</span></a>
+    )}
+    {showInsights && (
+      <a href={insightsUrl(repo.slug)} aria-current={cur('insights')}><svg class="hf-i"><use href="#i-chart" /></svg> Insights</a>
     )}
   </nav>
 </header>

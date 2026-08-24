@@ -48,19 +48,48 @@ export default defineConfig({
     maxCommits: null,        // cap per repo (null = all)
     concurrency: 4,          // repos scanned in parallel
     tagTrees: 25,            // newest N tags get browsable trees + archives (0 = none)
+    branchTrees: 10,         // newest N *non-default* branches get browsable trees ('all' = every one)
     archives: true,          // zip source archives (git archive) for default branch + tags
     cacheDir: './.frznforge-cache',  // mirror clones of remote repos (gitignored)
     fetch: 'auto',           // 'auto' | 'never' (offline, cache only) | 'always'
+    insights: {              // per-repo /insights/ page
+      enabled: true,
+      samples: 24,                    // max monthly code-size checkpoints per repo
+      maxBytesPerSample: 20 * 1024 * 1024,  // line-counting budget at one checkpoint
+    },
   },
   listing: { pageSize: 50 },
 });
 ```
 
 Notes
+- `site.url` is **display only** today: it is rendered as the host label under the site title
+  in the sidebar and nowhere else. Every link frznforge emits is root-absolute (`/repos/…`),
+  so leaving it out changes no URL — it is reserved for absolute links and feeds later.
 - `path` is absolute or relative to the config file. Bare repos work too.
-- `tagTrees`: every branch is always browsable; tags beyond the newest N lose their file
-  tree and download archive (a `tag-trees-capped` warning tells you when that happens).
-- `archives: false` skips zip generation entirely (no download links on the site).
+- `tagTrees` / `branchTrees` are the two biggest levers on build size, because the file
+  browser (`tree`/`blob`/`raw`) is generated **per browsable ref** — a repo with 27 branches
+  costs 27× its file count in pages. `tagTrees` keeps the newest N tags (those also get the
+  download archive); `branchTrees` keeps the N most recently updated non-default branches, or
+  `'all'`. The default branch always has a file browser and never counts against the cap, so
+  the defaults give at most `1 + 10 + 25` browsable refs per repo. Capped refs still appear on
+  the branches/tags pages and in the ref switcher — they just have no file browser, and ingest
+  says so (`tag-trees-capped`, `branch-trees-capped`). See
+  [deploying.md](./deploying.md#3-how-big-will-my-site-be) for the page-count formula, and
+  [performance.md](../dev/performance.md) for what these caps are actually measured to save —
+  including the case they *don't* help, which is a repo that vendors its dependencies.
+- `archives: false` skips zip generation entirely (no download links on the site). Source zips
+  are usually the largest single thing in `dist/`.
+- `insights` controls the `/repos/<slug>/insights/` page. Monthly commits and contributors are
+  exact — they come from the commit list already in the artifact. Code size over time is
+  **sampled**: at most `samples` monthly checkpoints (always including the first and last),
+  each one measured with `git ls-tree`, skipping binary and vendored paths. Counting lines
+  needs the file contents, so it stops once a checkpoint's text exceeds `maxBytesPerSample`;
+  that point then reports bytes but no line count — and its byte total loses the binary filter
+  too, because the blobs past the budget were never read and so could not be classified. The
+  series is flagged approximate, the page says so, and you get an `insights-approximate`
+  warning. Checkpoints are derived from the commit list and never from a clock, so the
+  sampling is reproducible. `enabled: false` drops the page.
 - `overrides` has the same shape as `.frznforge.json` and wins over it.
 - `org` on a repo puts it in that organization; so does listing the repo's slug under
   `organizations[].repos`. Doing both is fine — membership is the union of the two.
@@ -113,11 +142,17 @@ forges:
   github: https://github.com/you
   codeberg: https://codeberg.org/you
 pinned: [useful, frznforge]   # repo slugs, max 10, in order
+identities:                   # author emails counted as "you" in the contribution graph
+  - you@example.com
 ---
 
 # Hi 👋
 Markdown body — rendered on the profile page.
 ```
+
+Leave `identities` out to count every commit in every repo. Set it — listing each address you
+have ever committed under — as soon as any repo has other contributors, or their commits show
+up as yours.
 
 ## Notes (`content/notes/`)
 
@@ -228,5 +263,22 @@ frznforge never fails a build because of a repo's state; it emits a warning and 
 | Two notes slugify to the same name | The later one is suffixed `-2` (`note-slug-collision`) |
 | An org lists a repo slug that was not ingested | That entry is dropped (`org-unknown-repo`) |
 | A repo names an org that is not configured | The repo joins no org (`repo-unknown-org`) |
+| A committed path or ref name contains `#` or `%` | No static URL can reach it: listed without a link (`repo-path-unservable`) |
+| A description is longer than 300 characters | Truncated (`description-truncated`) |
+| Two repos resolve to the same slug | The later one is suffixed `-2` (`slug-collision`) |
+| More commits on a branch than `ingest.maxCommits` | The list is cut to the newest N (`commits-capped`) |
+| More tags than `ingest.tagTrees` | Older tags lose their file browser and archive (`tag-trees-capped`) |
+| More non-default branches than `ingest.branchTrees` | Older branches lose their file browser (`branch-trees-capped`) |
+| A code-size checkpoint exceeded `insights.maxBytesPerSample` | That point reports bytes but no line count, and that byte total may include binaries (`insights-approximate`) |
 
 Warnings are printed by `npm run ingest` and counted in the site footer.
+
+One message does **not** come from ingest and so has no code: a markdown file in
+`content/orgs/` with no matching `organizations` entry makes `astro build` (and `astro dev`)
+print
+
+```
+[frznforge] content/orgs/<id>.md does not match any organization in frznforge.config.ts — ignored.
+```
+
+once per orphaned file. Delete the file or add the organization.

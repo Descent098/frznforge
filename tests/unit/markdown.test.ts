@@ -20,6 +20,62 @@ describe('renderMarkdown (trusted)', () => {
   });
 });
 
+/**
+ * Headings are demoted one level in BOTH pipelines.
+ *
+ * Rendered markdown never owns a page: a README sits in a card whose head is already an
+ * `<h2>`, on a page whose `<h1>` is the repo. Letting user markdown emit `<h1>` gave those
+ * pages two `<h1>`s, and a README that is a lone title with no `##` in it — the most common
+ * README shape there is — stepped `h1 → h3` straight into the About sidebar and failed
+ * `heading-order`. See `.hf-md`'s shifted heading sizes in global.css: the markup moved, the
+ * rendered page did not.
+ */
+describe('renderMarkdown (heading levels)', () => {
+  it('demotes every heading one level', () => {
+    const html = renderMarkdown(['# One', '', '## Two', '', '### Three', '', '#### Four', '', '##### Five', ''].join('\n'));
+    expect(html).toContain('<h2>One</h2>');
+    expect(html).toContain('<h3>Two</h3>');
+    expect(html).toContain('<h4>Three</h4>');
+    expect(html).toContain('<h5>Four</h5>');
+    expect(html).toContain('<h6>Five</h6>');
+    expect(html).not.toContain('<h1');
+  });
+
+  it('clamps at h6 rather than emitting an h7', () => {
+    const html = renderMarkdown('###### Six');
+    expect(html).toContain('<h6>Six</h6>');
+    expect(html).not.toContain('<h7');
+  });
+
+  it('demotes setext headings too', () => {
+    const html = renderMarkdown(['Title', '=====', '', 'Sub', '---', ''].join('\n'));
+    expect(html).toContain('<h2>Title</h2>');
+    expect(html).toContain('<h3>Sub</h3>');
+  });
+
+  it('applies to untrusted content as well', () => {
+    expect(renderMarkdown('# Imported', { trusted: false })).toContain('<h2>Imported</h2>');
+  });
+});
+
+/**
+ * Fenced code blocks scroll horizontally (`.hf-md pre { overflow-x: auto }`) and contain
+ * nothing focusable, so without a tabindex they cannot be scrolled without a mouse in Firefox
+ * or Safari (axe `scrollable-region-focusable`, WCAG 2.1.1). Shiki-highlighted blocks already
+ * carry one; marked's did not.
+ */
+describe('renderMarkdown (code blocks)', () => {
+  it('makes every code block keyboard-focusable', () => {
+    const html = renderMarkdown(['```bash', 'npm test', '```', ''].join('\n'));
+    expect(html).toContain('<pre tabindex="0">');
+    expect(html).not.toMatch(/<pre>/);
+  });
+
+  it('does the same for untrusted content', () => {
+    expect(renderMarkdown('    indented code\n', { trusted: false })).toContain('<pre tabindex="0">');
+  });
+});
+
 describe('renderMarkdown (untrusted)', () => {
   const render = (src: string) => renderMarkdown(src, { trusted: false });
 
@@ -39,8 +95,8 @@ describe('renderMarkdown (untrusted)', () => {
     expect(html).not.toContain('onerror');
     expect(html).not.toContain('<iframe');
     expect(html).not.toContain('<img');
-    // The surrounding markdown still renders.
-    expect(html).toContain('<h1>Release 1.0</h1>');
+    // The surrounding markdown still renders (demoted a level — see the heading tests below).
+    expect(html).toContain('<h2>Release 1.0</h2>');
     expect(html).toContain('inline');
   });
 

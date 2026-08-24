@@ -156,12 +156,42 @@ export default async function globalSetup() {
     git(d, ['tag', 'light'], '2024-03-02T00:00:00Z');
   });
 
-  // bravo — template repo, Go, tags
+  // bravo — template repo, Go, and the only fixture with a LONG history.
+  //
+  // Every other fixture repo spans one or two months, which is not enough to exercise the
+  // Phase 7 insights page: no checkpoint thinning, no x-label thinning, no quiet month, one
+  // contributor. So bravo grows a commit a month for over a year. The shape is deliberate:
+  //   • 2023-06 → 2024-08, with 2023-11 and 2024-04 SKIPPED, so the zero-filled quiet months
+  //     the series emits are actually rendered;
+  //   • a second author in some months, so `contributors` is not a flat line of 1;
+  //   • the file grows monotonically, so code size has a visible slope;
+  //   • Go only, and no tags — the language facet, the `cli` tag and the empty-releases state
+  //     that other specs assert on bravo all stay exactly as they were.
+  // `scaffold` remains the FIRST commit at its original date; nothing asserts bravo's HEAD.
   makeRepo('bravo', (d) => {
     fs.writeFileSync(path.join(d, 'README.md'), '# Bravo template\n\nClone me.\n');
     fs.writeFileSync(path.join(d, '.frznforge.json'), JSON.stringify({ description: 'Bravo fixture: a Go CLI template.', tags: ['cli', 'go'], template: true }, null, 2));
     fs.writeFileSync(path.join(d, 'main.go'), 'package main\n\nfunc main() {}\n'.repeat(10));
     commitAll(d, 'scaffold', '2023-06-01T00:00:00Z');
+
+    // [year, month, commits that month]; the gaps at 2023-11 and 2024-04 are the point.
+    const months: Array<[number, number, number]> = [
+      [2023, 7, 1], [2023, 8, 3], [2023, 9, 2], [2023, 10, 4],
+      [2024, 1, 2], [2024, 2, 5], [2024, 3, 1],
+      [2024, 5, 3], [2024, 6, 2], [2024, 7, 4], [2024, 8, 1],
+    ];
+    let n = 0;
+    for (const [year, month, count] of months) {
+      for (let k = 0; k < count; k++) {
+        n++;
+        const date = `${year}-${String(month).padStart(2, '0')}-${String(2 + k * 4).padStart(2, '0')}T09:0${k}:00Z`;
+        fs.appendFileSync(path.join(d, 'main.go'), `\nfunc step${n}() int { return ${n} }\n`);
+        git(d, ['add', '-A'], date);
+        // a co-maintainer in the busier months, so the contributor series varies
+        const author = k === 1 ? ['--author=Bo Maintainer <bo@example.com>'] : [];
+        git(d, ['commit', '-q', '-m', `step ${n}`, ...author], date);
+      }
+    }
   });
 
   // empty — no commits at all
@@ -294,7 +324,16 @@ export default async function globalSetup() {
           repos: ['bravo'],
         },
       ],
-      ingest: { ...(userConfig.ingest ?? {}), outDir: DATA, cacheDir: CACHE },
+      // `insights.samples` is deliberately below bravo's active-month count so the build
+      // exercises checkpoint THINNING (`sampled: true`) rather than measuring every month —
+      // the path a real repo with years of history takes. Every other knob stays at its
+      // shipped default so the fixture keeps testing what users actually get.
+      ingest: {
+        ...(userConfig.ingest ?? {}),
+        outDir: DATA,
+        cacheDir: CACHE,
+        insights: { ...(userConfig.ingest?.insights ?? {}), samples: 6 },
+      },
     },
     ROOT,
   );

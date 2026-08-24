@@ -17,7 +17,7 @@
  */
 import { z } from 'astro/zod';
 
-export const SCHEMA_VERSION = 4 as const;
+export const SCHEMA_VERSION = 5 as const;
 
 /* ---- primitives -------------------------------------------------------- */
 
@@ -25,6 +25,8 @@ export const SCHEMA_VERSION = 4 as const;
 export const Sha = z.string().regex(/^[0-9a-f]{40}$/);
 /** ISO-8601 UTC timestamp, e.g. "2026-08-23T14:02:11Z" (seconds precision, from git). */
 export const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+/** Calendar month bucket in UTC, e.g. "2026-08" (schema v5, insights series). */
+export const Month = z.string().regex(/^\d{4}-\d{2}$/);
 /** URL-safe slug: lowercase, digits, dashes. */
 export const Slug = z.string().regex(/^[a-z0-9][a-z0-9-]*$/);
 
@@ -188,6 +190,90 @@ export const Readme = z.object({
 });
 export type Readme = z.infer<typeof Readme>;
 
+/* ---- insights (schema v5) ------------------------------------------------ */
+
+/**
+ * One month of commit activity on the default branch.
+ *
+ * Exact, not sampled: the commit list is already in the artifact, so ingest buckets it
+ * without a single extra git call.
+ */
+export const CommitPoint = z.object({
+  /** UTC month bucket, `YYYY-MM`. */
+  month: Month,
+  /** Commits authored in that month. */
+  commits: z.number().int().nonnegative(),
+  /** Distinct author emails (lower-cased) active that month — not a running total. */
+  contributors: z.number().int().nonnegative(),
+});
+export type CommitPoint = z.infer<typeof CommitPoint>;
+
+/**
+ * Size of the tracked code at one monthly checkpoint of the default branch.
+ *
+ * `bytes` is always present; `lines` is `null` when that checkpoint's text blobs exceeded
+ * `ingest.insights.maxBytesPerSample` and line counting was skipped for it (the series then
+ * has `approximate: true` and the repo gets an `insights-approximate` warning). At such a
+ * checkpoint `bytes` also loses its binary filter — the blobs that were never read could not
+ * be classified — so `lines === null` marks a point whose byte total may be inflated too.
+ *
+ * Both count non-binary, non-vendored files: a WIDER population than `languages`, which
+ * additionally drops prose files and files with no detected language. `bytes` is therefore
+ * normally larger than `sum(languages[].bytes)` and the two must never be presented as equal.
+ */
+export const CodeSizePoint = z.object({
+  /**
+   * UTC month bucket, `YYYY-MM`, of the checkpoint commit — by its **commit date**, not its
+   * author date, because the tree measured is the branch's state at the point that commit was
+   * applied. Checkpoints are emitted in true history order, so this series never goes
+   * backwards even across a rebase or a cherry-pick.
+   */
+  month: Month,
+  bytes: z.number().int().nonnegative(),
+  /**
+   * Lines across the checkpoint's text blobs counted the editor way (a trailing newline does
+   * not open a new line; a file without one still ends in a line — the same rule as
+   * `countLines()` in `src/lib/highlight.ts`, so a blob page and this series agree), or `null`
+   * when the checkpoint fell back to bytes.
+   */
+  lines: z.number().int().nonnegative().nullable(),
+});
+export type CodeSizePoint = z.infer<typeof CodeSizePoint>;
+
+/**
+ * Per-repo insights: monthly series over the default branch's history, oldest first.
+ *
+ * Computed at ingest so the site stays a pure renderer, and computed from *sampled*
+ * checkpoints so a long history cannot make a build unbounded. Sampling is deterministic —
+ * checkpoints are derived from the commit list, never from a clock — so two builds of the
+ * same commits pick the same checkpoints and emit the same bytes.
+ *
+ * `Repo.insights` is `null` for an empty repo and when `ingest.insights.enabled` is false.
+ */
+export const RepoInsights = z.object({
+  /**
+   * Exact monthly commit/contributor counts, oldest month first.
+   *
+   * Contiguous: every month between the first and the last commit appears, and a month with
+   * no commits is emitted as zeros rather than omitted — a chart drawn straight from this
+   * array must show a quiet period as quiet, not close the gap and imply steady activity.
+   */
+  commits: z.array(CommitPoint),
+  /** Sampled code-size checkpoints, oldest first; at most `ingest.insights.samples` entries. */
+  codeSize: z.array(CodeSizePoint),
+  /**
+   * True when `codeSize` covers fewer checkpoints than there are months that actually have
+   * commits. Zero-filled quiet months in `commits` never had a tree of their own to measure,
+   * so they do not count towards this.
+   */
+  sampled: z.boolean(),
+  /** Number of checkpoints actually measured — equals `codeSize.length`. */
+  sampleCount: z.number().int().nonnegative(),
+  /** True when at least one checkpoint has `lines: null` (byte budget exhausted). */
+  approximate: z.boolean(),
+});
+export type RepoInsights = z.infer<typeof RepoInsights>;
+
 /* ---- releases (schema v3) ------------------------------------------------ */
 
 /**
@@ -256,6 +342,16 @@ export const WarningCode = z.enum([
   'commits-capped',
   /** More tags than `ingest.tagTrees`; older tags have no browsable tree / archive. */
   'tag-trees-capped',
+  /**
+   * More non-default branches than `ingest.branchTrees`; older branches have no browsable
+   * tree (schema v5). The default branch always has one and never counts against the cap.
+   */
+  'branch-trees-capped',
+  /**
+   * At least one code-size checkpoint could not be line-counted within
+   * `ingest.insights.maxBytesPerSample`, so `RepoInsights.approximate` is true (schema v5).
+   */
+  'insights-approximate',
   /** A provider API call or mirror fetch failed (network/API error); cache used or repo skipped. */
   'remote-fetch-failed',
   /** The provider answered 401/403/404 and no token was configured for that source. */
@@ -423,6 +519,12 @@ export const Repo = z.object({
   archives: z.array(Archive),
   languages: z.array(LanguageStat),
   contributors: z.array(Contributor),
+  /**
+   * Monthly commit / contributor / code-size series (schema v5), or `null` when the repo is
+   * empty or `ingest.insights.enabled` is false. Declared between `contributors` and
+   * `readme`: key order here IS the emitted JSON order.
+   */
+  insights: RepoInsights.nullable(),
   readme: Readme.nullable(),
   /** Date of the first commit on any branch; null when empty. */
   createdAt: IsoDate.nullable(),

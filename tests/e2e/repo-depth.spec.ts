@@ -45,7 +45,7 @@ test.describe('file browser', () => {
   test('markdown blob shows Preview by default and Source when toggled', async ({ page }) => {
     await page.goto('/repos/alpha/blob/main/docs/guide.md/');
     // preview rendered by default
-    await expect(page.locator('.hf-mdview-preview .hf-md h1')).toHaveText('Guide');
+    await expect(page.locator('.hf-mdview-preview .hf-md h2')).toHaveText('Guide');
     await expect(page.locator('.hf-mdview-preview .hf-md strong')).toHaveText('bold');
     await expect(page.locator('.hf-mdview-source')).toBeHidden();
     // toggle to source (radio-input CSS trick, no JS involved)
@@ -129,7 +129,8 @@ test.describe('releases', () => {
     await page.goto('/repos/alpha/releases/v1.1.0/');
     await expect(page.locator('.hf-release-head h1')).toHaveText('v1.1.0');
     // tag message body rendered as markdown
-    await expect(page.locator('.hf-release-notes h2')).toHaveText('Highlights');
+    // user markdown is demoted a level: `## Highlights` renders as an <h3>
+    await expect(page.locator('.hf-release-notes h3')).toHaveText('Highlights');
     await expect(page.locator('.hf-release-notes em')).toHaveText('guide');
 
     const zipHref = await page.locator('.hf-release-assets a', { hasText: 'Source code (zip)' }).getAttribute('href');
@@ -157,7 +158,7 @@ test.describe('URL-hostile committed paths', () => {
     await link.click();
     await expect(page).toHaveURL(/read%20me\.md/);
     // the file really rendered — not a 404 page that merely happens to load
-    await expect(page.locator('.hf-blob-md h1')).toHaveText('Read me');
+    await expect(page.locator('.hf-blob-md h2')).toHaveText('Read me');
   });
 
   test('its raw URL serves the exact committed bytes', async ({ request }) => {

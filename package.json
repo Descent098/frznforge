@@ -1,7 +1,7 @@
 {
   "name": "frznforge",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "engines": {
     "node": ">=22.12.0"
   },
@@ -17,6 +17,7 @@
     "check": "astro check",
     "test:e2e": "playwright test",
     "smoke:remote": "tsx scripts/smoke-remote.ts",
+    "measure": "tsx scripts/measure-build.ts",
     "test:all": "npm test && npm run test:e2e"
   },
   "dependencies": {

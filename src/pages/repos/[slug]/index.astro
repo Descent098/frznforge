@@ -33,7 +33,7 @@ const rootEntries = repo.tree.filter((e) => !e.path.includes('/'));
 const readmeHtml = repo.readme
   ? isMarkdownPath(repo.readme.path)
     ? renderMarkdown(repo.readme.content, { trusted: isTrustedSource(repo.source) })
-    : `<pre>${repo.readme.content.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</pre>`
+    : `<pre tabindex="0">${repo.readme.content.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</pre>`
   : null;
 
 const links: Array<{ key: string; label: string; icon: string; url: string }> = [];
@@ -66,7 +66,10 @@ const heat = heatFor(repo.updatedAt, now);
                 <details class="hf-clone" data-clone-url={cloneUrl}>
                   <summary class="hf-btn hf-btn--primary"><svg class="hf-i"><use href="#i-download" /></svg> Clone <svg class="hf-i hf-caret"><use href="#i-chev" /></svg></summary>
                   <div class="hf-clone-pop" role="region" aria-label="Clone options">
-                    <h4>Clone <span class="hf-tabs-mini"><span class="is-on">HTTPS</span></span></h4>
+                    {/* Popover label, not a document section — a heading here landed an <h4>
+                        at the top of the page outline, before any h1. The region above already
+                        carries the accessible name. */}
+                    <p class="hf-clone-head">Clone <span class="hf-tabs-mini"><span class="is-on">HTTPS</span></span></p>
                     <div class="hf-clone-url"><code>{cloneUrl}</code><button type="button" aria-label="Copy URL" data-copy={cloneUrl}><svg class="hf-i"><use href="#i-copy" /></svg></button></div>
                     <p>This site is a read-only mirror. Clone from the upstream on {upstreamHost}.</p>
                     {defaultArchive && (
@@ -123,7 +126,7 @@ const heat = heatFor(repo.updatedAt, now);
 
         <aside class="hf-card hf-about" aria-labelledby="about-h">
           <section class="hf-about-section">
-            <h3 id="about-h">About</h3>
+            <h2 id="about-h">About</h2>
             {repo.description ? <p>{repo.description}</p> : <p class="hf-muted">No description provided.</p>}
             {links.length > 0 && (
               <ul class="hf-about-links">
@@ -135,7 +138,7 @@ const heat = heatFor(repo.updatedAt, now);
           </section>
           {repo.tags.length > 0 && (
             <section class="hf-about-section">
-              <h3>Tags</h3>
+              <h2>Tags</h2>
               <div class="hf-about-tags">
                 {repo.tags.map((t) => <a class="hf-tag" href={`/repos/?tag=${encodeURIComponent(t)}`}>{t}</a>)}
               </div>
@@ -151,7 +154,7 @@ const heat = heatFor(repo.updatedAt, now);
           </section>
           {repo.languages.length > 0 && (
             <section class="hf-about-section">
-              <h3>Languages</h3>
+              <h2>Languages</h2>
               <div class="hf-langbar" aria-hidden="true">
                 {repo.languages.map((l) => <span style={`width:${l.percent}%;background:${l.color ?? 'var(--hf-lang-other)'}`}></span>)}
               </div>
@@ -164,7 +167,7 @@ const heat = heatFor(repo.updatedAt, now);
           )}
           {repo.contributors.length > 0 && (
             <section class="hf-about-section">
-              <h3>Contributors <span class="hf-count hf-count--plain">{repo.contributors.length}</span></h3>
+              <h2>Contributors <span class="hf-count hf-count--plain">{repo.contributors.length}</span></h2>
               <div class="hf-contributors">
                 {repo.contributors.map((c) => (
                   <span class="hf-contributor"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">{initials(c.name)}</span><strong>{c.name}</strong><small>{formatInt(c.commits)} commit{c.commits === 1 ? '' : 's'}</small></span>

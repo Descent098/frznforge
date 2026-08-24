@@ -1,0 +1,270 @@
+---
+/**
+ * One insights chart: a build-time inline SVG plus the same numbers as a visually hidden
+ * data table. No chart library, no client JS — everything here is computed while the page
+ * is generated and shipped as static markup.
+ *
+ * Accessibility model (three layers, deliberately):
+ *  1. `<figure>` + `<figcaption>` names the chart in the document outline;
+ *  2. the `<svg>` is `role="img"` with an `aria-label` summarising the whole series, so a
+ *     screen reader hears one sentence instead of a bag of coordinates;
+ *  3. a `.hf-sr` `<table>` carries every value, because a shape's `<title>` is a mouse
+ *     affordance (and is explicitly *not* exposed when the SVG is a single image node).
+ * Colour never carries meaning on its own: each series has its own figure, its own caption
+ * and its own mark shape (bars / square-marked line / filled area with round markers).
+ */
+import { formatBytes, formatInt } from '../lib/format';
+
+export interface ChartPoint {
+  /** `YYYY-MM`, exactly as it appears in the artifact — also the x label and table row head. */
+  month: string;
+  value: number;
+}
+
+interface Props {
+  /** Unique on the page: seeds the ids this component generates. */
+  id: string;
+  kind: 'bars' | 'line' | 'area';
+  /** Ember for the commit series, ice for the cooler ones — matches the site's heat language. */
+  tone: 'ember' | 'ice';
+  heading: string;
+  /** One line under the heading saying what is plotted and over what. */
+  caption: string;
+  /** Y-axis unit label and the data table's value column header, e.g. "Commits". */
+  valueLabel: string;
+  /** `bytes` formats with `formatBytes`; `count` with `formatInt` + `noun`. */
+  unit: 'count' | 'bytes';
+  /** Singular noun for `count` values ("commit" → "3 commits"). Ignored for bytes. */
+  noun?: string;
+  points: ChartPoint[];
+  /** The whole-series sentence used as the SVG's accessible name. */
+  summary: string;
+  /** Optional honesty note rendered under the chart (sampling, budget, single point). */
+  note?: string | null;
+}
+
+const { id, kind, tone, heading, caption, valueLabel, unit, noun = '', points, summary, note = null } = Astro.props;
+
+/* ---- value formatting ----------------------------------------------------
+ * Static months, not `toLocaleDateString`: this string is baked into the HTML, so it must
+ * not depend on the build machine's ICU data (same rule as `formatBytes`).
+ */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function monthLabel(month: string): string {
+  const [y, m] = month.split('-');
+  const name = MONTHS[Number(m) - 1] ?? m ?? '';
+  return `${name} ${y}`;
+}
+function valueText(v: number): string {
+  if (unit === 'bytes') return formatBytes(v);
+  return noun ? `${formatInt(v)} ${noun}${v === 1 ? '' : 's'}` : formatInt(v);
+}
+/** Short form for the y-axis ticks, where there is no room for a unit word. */
+function tickText(v: number): string {
+  return unit === 'bytes' ? formatBytes(v) : formatInt(v);
+}
+
+/* ---- scale ---------------------------------------------------------------
+ * A "human" axis top: round the max up to a whole number of nice steps (decimal steps for
+ * counts, 1024-based for bytes, so a KB axis lands on KB boundaries).
+ */
+function niceStep(max: number, target: number): number {
+  if (max <= 0) return 1;
+  const raw = max / target;
+  if (unit === 'bytes') {
+    let base = 1;
+    while (base * 1024 <= raw) base *= 1024;
+    for (const m of [1, 2, 5, 10, 20, 50, 100, 200, 500]) if (raw <= m * base) return m * base;
+    return 1024 * base;
+  }
+  const base = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 2.5, 3, 4, 5]) if (raw <= m * base) return Math.max(1, Math.ceil(m * base));
+  return Math.max(1, Math.ceil(10 * base));
+}
+
+const values = points.map((p) => p.value);
+const maxValue = values.length ? Math.max(...values) : 0;
+const step = niceStep(maxValue, 4);
+const axisMax = Math.max(step, Math.ceil(maxValue / step) * step);
+const ticks: number[] = [];
+for (let v = 0; v <= axisMax + step / 1000; v += step) ticks.push(v);
+
+/* ---- geometry ------------------------------------------------------------
+ * A fixed viewBox drawn at (or below) natural size: `preserveAspectRatio` keeps the aspect,
+ * CSS pins the height, so a wide container never inflates the type. Narrow containers scroll
+ * the chart rather than the page — see `.hf-chart-scroll` in styles/insights.css.
+ */
+const PAD = { left: 62, right: 18, top: 20, bottom: 40 };
+const H = 250;
+const n = points.length;
+
+/*
+ * The x axis is a MONTH axis, not a list of points.
+ *
+ * The commit and contributor series are gap-filled by ingest, so for them "one slot per
+ * point" and "one slot per month" are the same thing. The code-size series is not: it only
+ * has a checkpoint in months that had a commit, so indexing by array position would draw a
+ * five-month gap and a one-month gap as the same step and put the area chart's slope out of
+ * time scale with no way for the reader to tell. Positioning by month keeps every chart on
+ * this page on one shared, honest x grid.
+ */
+function monthSlot(month: string): number {
+  return Number.parseInt(month.slice(0, 4), 10) * 12 + (Number.parseInt(month.slice(5, 7), 10) - 1);
+}
+const firstSlot = n > 0 ? monthSlot(points[0]!.month) : 0;
+const slotOf = (i: number) => monthSlot(points[i]!.month) - firstSlot;
+/** Months the axis spans, gaps included — the number of slots to divide the width into. */
+const slots = n > 0 ? Math.max(n, slotOf(n - 1) + 1) : 0;
+
+const W = Math.max(640, PAD.left + PAD.right + slots * 34);
+const innerW = W - PAD.left - PAD.right;
+const innerH = H - PAD.top - PAD.bottom;
+const baseY = PAD.top + innerH;
+
+const y = (v: number) => baseY - (axisMax === 0 ? 0 : (v / axisMax) * innerH);
+/** Bars occupy a slot each; line/area points sit on the slot centres so both share an x grid. */
+const slot = slots > 0 ? innerW / slots : innerW;
+const cx = (i: number) => PAD.left + slot * (slotOf(i) + 0.5);
+const barW = Math.min(52, Math.max(3, slot * 0.62));
+
+/* Thin the month labels until they stop colliding; the last month is always shown. Distance
+   is measured in SLOTS, not array positions, so a sparse series is thinned by how far apart
+   its labels actually sit. */
+const maxLabels = Math.max(2, Math.floor(innerW / 66));
+const every = Math.max(1, Math.ceil(slots / maxLabels));
+const labelled = new Set<number>();
+let lastLabelledSlot = -Infinity;
+for (let i = 0; i < n; i++) {
+  if (slotOf(i) - lastLabelledSlot < every) continue;
+  lastLabelledSlot = slotOf(i);
+  labelled.add(i);
+}
+if (n > 0) {
+  // drop the penultimate tick if the always-on last one would sit on top of it
+  const last = n - 1;
+  for (const i of [...labelled]) if (i !== last && slotOf(last) - slotOf(i) < every / 2) labelled.delete(i);
+  labelled.add(last);
+}
+
+const linePath = n > 0 ? points.map((p, i) => `${i === 0 ? 'M' : 'L'}${cx(i).toFixed(2)} ${y(p.value).toFixed(2)}`).join(' ') : '';
+const areaPath = n > 1 ? `${linePath} L${cx(n - 1).toFixed(2)} ${baseY} L${cx(0).toFixed(2)} ${baseY} Z` : '';
+
+const stroke = tone === 'ember' ? 'var(--hf-ember)' : 'var(--hf-ice)';
+const fill = tone === 'ember' ? 'var(--hf-ember-soft)' : 'var(--hf-ice-soft)';
+const capId = `${id}-cap`;
+const tableId = `${id}-table`;
+---
+<figure class={`hf-card hf-chart hf-chart--${tone}`} id={id} aria-labelledby={capId}>
+  <figcaption class="hf-card-head" id={capId}>
+    <svg class="hf-i" aria-hidden="true"><use href="#i-chart" /></svg>
+    <h2>{heading}</h2>
+  </figcaption>
+  <div class="hf-card-body">
+    <p class="hf-chart-lede">{caption}</p>
+
+    {n === 0 ? (
+      <p class="hf-chart-note">No data in this series.</p>
+    ) : (
+      <div class="hf-chart-scroll" tabindex="0" role="group" aria-labelledby={capId}>
+        <svg
+          class="hf-chart-svg"
+          style={`min-width:${W}px;max-width:${Math.round(W * 1.2)}px`}
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          aria-label={summary}
+        >
+          {/* y axis: unit label, gridlines, ticks */}
+          <text class="hf-chart-unit" x="4" y="12">{valueLabel}</text>
+          {ticks.map((t) => (
+            <g>
+              <line class="hf-chart-grid" x1={PAD.left} x2={W - PAD.right} y1={y(t).toFixed(2)} y2={y(t).toFixed(2)} />
+              <text class="hf-chart-tick" x={PAD.left - 8} y={(y(t) + 4).toFixed(2)} text-anchor="end">{tickText(t)}</text>
+            </g>
+          ))}
+          <line class="hf-chart-axis" x1={PAD.left} x2={W - PAD.right} y1={baseY} y2={baseY} />
+
+          {/* marks */}
+          {kind === 'area' && areaPath && <path class="hf-chart-area" d={areaPath} fill={fill} />}
+          {(kind === 'line' || kind === 'area') && n > 1 && (
+            <path class="hf-chart-line" d={linePath} fill="none" stroke={stroke} />
+          )}
+          {points.map((p, i) =>
+            kind === 'bars' ? (
+              <rect
+                class="hf-chart-bar"
+                x={(cx(i) - barW / 2).toFixed(2)}
+                y={y(p.value).toFixed(2)}
+                width={barW.toFixed(2)}
+                height={Math.max(p.value > 0 ? 2 : 0, baseY - y(p.value)).toFixed(2)}
+                fill={stroke}
+                rx="2"
+              ><title>{`${p.month}: ${valueText(p.value)}`}</title></rect>
+            ) : kind === 'line' ? (
+              <rect
+                class="hf-chart-dot"
+                x={(cx(i) - 3.5).toFixed(2)}
+                y={(y(p.value) - 3.5).toFixed(2)}
+                width="7"
+                height="7"
+                fill={stroke}
+              />
+            ) : (
+              <circle class="hf-chart-dot" cx={cx(i).toFixed(2)} cy={y(p.value).toFixed(2)} r="3.75" fill={stroke} />
+            ),
+          )}
+
+          {/*
+            Hover targets for the point series. A 7px marker is a miserable thing to hit with
+            a mouse, so the value's `<title>` lives on a transparent full-height column drawn
+            over it instead — exactly one titled element per point either way (bars are big
+            enough to carry their own).
+          */}
+          {kind !== 'bars' &&
+            points.map((p, i) => (
+              <rect
+                class="hf-chart-hit"
+                x={(cx(i) - slot / 2).toFixed(2)}
+                y={PAD.top}
+                width={slot.toFixed(2)}
+                height={innerH}
+                fill="transparent"
+              ><title>{`${p.month}: ${valueText(p.value)}`}</title></rect>
+            ))}
+
+          {/* x axis: thinned month labels */}
+          {points.map((p, i) =>
+            labelled.has(i) ? (
+              <text class="hf-chart-xlab" x={cx(i).toFixed(2)} y={baseY + 20} text-anchor="middle">{monthLabel(p.month)}</text>
+            ) : null,
+          )}
+        </svg>
+      </div>
+    )}
+
+    {note && <p class="hf-chart-note">{note}</p>}
+
+    {/*
+      The `.hf-sr` clamp goes on a WRAPPER, not on the <table>.
+
+      `.hf-sr` hides by setting `width: 1px` + `overflow: hidden`, and that works on a block
+      box — but a CSS table's used width is never below its min-content width, so a <table>
+      carrying this class ignores the clamp, lays itself out at full width and paints a raw
+      grid of numbers under the chart. Putting the clamp on a plain <div> makes it bite while
+      the <table> inside keeps its table semantics in the accessibility tree, which is the
+      whole reason it exists.
+    */}
+    <div class="hf-sr" id={tableId}>
+      <table>
+        <caption>{heading} — {valueLabel} by month</caption>
+        <thead>
+          <tr><th scope="col">Month</th><th scope="col">{valueLabel}</th></tr>
+        </thead>
+        <tbody>
+          {points.map((p) => (
+            <tr><th scope="row">{p.month}</th><td>{valueText(p.value)}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</figure>

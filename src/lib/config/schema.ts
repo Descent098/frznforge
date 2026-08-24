@@ -202,6 +202,17 @@ export const FrznforgeConfigSchema = z.object({
     concurrency: z.number().int().positive().default(4),
     /** Newest N tags get browsable trees + archives (schema v2). 0 disables tag trees. */
     tagTrees: z.number().int().nonnegative().default(25),
+    /**
+     * How many **non-default** branches get browsable trees (schema v5): the N most recently
+     * updated, or `'all'` for every branch. `0` gives the default branch only.
+     *
+     * This is the single biggest lever on build size, because tree/blob/raw pages are emitted
+     * per browsable ref: a repo with 27 branches costs 27× its file count in pages. The
+     * default branch always has a tree (`Repo.tree`/`Repo.files`) and never counts against the
+     * cap. Skipped branches still appear on the branches page and in `Repo.branches`; they
+     * just have no file browser. Capping raises `branch-trees-capped`.
+     */
+    branchTrees: z.union([z.number().int().nonnegative(), z.literal('all')]).default(10),
     /** Produce zip source archives with `git archive` for the default branch + tag-tree tags. */
     archives: z.boolean().default(true),
     /**
@@ -217,6 +228,26 @@ export const FrznforgeConfigSchema = z.object({
      *  - 'always' — always hit the network; failures are still warnings, never build errors
      */
     fetch: z.enum(['auto', 'never', 'always']).default('auto'),
+    /**
+     * Per-repo insights (schema v5): monthly commits/contributors plus a sampled code-size
+     * series, computed at ingest and rendered at `/repos/<slug>/insights/`.
+     *
+     * Commits are exact (the commit list is already in the artifact). Code size is sampled so
+     * a long history cannot make the build unbounded, and sampling is deterministic —
+     * checkpoints come from the commit list, never from a clock.
+     */
+    insights: z.object({
+      /** Off ⇒ `Repo.insights` is `null` everywhere and no insights page is built. */
+      enabled: z.boolean().default(true),
+      /** Maximum monthly code-size checkpoints per repo (first and last are always included). */
+      samples: z.number().int().positive().default(24),
+      /**
+       * Byte budget for line counting at ONE checkpoint. Once a checkpoint's text blobs exceed
+       * it, that point keeps its `bytes` but reports `lines: null`, the series is marked
+       * `approximate`, and the repo gets an `insights-approximate` warning.
+       */
+      maxBytesPerSample: z.number().int().positive().default(20 * 1024 * 1024),
+    }).prefault({}),
   }).prefault({}),
   listing: z.object({
     pageSize: z.number().int().positive().default(50),

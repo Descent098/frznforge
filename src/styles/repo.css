@@ -32,7 +32,7 @@
   padding: 6px;
 }
 .hf-refsw-group + .hf-refsw-group { border-top: 1px solid var(--hf-border); margin-top: 4px; padding-top: 4px; }
-.hf-refsw-group h4 {
+.hf-refsw-grouphead {
   font-size: 11px; font-weight: 640; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--hf-text-3); padding: 8px 10px 4px;
 }
@@ -95,7 +95,12 @@
   margin-right: 18px;
   text-align: right;
   color: var(--hf-text-3);
-  opacity: 0.7;
+  /* Line numbers are information, not decoration, so they carry a contrast floor like any
+     other text — and, being a ::before, no browser-based checker can see them (axe and
+     Lighthouse both skip pseudo-element text). At 0.7 they sat at 3.1-3.6:1 in every palette.
+     0.9 clears 4.7:1 everywhere and is all but indistinguishable from the old weight.
+     `tests/unit/contrast.test.ts` pins it, since nothing else can. */
+  opacity: 0.9;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -126,33 +131,12 @@
   }
 }
 
-/* Comment contrast in dark mode.
-   github-dark paints comments #6A737D, which was chosen against that theme's own near-black
-   background. On Hearth's warmer dark surface (--hf-surface, #221b17) it lands at 3.5:1 —
-   under the 4.5:1 WCAG AA floor, so every code comment on the site failed the axe
-   color-contrast check. Comments are the part of a file a reader most needs when skimming
-   unfamiliar code, so they cannot be the least legible thing on the page.
-
-   #8b949e is github's own lighter comment grey and reaches 5.5:1 here. Matching on the inline
-   style is the only handle available — shiki bakes theme colours into `style` and gives comment
-   spans no class. If shiki ever changes that literal the selector simply stops matching, which
-   is the pre-existing behaviour, not a broken page.
-
-   This sets `color`, NOT `--shiki-dark`: the custom property is declared in the span's own
-   `style` attribute, and an inline declaration beats any stylesheet rule, so redefining the
-   variable here would silently lose. `color` is only ever set by the rules above, so the extra
-   attribute selector is enough to win on specificity.
-
-   Light mode needs no fix — #6A737D on white is 4.9:1 — so both dark mechanisms are matched
-   individually rather than restyling the token globally. */
-:root[data-theme="dark"] .hf-code .shiki span[style*="--shiki-dark:#6A737D"] {
-  color: #8b949e;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .hf-code .shiki span[style*="--shiki-dark:#6A737D"] {
-    color: #8b949e;
-  }
-}
+/* Token contrast in the code view is handled where the themes are chosen, not here.
+   This file used to carry a per-literal override for github-dark's comment grey (#6A737D,
+   3.2:1 on Hearth's dark surface), and github-light needed three more of its own. Both plain
+   themes ship colours below WCAG AA, so `src/lib/highlight.ts` now loads the HIGH-CONTRAST
+   github themes instead — one decision in one place, rather than a growing list of attribute
+   selectors matching literals out of a bundled JSON file. */
 
 /* ---- markdown preview/source toggle (no JS: radio inputs) ---------------- */
 .hf-mdview-input {
@@ -207,7 +191,9 @@
 .hf-commit-sub .hf-age { font-size: 12px; }
 .hf-commit-author { color: var(--hf-text-2); font-weight: 560; }
 .hf-commit-stats { display: inline-flex; gap: 8px; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.hf-adds { color: #2da44e; font-weight: 640; font-style: normal; }
+/* Light-mode diff green is INK on a card: #2da44e is github's, but github paints it on
+   #ffffff and this card is #fffcf8 / #f9f4ee, where it lands at 2.9-3.1:1. */
+.hf-adds { color: #1a7f37; font-weight: 640; font-style: normal; }
 .hf-dels { color: #cf222e; font-weight: 640; font-style: normal; }
 :root[data-theme="dark"] .hf-adds { color: #57d364; }
 :root[data-theme="dark"] .hf-dels { color: #f47067; }
@@ -289,6 +275,10 @@
 a.hf-ref-name:hover { color: var(--hf-ice); }
 a.hf-ref-name:hover code { text-decoration: underline; }
 .hf-ref-default { margin-left: 8px; background: var(--hf-ice-soft); color: var(--hf-ice); }
+/* A branch past `ingest.branchTrees`: listed, but no tree page exists to link to. Static
+   label, not a link — cancel the shared `.hf-tag` hover affordance. */
+.hf-ref-nobrowse { margin-left: 8px; background: var(--hf-neutral-soft); color: var(--hf-text-3); }
+.hf-ref-nobrowse:hover { background: var(--hf-neutral-soft); color: var(--hf-text-3); }
 .hf-ref-count { text-align: right; font-variant-numeric: tabular-nums; }
 .hf-ref-count a { color: var(--hf-text-2); }
 .hf-ref-count a:hover { color: var(--hf-ice); text-decoration: underline; }

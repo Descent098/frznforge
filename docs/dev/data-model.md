@@ -3,7 +3,9 @@
 `npm run ingest` turns the repositories listed in `frznforge.config.ts` — local directories
 and, since schema v3, repos hosted on GitHub / GitLab / Gitea / Forgejo — into one JSON
 artifact plus a blob store. Since schema v4 it also collects **notes** (a plain folder of
-files on disk) and resolves **organizations** (groupings of repos) into the same artifact.
+files on disk) and resolves **organizations** (groupings of repos) into the same artifact, and
+since schema v5 it computes per-repo **insights** (monthly commit, contributor and code-size
+series) from sampled commits.
 Every page of the site is built from this artifact and nothing else — the site never talks to
 git and never talks to a forge.
 
@@ -98,6 +100,8 @@ git-ignored) and the ordinary local scanner then runs on that bare mirror:
   `Note.files` by path; `organizations` by slug; `Organization.repos` by slug.
 - Warnings are collected in a fixed order: site-level, then notes, then organizations, then
   per repo in slug order.
+- Sampling is deterministic: the insights checkpoints (schema v5) are derived from the commit
+  list, so a sampled series is as reproducible as an exhaustive one. See "Insights".
 - **One opt-out, and it is loud.** `notes.useMtime` lets an undated note take its date from
   the filesystem. Mtimes are not reproducible — a fresh clone stamps every file with the clone
   time — so switching it on trades away byte-identical output. It is off by default and
@@ -143,7 +147,7 @@ fields are declared in `ForgeData`, and the snapshot tests compare bytes.
 
 | field           | meaning                                                                          |
 | --------------- | -------------------------------------------------------------------------------- |
-| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `4`). The site refuses artifacts of another version. |
+| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `5`). The site refuses artifacts of another version. |
 | `repos`         | `Repo[]`, sorted by slug.                                                        |
 | `notes`         | `Note[]` (schema v4), date desc / undated last / title asc — see "Notes".         |
 | `organizations` | `Organization[]` (schema v4), sorted by slug — see "Organizations".               |
@@ -180,10 +184,11 @@ Git-derived:
 | `commitCount`   | `Object.keys(commits).length`.                                                                       |
 | `tree`          | Flat listing of the default-branch HEAD tree — every blob, tree, symlink and submodule at every depth, sorted by path. |
 | `files`         | `FileInfo` for every blob/symlink in `tree`, keyed by path (sorted).                                 |
-| `refTrees`      | `Record<refName, RefTree>` — browsable trees for every **non-default** branch plus the newest `ingest.tagTrees` tags (schema v2). The default branch is only in `tree`/`files`. Keys: branches first (name order), then treed tags (name order). |
+| `refTrees`      | `Record<refName, RefTree>` — browsable trees for the most recently updated `ingest.branchTrees` **non-default** branches (schema v5; every non-default branch before that) plus the newest `ingest.tagTrees` tags (schema v2). The default branch is only in `tree`/`files`. Keys: branches first (name order), then treed tags (name order). |
 | `archives`      | `Archive[]` — zip source archives for the default branch + every treed tag (schema v2). `[]` when `ingest.archives` is `false` or the repo is empty. Order: default branch first, then tags by name. |
 | `languages`     | `LanguageStat[]` — see "Language stats". Computed from the **default branch** only, as are `contributors`, `readme`, license detection and `.frznforge.json`. |
 | `contributors`  | Authors grouped by lower-cased email.                                                                |
+| `insights`      | `RepoInsights \| null` (schema v5) — monthly commit/contributor counts and a sampled code-size series over the default branch. `null` for an empty repo and when `ingest.insights.enabled` is `false`. Declared between `contributors` and `readme`; see "Insights". |
 | `readme`        | Root `README.md` (preferred) / `README` / `README.*`, with inlined content; `null` if absent, binary, or over `maxBlobBytes`. |
 | `createdAt`     | Earliest commit date (committer date) among `commits`.                                               |
 | `updatedAt`     | Latest commit date among `commits`.                                                                  |
@@ -257,7 +262,14 @@ Tags that point at trees or blobs (not commits) are not representable and are sk
   `TreeEntry.lastCommit` is computed by walking history from **that ref's** head. Stored
   blobs land in the same content-addressed `blobs/` store, so files unchanged across
   branches cost nothing extra.
-- Every non-default branch gets a tree. Tags are capped at the newest `ingest.tagTrees`
+- Non-default branches are capped at the most recently updated `ingest.branchTrees`
+  (schema v5, default 10; `'all'` for every branch, `0` for none), ranked by their head
+  commit's committer date desc with ties broken by name, then emitted in name order. The
+  default branch is browsable through `tree`/`files` and never counts against the cap, so the
+  cap is on *extra* browsable refs. Branches without a tree still appear in `Repo.branches`
+  and on the branches page — they just have no file browser, no blob pages and no raw routes.
+  Skipping any raises one `branch-trees-capped` warning. Tags are capped at the newest
+  `ingest.tagTrees`
   (by tag date desc — tagger date for annotated tags, target commit date for lightweight
   ones; ties broken by name). When tags are skipped by the cap, the repo gets one
   `tag-trees-capped` warning. When a tag peels to a commit whose tree was already computed
@@ -288,6 +300,60 @@ Empty array when nothing counts.
 
 Commits grouped by author email, lower-cased; `name` is the name used on the most recent
 commit; `firstCommit`/`lastCommit` are author dates. Sorted by `commits` desc, then name.
+
+### Insights: `RepoInsights` / `CommitPoint` / `CodeSizePoint` (schema v5)
+
+`Repo.insights` is what `/repos/<slug>/insights/` renders: monthly series over the **default
+branch's** history, oldest first. `null` when the repo is empty or `ingest.insights.enabled`
+is `false` — the tab and the page then do not exist (`hasInsights(repo)` in
+`src/lib/routes.ts` is the single predicate for both).
+
+| field         | meaning                                                                          |
+| ------------- | ---------------------------------------------------------------------------------- |
+| `commits`     | `CommitPoint[]` — exact monthly commit activity, oldest month first. The series is **contiguous**: every month between the first and the last commit is present, and quiet months are emitted as zeros so a chart drawn straight from the array shows a gap as a gap. |
+| `codeSize`    | `CodeSizePoint[]` — sampled code-size checkpoints, oldest first, at most `ingest.insights.samples` entries. |
+| `sampled`     | `true` when `codeSize` covers fewer checkpoints than there are months that actually have commits. Zero-filled quiet months in `commits` never had a tree of their own to measure, so they are not counted here. |
+| `sampleCount` | Checkpoints actually measured; equals `codeSize.length`.                           |
+| `approximate` | `true` when at least one checkpoint reports `lines: null` (byte budget exhausted). |
+
+**`CommitPoint`** — `{ month, commits, contributors }`. `month` is a UTC `YYYY-MM` bucket of
+the commit's **author** date; `commits` is the number of commits in it; `contributors` is the
+number of distinct lower-cased author emails active that month (activity per month, not a
+running total, so the series can go down).
+
+**`CodeSizePoint`** — `{ month, bytes, lines }`. `bytes` is the summed size of the checkpoint
+tree's non-binary, non-vendored blobs — the same population as `languages`, so the two agree.
+`lines` is the newline count over those blobs, or `null` when that checkpoint hit the byte
+budget (see below).
+
+#### Sampling and its bounds
+
+Commit activity is free: the commit list is already in the artifact, so ingest buckets it
+without one extra git call. Code size is not — every checkpoint costs a tree listing, and
+line counts cost blob content — so it is **sampled**, and the sampling is what keeps a build
+bounded no matter how long the history is:
+
+- At most `ingest.insights.samples` checkpoints per repo (default 24), chosen as monthly
+  checkpoints spread evenly across the history, **always including the first and the last**
+  month so the endpoints of the chart are real measurements rather than interpolations.
+- Each checkpoint is one `git ls-tree -r -l <commit>`; blob sizes come straight from it.
+- Line counting streams that checkpoint's text blobs through `cat-file --batch` and stops the
+  moment the checkpoint's cumulative text bytes exceed `ingest.insights.maxBytesPerSample`
+  (default 20 MiB). Such a point keeps its `bytes` and reports `lines: null`; the series is
+  marked `approximate` and the repo gets one `insights-approximate` warning naming the reason.
+
+So the worst case per repo is `samples` tree listings plus `samples × maxBytesPerSample` bytes
+of blob reads — bounded by config, never by history length.
+
+#### Determinism
+
+Insights obey the same rule as everything else in the artifact: **checkpoints are derived from
+the commit list, never from a clock**. Months come from commit dates already in the artifact,
+the checkpoint for a month is that month's newest commit on the default branch, and the
+thinning to `samples` is a pure function of that list. Nothing consults `Date.now()`, the
+filesystem or the scan order, so the same repo at the same commits picks the same checkpoints
+and emits the same bytes. (A consequence worth knowing: raising `ingest.maxCommits` changes
+the history insights can see, and therefore the series.)
 
 ### `License`
 
@@ -372,6 +438,8 @@ annotated-tag derivation, newest first either way. `SiteRelease.source` (`'provi
 | `description-truncated`     | repo  | In-repo description exceeded 300 characters and was truncated.                           |
 | `commits-capped`            | repo  | One or more branch commit lists were truncated to `ingest.maxCommits`.                   |
 | `tag-trees-capped`          | repo  | More tags than `ingest.tagTrees`; only the newest N have browsable trees / archives ("N of M tags have browsable trees"). |
+| `branch-trees-capped`       | repo  | More non-default branches than `ingest.branchTrees`; only the most recently updated N have browsable trees ("N of M branches have browsable trees" — N counts the default branch, which is always browsable). Skipped branches still list on the branches page. |
+| `insights-approximate`      | repo  | At least one code-size checkpoint exceeded `ingest.insights.maxBytesPerSample`, so it reports `lines: null` and `RepoInsights.approximate` is `true`. Byte counts are unaffected. |
 | `repo-not-found`            | site  | A configured path is not a git repository (or is a path inside one); the entry was skipped. |
 | `slug-collision`            | site  | Two configured repos resolved to the same slug; the later one (config order) was suffixed. `repo` holds the new slug. |
 | `remote-fetch-failed`       | repo  | A provider API call or mirror fetch failed (network error, bad response, unreachable host). The cached mirror was used if there is one, otherwise the repo was skipped. Never contains a token. |
@@ -535,6 +603,14 @@ releaseMode? }`. The site config's `overrides` for that repo win field-by-field.
 
 ## Version history
 
+- **v5** — insights and browsable-branch capping: `Repo.insights`
+  (`RepoInsights | null`, declared after `contributors` and before `readme`) with
+  `CommitPoint[]` and `CodeSizePoint[]`, plus the `Month` (`YYYY-MM`) primitive; new warnings
+  `insights-approximate` and `branch-trees-capped`; new config
+  `ingest.insights.{enabled,samples,maxBytesPerSample}` and `ingest.branchTrees`
+  (`number | 'all'`, default 10), which caps `refTrees` for non-default branches the way
+  `ingest.tagTrees` already caps tags. The branch cap changes no shape but does change which
+  refs land in `refTrees` — and with it the page count, which is the point.
 - **v4** — notes and organizations: `ForgeData.notes` (`Note[]` with `NoteFile[]`) and
   `ForgeData.organizations` (`Organization[]`), both declared after `repos` and before
   `warnings`; new warnings `notes-dir-missing`, `note-slug-collision`, `org-unknown-repo`,

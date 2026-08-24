@@ -7,12 +7,13 @@
  * The markdown file is optional — membership and name come from the artifact — so every
  * branch below has to work with `fm === null`.
  */
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import Base from '../../../layouts/Base.astro';
 import OrgHeader from '../../../components/OrgHeader.astro';
 import RepoCard from '../../../components/RepoCard.svelte';
 import type { Organization, Repo } from '../../../lib/data/schema';
 import { summarize } from '../../../lib/listing';
+import { renderMarkdown } from '../../../lib/markdown';
 import { getOrgRoutes, orgReposUrl } from '../../../lib/routes';
 import { getData } from '../../../lib/site';
 import '../../../styles/orgs.css';
@@ -29,7 +30,18 @@ const now = new Date();
 const entries = await getCollection('orgs');
 const entry = entries.find((e) => e.id === org.slug) ?? null;
 const fm = entry?.data ?? null;
-const Content = entry ? (await render(entry)).Content : null;
+/**
+ * Rendered with the site's own `renderMarkdown()` rather than Astro's markdown pipeline.
+ *
+ * One engine for every piece of markdown on the site — READMEs, notes, release bodies and
+ * these two — means one set of rules, and in particular one place where headings are demoted
+ * a level so the page chrome keeps sole ownership of the `<h1>`. Astro's pipeline would need
+ * a rehype plugin to do the same, and reaching for one now means installing
+ * `@astrojs/markdown-remark`, which this project does not ship.
+ *
+ * `entry.body` is the markdown with the frontmatter already stripped by the collection.
+ */
+const bodyHtml = entry?.body?.trim() ? renderMarkdown(entry.body) : null;
 
 // Pinned repos must be members: pinning a repo that belongs to another org would make the
 // page lie about the group. Unknown/non-member slugs are dropped with a build warning, the
@@ -52,10 +64,14 @@ const description = fm?.description ?? org.description;
   <div class="hf-container">
     <OrgHeader org={org} repos={repos} fm={fm} now={now} />
 
-    {Content && (
+    {bodyHtml && (
       <section class="hf-two-col hf-two-col--single" style="margin-top:16px">
-        <article class="hf-card hf-readme" aria-label={`About ${org.name}`}>
-          <div class="hf-md"><Content /></div>
+        <article class="hf-card hf-readme" aria-labelledby="org-about-h">
+          {/* See the same heading on the profile page: the chrome owns an h2 so the org's own
+              markdown cannot step h1 -> h3 by opening at `##`, which this project's own
+              organization page does. */}
+          <h2 class="hf-sr" id="org-about-h">About {org.name}</h2>
+          <div class="hf-md" set:html={bodyHtml} />
         </article>
       </section>
     )}

@@ -44,14 +44,14 @@ const readmeContent = readmeInfo?.stored && !readmeInfo.binary ? readBlob(cfg.ou
 const readmeHtml = readmeEntry && readmeContent !== null
   ? isMarkdownPath(readmeEntry.path)
     ? renderMarkdown(readmeContent, { trusted: isTrustedSource(repo.source) })
-    : `<pre>${readmeContent.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</pre>`
+    : `<pre tabindex="0">${readmeContent.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</pre>`
   : null;
 
 const title = dirPath === '' ? `${repo.name} at ${ref.name}` : `${dirPath} · ${repo.name} at ${ref.name}`;
 ---
 <Base title={title} description={repo.description ?? undefined} active="repos">
   <div class="hf-container">
-    <RepoHeader repo={repo} active="code" />
+    <RepoHeader repo={repo} active="code" heading={title} />
 
     <div class="hf-repo-main" style="margin-top:16px">
       <div class="hf-toolbar">

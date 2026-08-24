@@ -19,18 +19,27 @@
   /* text */
   --hf-text: #24190f;
   --hf-text-2: #5c4e43;
-  --hf-text-3: #7a6c60;
-  /* brand temps */
-  --hf-ember: #ea5a14;
+  --hf-text-3: #6a5c50;
+  /* Brand temps.
+     These are INK values first and decoration second: `.t-hot`, `.t-cold`, `.hf-sha`,
+     `.hf-tag`, `.hf-footer-warn` and a dozen other 12-14px labels take their `color` straight
+     from them, on `--hf-surface`, on `--hf-canvas` and on their own `-soft` tint. The dark
+     palette was tuned for that; the light one shipped with the raw brand hues, and every one
+     of them failed WCAG 1.4.3 AA on every page — ember 2.7:1, amber 2.2:1, ice 3.1:1.
+     They are now the lightest point of each hue that still clears 4.5:1 against all six of
+     those backgrounds. The `-soft` tints keep the ORIGINAL bright hue: they are backgrounds,
+     and keeping them light is what makes the darker ink readable on them.
+     `tests/unit/contrast.test.ts` pins this; do not lighten one without running it. */
+  --hf-ember: #b03f08;
   --hf-ember-2: #ff8a3d;
   --hf-ember-soft: rgba(234, 90, 20, 0.12);
-  --hf-amber: #d98c12;
+  --hf-amber: #8f5a06;
   /* Warm ramp's far end. Deliberately palette-independent, like the ramp it belongs to. */
   --hf-amber-2: #f4c35a;
   --hf-amber-soft: rgba(217, 140, 18, 0.14);
   --hf-neutral: #8c8a86;
   --hf-neutral-soft: rgba(140, 138, 134, 0.16);
-  --hf-ice: #2f86c7;
+  --hf-ice: #19669f;
   --hf-ice-2: #6cc1ff;
   --hf-ice-soft: rgba(47, 134, 199, 0.12);
   --hf-on-ember: #fff7f0;
@@ -39,7 +48,7 @@
   --hf-accent-2: var(--hf-ember-2);
   --hf-accent-soft: var(--hf-ember-soft);
   --hf-on-accent: var(--hf-on-ember);
-  --hf-accent-shadow: rgba(234, 90, 20, 0.65);
+  --hf-accent-shadow: rgba(176, 63, 8, 0.65);
   /* code */
   --hf-code-bg: rgba(70, 45, 25, 0.07);
   /* langs */
@@ -82,7 +91,7 @@
   --hf-amber-soft: rgba(240, 166, 42, 0.16);
   --hf-neutral: #8f877f;
   --hf-neutral-soft: rgba(143, 135, 127, 0.18);
-  --hf-ice: #5fb1ee;
+  --hf-ice: #6dbaf1;
   --hf-ice-2: #9ad6ff;
   --hf-ice-soft: rgba(95, 177, 238, 0.16);
   --hf-on-ember: #1c0f06;
@@ -112,7 +121,7 @@
     --hf-amber-soft: rgba(240, 166, 42, 0.16);
     --hf-neutral: #8f877f;
     --hf-neutral-soft: rgba(143, 135, 127, 0.18);
-    --hf-ice: #5fb1ee;
+    --hf-ice: #6dbaf1;
     --hf-ice-2: #9ad6ff;
     --hf-ice-soft: rgba(95, 177, 238, 0.16);
     --hf-on-ember: #1c0f06;
@@ -137,15 +146,17 @@
   --hf-shadow-lg: 0 2px 4px rgba(21, 32, 43, 0.05), 0 24px 48px -20px rgba(21, 32, 43, 0.24);
   --hf-text: #15202b;
   --hf-text-2: #4f6273;
-  --hf-text-3: #647891;
-  --hf-ember: #f26a2b;
+  /* Same rule as the hearth light block above: ink values that clear 4.5:1 on this palette's
+     surfaces and tints. Frost's originals were the worse of the two — amber was 1.9:1. */
+  --hf-text-3: #556678;
+  --hf-ember: #b34209;
   --hf-ember-2: #ff9a5c;
   --hf-ember-soft: rgba(242, 106, 43, 0.12);
-  --hf-amber: #f0a24a;
+  --hf-amber: #8f5a06;
   --hf-amber-soft: rgba(240, 162, 74, 0.14);
   --hf-neutral: #7d8fa1;
   --hf-neutral-soft: rgba(125, 143, 161, 0.16);
-  --hf-ice: #1f7fd6;
+  --hf-ice: #1667ad;
   --hf-ice-2: #5da0dd;
   --hf-ice-soft: rgba(31, 127, 214, 0.12);
   --hf-on-ember: #fff7f0;
@@ -153,7 +164,7 @@
   --hf-accent-2: var(--hf-ice-2);
   --hf-accent-soft: var(--hf-ice-soft);
   --hf-on-accent: #f3f9ff;
-  --hf-accent-shadow: rgba(31, 127, 214, 0.55);
+  --hf-accent-shadow: rgba(22, 103, 173, 0.55);
   --hf-code-bg: rgba(21, 32, 43, 0.06);
   --hf-lang-other: #9cb0c4;
 }
@@ -177,7 +188,7 @@
   --hf-amber-soft: rgba(245, 177, 94, 0.16);
   --hf-neutral: #71849a;
   --hf-neutral-soft: rgba(113, 132, 154, 0.18);
-  --hf-ice: #5aaaf5;
+  --hf-ice: #74baf7;
   --hf-ice-2: #8cc4fa;
   --hf-ice-soft: rgba(90, 170, 245, 0.16);
   --hf-on-ember: #1a0c04;
@@ -207,7 +218,7 @@
     --hf-amber-soft: rgba(245, 177, 94, 0.16);
     --hf-neutral: #71849a;
     --hf-neutral-soft: rgba(113, 132, 154, 0.18);
-    --hf-ice: #5aaaf5;
+    --hf-ice: #74baf7;
     --hf-ice-2: #8cc4fa;
     --hf-ice-soft: rgba(90, 170, 245, 0.16);
     --hf-on-ember: #1a0c04;
@@ -255,7 +266,10 @@ a { color: inherit; text-decoration: none; }
 a:hover { text-decoration: none; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 svg.hf-i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-:where(a, button, [tabindex]):focus-visible {
+/* `summary` is neither a link nor a button and carries no tabindex, so it used to fall
+   through to Chrome's default `auto` outline while every other control on the site drew the
+   2px accent ring — the ref switcher and the Clone button were the only two. */
+:where(a, button, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--hf-accent);
   outline-offset: 2px;
   border-radius: 6px;
@@ -697,8 +711,14 @@ code, kbd, pre { font-family: var(--hf-mono); }
 
 .hf-readme { padding: 8px 28px 28px; }
 .hf-md { font-size: 14.5px; color: var(--hf-text); line-height: 1.65; }
-.hf-md h1 { font-size: 26px; font-weight: 740; letter-spacing: -0.02em; margin: 20px 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--hf-border); }
-.hf-md h2 { font-size: 18px; font-weight: 680; margin: 26px 0 10px; }
+/* Rendered markdown starts at h2, never h1 — the page chrome owns the h1 (see
+   `renderMarkdown()` in src/lib/markdown.ts and the rehype plugin in astro.config.mjs).
+   These sizes are the old h1/h2/h3 sizes shifted down one level, so a `#` still looks like a
+   title and a `##` like a section: the markup changed, the page did not. */
+.hf-md h2 { font-size: 26px; font-weight: 740; letter-spacing: -0.02em; margin: 20px 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--hf-border); }
+.hf-md h3 { font-size: 18px; font-weight: 680; margin: 26px 0 10px; }
+.hf-md h4 { font-size: 15.5px; font-weight: 660; margin: 20px 0 8px; }
+.hf-md h5, .hf-md h6 { font-size: 14.5px; font-weight: 640; margin: 18px 0 6px; color: var(--hf-text-2); }
 .hf-md p { margin: 0 0 12px; color: var(--hf-text-2); }
 .hf-md ul { margin: 0 0 12px; padding-left: 22px; color: var(--hf-text-2); }
 .hf-md li { margin: 4px 0; }
@@ -826,7 +846,7 @@ code, kbd, pre { font-family: var(--hf-mono); }
 .hf-palette-input .hf-placeholder { color: var(--hf-text-3); flex: 1; }
 .hf-palette-group { padding: 6px 8px; }
 .hf-palette-group + .hf-palette-group { border-top: 1px solid var(--hf-border); }
-.hf-palette-group h4 {
+.hf-palette-grouphead {
   font-size: 11px; font-weight: 640; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--hf-text-3); padding: 8px 10px 4px;
 }
@@ -955,10 +975,10 @@ code, kbd, pre { font-family: var(--hf-mono); }
   border-left: 1px solid var(--hf-border-strong); border-top: 1px solid var(--hf-border-strong);
   transform: rotate(45deg);
 }
-.hf-clone-pop h4 { font-size: 13px; font-weight: 640; display: flex; align-items: center; gap: 8px; }
-.hf-clone-pop h4 .hf-tabs-mini { margin-left: auto; display: inline-flex; gap: 2px; background: var(--hf-canvas); border-radius: 7px; padding: 2px; }
-.hf-clone-pop h4 .hf-tabs-mini span { font-size: 11.5px; padding: 2px 8px; border-radius: 5px; color: var(--hf-text-3); font-weight: 560; }
-.hf-clone-pop h4 .hf-tabs-mini span.is-on { background: var(--hf-surface); color: var(--hf-text); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+.hf-clone-head { font-size: 13px; font-weight: 640; display: flex; align-items: center; gap: 8px; }
+.hf-clone-head .hf-tabs-mini { margin-left: auto; display: inline-flex; gap: 2px; background: var(--hf-canvas); border-radius: 7px; padding: 2px; }
+.hf-clone-head .hf-tabs-mini span { font-size: 11.5px; padding: 2px 8px; border-radius: 5px; color: var(--hf-text-3); font-weight: 560; }
+.hf-clone-head .hf-tabs-mini span.is-on { background: var(--hf-surface); color: var(--hf-text); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
 .hf-clone-url {
   display: flex; align-items: center; gap: 6px;
   height: 34px; padding: 0 4px 0 10px;
@@ -1029,8 +1049,8 @@ code, kbd, pre { font-family: var(--hf-mono); }
 .hf-about { position: sticky; top: var(--hf-gutter); display: flex; flex-direction: column; }
 .hf-about-section { padding: 16px 18px; border-bottom: 1px solid var(--hf-border); display: flex; flex-direction: column; gap: 10px; }
 .hf-about-section:last-child { border-bottom: 0; }
-.hf-about h3 { font-size: 13px; font-weight: 660; display: flex; align-items: center; gap: 8px; }
-.hf-about h3 .hf-gear { margin-left: auto; color: var(--hf-text-3); }
+.hf-about-section > h2 { font-size: 13px; font-weight: 660; display: flex; align-items: center; gap: 8px; }
+.hf-about-section > h2 .hf-gear { margin-left: auto; color: var(--hf-text-3); }
 .hf-about p { font-size: 13.5px; color: var(--hf-text-2); }
 .hf-about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .hf-about-links li { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
@@ -1111,12 +1131,29 @@ code, kbd, pre { font-family: var(--hf-mono); }
 @media (max-width: 560px) {
   .hf-kpi, .hf-kpi--ice { grid-column: span 12; }
   .hf-kpi-value { font-size: 30px; }
+  /* The repo overview's commit bar is one non-wrapping flex row with `margin-left: auto` on
+     the "N commits" link. Below ~480px the row is wider than the viewport, so the link and the
+     date were pushed off the right edge and the whole DOCUMENT scrolled sideways — the only
+     page type on the site that did. Let it wrap: message on its own line, the rest beneath. */
+  .hf-commit-bar { flex-wrap: wrap; }
+  .hf-commit-bar .hf-msg { flex: 1 1 100%; min-width: 0; }
+  .hf-commit-bar .hf-commits-link { margin-left: 0; }
+  /* The two dots either side of the sha are separators for a row that no longer exists. */
+  .hf-commit-bar .hf-dot { display: none; }
 }
 
 /* ==========================================================================
    Site additions (Phase 2): listing, facets, pager, empty/404, banners
    ========================================================================== */
-.t-cool { color: var(--hf-ice-2); }
+/* `--hf-ice-2` is the LIGHT end of the ice ramp: readable on a dark surface, 2.0:1 on a light
+   one — and `.t-cool` is real text (the age label on any repo touched 6-12 months ago). Light
+   mode therefore uses the ink value and lets the heat BARS carry the cool/cold distinction;
+   dark mode keeps the brighter blue it was designed for. */
+.t-cool { color: var(--hf-ice); }
+:root[data-theme="dark"] .t-cool { color: var(--hf-ice-2); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .t-cool { color: var(--hf-ice-2); }
+}
 .hf-muted { color: var(--hf-text-3); }
 .hf-count--plain { font-size: 11.5px; color: var(--hf-text-3); font-weight: 500; }
 

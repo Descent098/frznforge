@@ -29,7 +29,11 @@ const family = { hot: 'c-hot', warm: 'c-warm', neutral: 'c-neutral', cool: 'c-co
       More
     </span>
   </div>
-  <div class="hf-contrib-scroll">
+  {/* Focusable: the 52-week grid is wider than a phone, so this is a scrollable region.
+      Firefox and Safari do not make scrollers keyboard-reachable on their own, and there
+      is nothing focusable inside — without tabindex the graph cannot be scrolled without
+      a mouse (axe `scrollable-region-focusable`, WCAG 2.1.1). */}
+  <div class="hf-contrib-scroll" tabindex="0" role="group" aria-labelledby="contrib-h">
     <div class="hf-contrib-months" aria-hidden="true" style={`grid-template-columns: repeat(52, 1fr);`}>
       {graph.months.map((m, i) => {
         const next = graph.months[i + 1]?.week ?? 52;

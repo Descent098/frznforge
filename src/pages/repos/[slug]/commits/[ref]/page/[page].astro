@@ -29,7 +29,7 @@ const page = Number(Astro.params.page);
 ---
 <Base title={`Commits on ${refName} (page ${page}) · ${repo.name}`} description={repo.description ?? undefined} active="repos">
   <div class="hf-container">
-    <RepoHeader repo={repo} active="commits" />
+    <RepoHeader repo={repo} active="commits" heading={`Commits on ${refName} (page ${page}) · ${repo.name}`} />
     <div class="hf-repo-main" style="margin-top:16px">
       <CommitList repo={repo} refName={refName} page={page} />
     </div>

@@ -33,8 +33,11 @@ function target(ref: BrowsableRef): string {
   <div class="hf-refsw-pop" role="region" aria-label="Switch branches and tags">
     {branches.length > 0 && (
       <div class="hf-refsw-group">
-        <h4>Branches</h4>
-        <ul>
+        {/* A group label inside a popover, not a section of the document: rendering it as a
+            heading put stray <h4>s at the very top of every repo page's outline. The list
+            carries the name instead, so a screen reader still announces "Branches, list". */}
+        <p class="hf-refsw-grouphead" aria-hidden="true">Branches</p>
+        <ul aria-label="Branches">
           {branches.map((r) => (
             <li>
               <a href={target(r)} class:list={{ 'is-current': r.name === current.name }} aria-current={r.name === current.name ? 'true' : undefined}>
@@ -49,8 +52,8 @@ function target(ref: BrowsableRef): string {
     )}
     {tags.length > 0 && (
       <div class="hf-refsw-group">
-        <h4>Tags</h4>
-        <ul>
+        <p class="hf-refsw-grouphead" aria-hidden="true">Tags</p>
+        <ul aria-label="Tags">
           {tags.map((r) => (
             <li>
               <a href={target(r)} class:list={{ 'is-current': r.name === current.name }} aria-current={r.name === current.name ? 'true' : undefined}>

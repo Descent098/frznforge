@@ -248,6 +248,25 @@ exports[`ingest > matches the artifact snapshot (paths redacted) 1`] = `
           "target": "7868a765f34e61c519fa3bc3e413085a93786576",
         },
       ],
+      "insights": {
+        "approximate": false,
+        "codeSize": [
+          {
+            "bytes": 275,
+            "lines": 9,
+            "month": "2024-01",
+          },
+        ],
+        "commits": [
+          {
+            "commits": 2,
+            "contributors": 2,
+            "month": "2024-01",
+          },
+        ],
+        "sampleCount": 1,
+        "sampled": false,
+      },
       "languages": [
         {
           "bytes": 80,
@@ -785,6 +804,25 @@ Hello.
           "target": "d1b6eae27ee8cbd871a89df60da0854357b5f8f6",
         },
       ],
+      "insights": {
+        "approximate": false,
+        "codeSize": [
+          {
+            "bytes": 26,
+            "lines": 2,
+            "month": "2024-01",
+          },
+        ],
+        "commits": [
+          {
+            "commits": 1,
+            "contributors": 1,
+            "month": "2024-01",
+          },
+        ],
+        "sampleCount": 1,
+        "sampled": false,
+      },
       "languages": [
         {
           "bytes": 14,
@@ -1124,6 +1162,25 @@ Hello.
           "target": "7868a765f34e61c519fa3bc3e413085a93786576",
         },
       ],
+      "insights": {
+        "approximate": false,
+        "codeSize": [
+          {
+            "bytes": 275,
+            "lines": 9,
+            "month": "2024-01",
+          },
+        ],
+        "commits": [
+          {
+            "commits": 2,
+            "contributors": 2,
+            "month": "2024-01",
+          },
+        ],
+        "sampleCount": 1,
+        "sampled": false,
+      },
       "languages": [
         {
           "bytes": 80,
@@ -1555,7 +1612,7 @@ Hello.
       "warnings": [],
     },
   ],
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "warnings": [
     {
       "code": "repo-not-found",

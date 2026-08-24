@@ -64,7 +64,7 @@ function assetIcon(asset: ReleaseAsset): string {
 ---
 <Base title={`${titled ? rel.name : rel.tag} · Releases · ${repo.name}`} description={repo.description ?? undefined} active="repos">
   <div class="hf-container">
-    <RepoHeader repo={repo} active="releases" />
+    <RepoHeader repo={repo} active="releases" ownHeading />
 
     <div class="hf-repo-main" style="margin-top:16px">
       <p class="hf-release-backlink"><a href={releasesUrl(repo.slug)}><svg class="hf-i"><use href="#i-arrow-left" /></svg> All releases</a></p>
@@ -101,7 +101,16 @@ function assetIcon(asset: ReleaseAsset): string {
           </span>
         </div>
 
-        {rel.body.trim() && <div class="hf-md hf-release-notes" set:html={renderMarkdown(rel.body, { trusted: isTrustedSource(repo.source) })} />}
+        {rel.body.trim() && (
+          <section aria-labelledby="release-notes-h">
+            {/* The notes need a heading of their own, because their content does not have a
+                reliable one: release bodies routinely open at `##`, which renders as an h3 and
+                would step straight from this page's h1. Hidden — on screen the notes are
+                obviously the notes. */}
+            <h2 class="hf-sr" id="release-notes-h">Release notes</h2>
+            <div class="hf-md hf-release-notes" set:html={renderMarkdown(rel.body, { trusted: isTrustedSource(repo.source) })} />
+          </section>
+        )}
 
         <footer class="hf-release-assets">
           <h2>Downloads</h2>

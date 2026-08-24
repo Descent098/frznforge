@@ -1,58 +1,133 @@
 # frznforge
 
-A **read-only, static forge** for one person. Point it at your git repositories, run a
-build, and host the output anywhere static files go. No server, no accounts, no issues,
-no pull requests, no stars — just your projects, browsable and cloneable.
+**A read-only forge you can host on a static file server.** Point it at your git
+repositories, run a build, and get a browsable site — profile, repository listing, file
+browser, history, diffs, branches, tags, releases, insights — as plain HTML.
 
-It is for **source-available** projects, and for people who self-host a private forge
-(Forgejo, Gitea, GitLab…) but want a public, safe, always-up showcase of their work.
+No server. No database. No accounts, issues, pull requests or stars.
 
-- **Ingest** scans local git repositories (concurrently) into a JSON artifact — committed
-  content only, never your working tree.
-- **Build** turns that artifact into a fully static Astro site: profile page, repository
-  listing with search/filter/sort, and a repository overview per repo.
-- **Deploy** the `dist/` folder to GitHub Pages, Cloudflare Pages, Netlify, S3, a NAS…
+**Status: 0.1.0, released 2026-08-24** — the first usable release. Everything in
+[CHANGELOG.md](CHANGELOG.md) is implemented and tested, and it builds this project's own site.
+Expect rough edges; the known ones are listed under [Status](#status) below.
 
-> Status: early. See [docs/dev/plans/plan-phases.md](docs/dev/plans/plan-phases.md) for
-> what exists and what's next.
+## Who it is for
+
+- You self-host a private forge (Forgejo, Gitea, GitLab) and want a **public, safe,
+  always-up** window onto your work that does not expose the forge itself.
+- Your code lives on GitHub but you want **your own front door** for it, on your own domain.
+- You have a pile of **source-available** projects and want them browsable without asking
+  anyone to sign up for anything.
+- You want the whole thing to still be there in ten years, because it is a folder of files.
+
+It is not a GitHub replacement. There is nowhere to file an issue, nothing to click "fork" on,
+and no git server — the site links back to wherever the repository actually lives.
+
+## What it does
+
+**Ingest** — `npm run ingest` reads git through the CLI and writes one validated JSON artifact
+plus a content-addressed blob store.
+
+- Local repositories (including bare ones) and repositories imported from **GitHub, GitLab,
+  Gitea and Forgejo** — mirror-cloned into a local cache, with metadata and releases from the
+  provider API. Tokens come from the environment only and never reach the artifact.
+- Only **committed** content is read, never your working tree.
+- Per repo: history, branches, tags, per-ref file trees, per-path last-commit info, per-commit
+  file stats, language breakdown, contributors, detected license, README, source zips, and
+  monthly commit/contributor/code-size insights.
+- **Deterministic**: the same repositories at the same commits produce a byte-identical
+  artifact. No clock values, no unsorted iteration.
+- Nothing about a repository fails a build. Empty repos, missing paths, a forge that is down —
+  all warnings, printed at ingest and counted in the site footer.
+
+**Site** — `astro build` turns the artifact into static pages.
+
+- Profile page from `content/profile.md`: bio, links, contribution graph, activity log,
+  pinned repos, aggregated stats.
+- Repository listing with search, language/tag/kind filters, sorting and pagination — and it
+  works with JavaScript off.
+- Repo overview, file browser for every browsable ref, file view with build-time Shiki
+  highlighting and `#L42` anchors, markdown Preview/Source toggle, raw and zip downloads,
+  paginated history, single-commit pages, branches, tags, releases, insights.
+- **Notes** — a folder of files published gist-style at `/notes/`.
+- **Organizations** — group repos under their own page and listing.
+- Ctrl-K command palette, light/dark with a `t` shortcut, two colour palettes. Every page type
+  is checked in **both** themes by `tests/e2e/a11y.spec.ts` — WCAG AA contrast over every
+  visible text node, one `<h1>` per page, no skipped heading levels, no duplicate ids, no
+  unreachable scroll regions, no sideways scroll at 380px — and the palette tokens themselves
+  are pinned in `tests/unit/contrast.test.ts`. The published pages call nothing — no CDN, no
+  fonts, no analytics, no forge API.
+
+**Deploy** — copy `dist/` to GitHub Pages, Cloudflare Pages, Netlify, S3, a NAS, or an nginx
+box.
 
 ## Quick start
 
 ```bash
 npm install
-# edit frznforge.config.ts: add your repos + owner details
-# edit content/profile.md: bio, links, pinned repos
-npm run ingest     # git → data/forge.json (+ blobs)
-npm run dev        # or: astro dev --background
-npm run build      # = ingest + astro build → dist/
+# edit frznforge.config.ts — your name, and the repos to publish
+# edit content/profile.md  — bio, links, pinned repos
+npm run ingest     # git → data/forge.json + blobs + archives
+npm run dev        # http://localhost:4321/
 ```
 
-## Configuration
+`npm run build` (= ingest + `astro build`) writes the deployable site to `dist/`.
 
-Everything lives in [`frznforge.config.ts`](frznforge.config.ts) (site title, owner, palette,
-repos, ingest limits) and [`content/profile.md`](content/profile.md) (profile frontmatter +
-body). Per-repo metadata (description, links, tags, template flag, license) comes from a
-`.frznforge.json` committed inside each repo, overridable from the site config. See
-[docs/user/configuration.md](docs/user/configuration.md).
+Two commands help you fill that config in:
+`npm run frznforge -- new <dir>` scaffolds fresh authoring files, and
+`npm run frznforge -- init` walks a forge account and writes the repo entries for you
+(`--web` does it in a browser).
 
-Repos hosted on GitHub, GitLab, Gitea or Forgejo can be imported instead of pointed at
-locally — frznforge mirror-clones them and reads their releases from the provider API.
-`npm run frznforge -- init` walks an account and writes the config entries for you. See
-[docs/user/importing.md](docs/user/importing.md).
+## Documentation
+
+| Guide | |
+|---|---|
+| [Quick start](docs/user/quick-start.md) | Zero to a running site in ten minutes |
+| [Starting a site](docs/user/starting-a-site.md) | `frznforge -- new`, and keeping your content in its own repository |
+| [Configuration](docs/user/configuration.md) | Every config key, `.frznforge.json`, notes, orgs, warnings |
+| [Importing from a forge](docs/user/importing.md) | GitHub/GitLab/Gitea/Forgejo, tokens, the `init` wizard, offline builds |
+| [Deploying](docs/user/deploying.md) | Build size, a working Actions workflow, host-by-host settings |
+| [Migrating from a forge](docs/user/migrating.md) | What carries over, what doesn't, and how to stay fresh |
+
+Start at [docs/user/](docs/user/README.md).
 
 ## Development
 
 ```bash
-npm test            # vitest unit tests (ingest extractors, listing logic, schema)
-npm run test:e2e    # playwright, builds the site from a fixture artifact
+npm test            # vitest unit tests (tests/unit) against fixture git repos in temp dirs
+npm run test:e2e    # playwright, builds the site from fixture repos first
 npm run check       # astro check
 ```
 
-Data model: [docs/dev/data-model.md](docs/dev/data-model.md). Design explorations that led
-to the current look: [docs/dev/plans/design-options](docs/dev/plans/design-options).
+Keep all three green. No test may touch the network.
 
-Versioning: `VERSION` is the single source of truth; every change is logged in
-[CHANGELOG.md](CHANGELOG.md).
+- Data contract: [docs/dev/data-model.md](docs/dev/data-model.md) — `src/lib/data/schema.ts` is
+  the ingest ↔ site boundary; any change to it bumps `SCHEMA_VERSION`.
+- Phase plan and cross-cutting rules: [docs/dev/plans/plan-phases.md](docs/dev/plans/plan-phases.md).
+- Plain CSS only, `hf-` prefix, tokens at the top of `src/styles/global.css` and
+  `src/styles/repo.css`.
+- `VERSION` is the single source of truth for the version; every change is logged in
+  [CHANGELOG.md](CHANGELOG.md).
+
+## Status
+
+**0.1.0**, released 2026-08-24 — the first usable release. Artifact schema v5.
+
+Rough edges, honestly:
+
+- **The site must be served from the root of a domain.** There is no `base` path support, so
+  a GitHub Pages *project* URL (`you.github.io/my-forge/`) will not work — use a user/org
+  site or a custom domain.
+- **Builds get large fast.** File pages are generated per browsable ref, so a repository's
+  file count is multiplied by its branches and tags. The defaults cap that at 1 default branch
+  + 10 branches + 25 tags; see [deploying.md](docs/user/deploying.md#3-how-big-will-my-site-be)
+  before you point it at fifty repositories.
+- **There is no published npm package.** You clone this repository; the generator and your
+  site live in the same directory. `frznforge -- new` scaffolds the files you author, but it
+  cannot install the engine for you — see
+  [starting-a-site.md](docs/user/starting-a-site.md).
+- No feeds, no sitemap, no diff view between arbitrary refs, no file-content search.
+- Everything is public. A repository listed in the config is published in full, whole history
+  included — there is no visibility switch, because static files cannot check who is asking.
 
 ## License
 

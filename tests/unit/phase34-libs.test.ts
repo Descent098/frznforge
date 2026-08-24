@@ -21,7 +21,7 @@ import {
   treeRoutes,
   treeUrl,
 } from '../../src/lib/routes';
-import { shikiLang, countLines } from '../../src/lib/highlight';
+import { shikiLang, countLines, highlightToHtml } from '../../src/lib/highlight';
 import { buildContribGraph, commitsByDay } from '../../src/lib/contrib';
 import { buildActivity } from '../../src/lib/activity';
 import { buildSearchIndex, scoreDoc, search } from '../../src/lib/search';
@@ -111,6 +111,7 @@ const repo: Repo = {
   ],
   languages: [{ name: 'TypeScript', bytes: 20, percent: 100, color: '#3178c6' }],
   contributors: [{ name: 'Kieran', email: 'kieran@example.com', commits: 3, firstCommit: '2026-08-19T09:00:00Z', lastCommit: '2026-08-21T10:00:00Z' }],
+  insights: null,
   readme: null,
   createdAt: '2026-08-19T09:00:00Z',
   updatedAt: '2026-08-21T10:00:00Z',
@@ -200,6 +201,31 @@ describe('highlight helpers', () => {
     expect(countLines('a')).toBe(1);
     expect(countLines('a\nb\n')).toBe(2);
   });
+
+  /**
+   * Per-line ids have to be unique across a whole PAGE, not just within one file.
+   *
+   * A multi-file note renders one highlighted card per file, and every card used to emit
+   * `id="L1"…"L30"` again — so `#L5` resolved to the first file and the lines of every later
+   * file were unlinkable no matter what you typed. `NoteFileView` now passes its section
+   * anchor as the prefix.
+   */
+  it('namespaces per-line ids by the caller-supplied prefix', async () => {
+    const source = 'const a = 1;\nconst b = 2;\nconst c = 3;\n';
+    const first = await highlightToHtml(source, 'TypeScript', 'a.ts', 'f-a-ts-');
+    const second = await highlightToHtml(source, 'TypeScript', 'b.ts', 'f-b-ts-');
+    const ids = (html: string) => [...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]!);
+
+    expect(ids(first)).toEqual(['f-a-ts-L1', 'f-a-ts-L2', 'f-a-ts-L3']);
+    expect(ids(second)).toEqual(['f-b-ts-L1', 'f-b-ts-L2', 'f-b-ts-L3']);
+    // disjoint: no id from one file can be reached by an anchor meant for the other
+    expect(ids(first).filter((id) => ids(second).includes(id))).toEqual([]);
+  });
+
+  it('keeps the documented bare `L<n>` ids when no prefix is given', async () => {
+    const html = await highlightToHtml('one\ntwo\n', null, 'notes.txt');
+    expect([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]!)).toEqual(['L1', 'L2']);
+  });
 });
 
 describe('contributions', () => {
@@ -241,7 +267,7 @@ describe('activity', () => {
 });
 
 describe('search', () => {
-  const data = { schemaVersion: 4 as const, repos: [repo], notes: [], organizations: [], warnings: [] };
+  const data = { schemaVersion: 5 as const, repos: [repo], notes: [], organizations: [], warnings: [] };
   const index = buildSearchIndex(data);
   it('indexes pages, repos and default-branch files only', () => {
     const kinds = index.docs.map((d) => d.kind);

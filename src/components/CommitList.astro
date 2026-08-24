@@ -38,8 +38,10 @@ const dayLabel = (day: string) =>
     </summary>
     <div class="hf-refsw-pop" role="region" aria-label="Switch branch">
       <div class="hf-refsw-group">
-        <h4>Branches</h4>
-        <ul>
+        {/* A popover's group label, not a section of the document — see RefSwitcher.astro.
+            The <ul> carries the name so a screen reader still announces "Branches, list". */}
+        <p class="hf-refsw-grouphead" aria-hidden="true">Branches</p>
+        <ul aria-label="Branches">
           {repo.branches.map((b) => (
             <li>
               <a href={commitsUrl(repo.slug, b.name)} class:list={{ 'is-current': b.name === refName }} aria-current={b.name === refName ? 'true' : undefined}>
@@ -59,7 +61,7 @@ const dayLabel = (day: string) =>
 <div class="hf-commit-groups">
   {groups.map((g) => (
     <section class="hf-commit-group">
-      <h3 class="hf-commit-day"><svg class="hf-i"><use href="#i-history" /></svg> Commits on {dayLabel(g.day)}</h3>
+      <h2 class="hf-commit-day"><svg class="hf-i"><use href="#i-history" /></svg> Commits on {dayLabel(g.day)}</h2>
       <div class="hf-card hf-commit-list">
         {g.commits.map((c) => (
           <div class="hf-commit-row">

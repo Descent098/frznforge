@@ -68,8 +68,8 @@ test.describe('command palette', () => {
     // Organizations carry no date, so under one flat recency sort every dated repo (plus the
     // actions and page docs ahead of them) pushed them past the cut and the group never
     // appeared. Per-kind quotas are what put it back.
-    await expect(palette.locator('.hf-palette-group h4', { hasText: 'Organizations' })).toBeVisible();
-    await expect(palette.locator('.hf-palette-group h4', { hasText: 'Repositories' })).toBeVisible();
+    await expect(palette.locator('.hf-palette-grouphead', { hasText: 'Organizations' })).toBeVisible();
+    await expect(palette.locator('.hf-palette-grouphead', { hasText: 'Repositories' })).toBeVisible();
     // and the default view is still a short menu, not the whole index
     expect(await palette.locator('.hf-palette-item').count()).toBeLessThanOrEqual(14);
   });

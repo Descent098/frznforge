@@ -90,7 +90,7 @@ test.describe('one note', () => {
     // rendered markdown: headings, a table and a fenced code block from the note's own body
     const preview = page.locator('.hf-nv-preview');
     await expect(preview).toBeVisible();
-    await expect(preview.locator('.hf-md h2').first()).toContainText('The seven calls');
+    await expect(preview.locator('.hf-md h3').first()).toContainText('The seven calls');
     await expect(preview.locator('.hf-md table')).toBeVisible();
     await expect(preview.locator('.hf-md pre code')).not.toHaveCount(0);
     // frontmatter is metadata, not prose: never rendered, and the title is not repeated as a
@@ -131,8 +131,10 @@ test.describe('one note', () => {
     await expect(code).toBeVisible();
     await expect(code.locator('.shiki')).toHaveCount(1);
     expect(await code.locator('.line').count()).toBeGreaterThan(10);
-    // the gutter is CSS counters on `.line`, and every line is anchorable as #L<n>
-    await expect(code.locator('#L1')).toHaveCount(1);
+    // The gutter is CSS counters on `.line`, and every line is anchorable — with an id
+    // namespaced by the note file's section anchor, so a multi-file note cannot emit the same
+    // `L1` on three cards (see highlight.ts `idPrefix`).
+    await expect(code.locator('[id$="-L1"]')).toHaveCount(1);
     await expect(page.locator('.hf-blob-meta .hf-lang-badge')).toHaveText('PowerShell');
 
     await expectBasicA11y(page);

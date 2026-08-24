@@ -25,7 +25,7 @@ const refName = refFromSlug(Astro.params.ref!);
 ---
 <Base title={`Commits on ${refName} · ${repo.name}`} description={repo.description ?? undefined} active="repos">
   <div class="hf-container">
-    <RepoHeader repo={repo} active="commits" />
+    <RepoHeader repo={repo} active="commits" heading={`Commits on ${refName} · ${repo.name}`} />
     <div class="hf-repo-main" style="margin-top:16px">
       <CommitList repo={repo} refName={refName} page={1} />
     </div>

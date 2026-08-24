@@ -14,6 +14,18 @@ interface Props { repo: Repo }
 const { repo } = Astro.props;
 const now = new Date();
 
+/**
+ * Whether `/repos/<slug>/tree/<ref>/` was actually generated for this branch.
+ *
+ * `ingest.branchTrees` (10 by default) caps how many non-default branches get a tree, so a
+ * repo with more branches than that has some with no file browser. Linking every branch
+ * regardless shipped hrefs to pages that were never built — a 404 for the visitor, with only
+ * a `branch-trees-capped` line in the build log to explain it. The default branch always has
+ * a tree and never counts against the cap; everything else has one iff it is in `refTrees`.
+ */
+const isBrowsable = (name: string) => name === repo.defaultBranch || name in repo.refTrees;
+const capped = repo.branches.filter((b) => !isBrowsable(b.name)).length;
+
 /** Default branch first, then most recently committed. */
 const branches = [...repo.branches].sort(
   (a, b) =>
@@ -27,6 +39,16 @@ const branches = [...repo.branches].sort(
     <RepoHeader repo={repo} active="branches" />
 
     <div class="hf-repo-main" style="margin-top:16px">
+      {capped > 0 && (
+        <p class="hf-banner">
+          <svg class="hf-i" aria-hidden="true"><use href="#i-bolt" /></svg>
+          <span>
+            {capped === 1 ? 'One branch is' : `${capped} branches are`} listed but <b>not browsable</b>: past
+            <code>ingest.branchTrees</code>, no file browser is generated. History and commit counts are complete
+            either way.
+          </span>
+        </p>
+      )}
       <div class="hf-card hf-reflist">
         <table>
           <thead>
@@ -38,8 +60,15 @@ const branches = [...repo.branches].sort(
               return (
                 <tr>
                   <td>
-                    <a class="hf-ref-name" href={treeUrl(repo.slug, b.name)}><svg class="hf-i"><use href="#i-branch" /></svg><code>{b.name}</code></a>
+                    {isBrowsable(b.name) ? (
+                      <a class="hf-ref-name" href={treeUrl(repo.slug, b.name)}><svg class="hf-i"><use href="#i-branch" /></svg><code>{b.name}</code></a>
+                    ) : (
+                      <span class="hf-ref-name"><svg class="hf-i"><use href="#i-branch" /></svg><code>{b.name}</code></span>
+                    )}
                     {b.name === repo.defaultBranch && <span class="hf-tag hf-ref-default">default</span>}
+                    {!isBrowsable(b.name) && (
+                      <span class="hf-tag hf-ref-nobrowse" title="Past ingest.branchTrees — no file browser was generated for this branch">not browsable</span>
+                    )}
                   </td>
                   <td class="hf-fmsg">{head ? <a href={commitUrl(repo.slug, head.sha)}>{head.subject}</a> : ''}</td>
                   <td class="hf-ref-count"><a href={commitsUrl(repo.slug, b.name)}>{formatInt(b.commits.length)}</a></td>

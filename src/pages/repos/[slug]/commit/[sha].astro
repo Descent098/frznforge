@@ -30,7 +30,7 @@ const pathLink = (p: string) => (repo.defaultBranch && repo.files[p] ? blobUrl(r
 ---
 <Base title={`${commit.subject} · ${repo.name}`} description={repo.description ?? undefined} active="repos">
   <div class="hf-container">
-    <RepoHeader repo={repo} active="commits" />
+    <RepoHeader repo={repo} active="commits" ownHeading />
 
     <div class="hf-repo-main" style="margin-top:16px">
       <article class="hf-card hf-commit-page">
@@ -49,7 +49,7 @@ const pathLink = (p: string) => (repo.defaultBranch && repo.files[p] ? blobUrl(r
             )}
           </div>
           <div class="hf-commit-page-refs">
-            <span class="hf-badge">commit <button type="button" data-copy={commit.sha} aria-label="Copy full sha"><code>{commit.sha.slice(0, 12)}</code> <svg class="hf-i"><use href="#i-copy" /></svg></button></span>
+            <span class="hf-badge">commit <button type="button" data-copy={commit.sha} aria-label={`Copy full sha ${commit.sha.slice(0, 12)}`}><code>{commit.sha.slice(0, 12)}</code> <svg class="hf-i"><use href="#i-copy" /></svg></button></span>
             {parents.length > 0 && (
               <span class="hf-badge">
                 {parents.length === 1 ? 'parent' : 'parents'}{' '}
