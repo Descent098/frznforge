@@ -87,10 +87,23 @@ export function findRef(repo: Repo, sluggedRef: string): BrowsableRef | undefine
 
 /* ---- repo sub-page URLs --------------------------------------------------- */
 
+/**
+ * Percent-encode each segment of a path that goes into a URL, keeping `/` literal so the
+ * directory structure survives.
+ *
+ * Repo paths and ref names are whatever was committed, not slugs: spaces, `&`, `+`, `;`,
+ * `#` and non-ASCII are all legal in a git path, and a raw interpolation produces either an
+ * invalid href (`href="/repos/x/blob/main/read me.md/"`) or a build abort. See
+ * `isRawServable` for the two characters encoding cannot rescue.
+ */
+export const encodePathSegments = (path: string) => path.split('/').map(encodeURIComponent).join('/');
+
 export const treeUrl = (slug: string, ref: string, path = '') =>
-  `/repos/${slug}/tree/${refSlug(ref)}/${path ? path + '/' : ''}`;
-export const blobUrl = (slug: string, ref: string, path: string) => `/repos/${slug}/blob/${refSlug(ref)}/${path}/`;
-export const rawUrl = (slug: string, ref: string, path: string) => `/repos/${slug}/raw/${refSlug(ref)}/${path}`;
+  `/repos/${slug}/tree/${encodePathSegments(refSlug(ref))}/${path ? encodePathSegments(path) + '/' : ''}`;
+export const blobUrl = (slug: string, ref: string, path: string) =>
+  `/repos/${slug}/blob/${encodePathSegments(refSlug(ref))}/${encodePathSegments(path)}/`;
+export const rawUrl = (slug: string, ref: string, path: string) =>
+  `/repos/${slug}/raw/${encodePathSegments(refSlug(ref))}/${encodePathSegments(path)}`;
 export const commitsUrl = (slug: string, ref: string, page = 1) =>
   `/repos/${slug}/commits/${refSlug(ref)}/${page > 1 ? `page/${page}/` : ''}`;
 export const commitUrl = (slug: string, sha: string) => `/repos/${slug}/commit/${sha}/`;
@@ -182,12 +195,14 @@ export const ORGS_INDEX_URL = '/orgs/';
 export const noteUrl = (slug: string) => `/notes/${slug}/`;
 
 /**
- * Characters in a note file name that no static raw URL can round-trip.
+ * Characters in a file path that no static URL can round-trip.
  *
- * Note file names are whatever the author typed on disk, not slugs, so they can contain
- * anything the filesystem allows. Percent-encoding handles almost all of it — spaces, `&`,
- * `+`, `;`, non-ASCII all survive, because the build writes the file under its literal name
- * and the browser's decoded request matches it. Two characters do not:
+ * This governs BOTH note raw routes and repo `tree`/`blob`/`raw` routes: a note file name is
+ * whatever the author typed on disk and a repo path is whatever was committed, so neither is
+ * a slug and both can hold anything the filesystem (or git) allows. Percent-encoding handles
+ * almost all of it — spaces, `&`, `+`, `;`, non-ASCII all survive, because the build writes
+ * the file under its literal name and the browser's decoded request matches it. Two
+ * characters do not:
  *
  *  - `#` — the build escapes it in the OUTPUT FILENAME (`c%23-tips.md` lands on disk with a
  *    literal `%23`), so the encoded URL decodes to a name that is not there;
@@ -200,9 +215,15 @@ export const noteUrl = (slug: string) => `/notes/${slug}/`;
 const UNSERVABLE_CHARS = /[#%]/;
 
 /**
- * Whether a note file's path can be served as static raw bytes. See `UNSERVABLE_CHARS`.
+ * Whether a path can appear in a static URL at all. See `UNSERVABLE_CHARS`.
  *
- * @param filePath `NoteFile.path` — relative to the note root, forward slashes.
+ * Used for note file paths (raw routes) and for repo paths and ref names (tree, blob and
+ * raw routes). A path this rejects gets no route: ingest warns (`note-file-unservable`,
+ * `repo-path-unservable`) and the UI renders the name without a link, which beats emitting
+ * a dead one or aborting the build.
+ *
+ * @param filePath A `NoteFile.path`, a repo `TreeEntry.path`, or a slugged ref name —
+ *   forward slashes, relative to its root.
  */
 export function isRawServable(filePath: string): boolean {
   return !UNSERVABLE_CHARS.test(filePath);
@@ -307,30 +328,45 @@ export const COMMITS_PER_PAGE = 50;
 
 export interface FileRoute { repo: Repo; ref: BrowsableRef; entry: TreeEntry }
 
-/** Every directory (tree) route for a repo: one per ref root + one per tree entry. */
+/**
+ * Every directory (tree) route for a repo: one per ref root + one per tree entry.
+ *
+ * Paths and refs that no static URL can round-trip are skipped (`isRawServable`); ingest has
+ * already raised `repo-path-unservable` for them.
+ */
 export function treeRoutes(repo: Repo): Array<{ repo: Repo; ref: BrowsableRef; path: string; url: string }> {
   const out: Array<{ repo: Repo; ref: BrowsableRef; path: string; url: string }> = [];
   for (const ref of browsableRefs(repo)) {
+    if (!isRawServable(ref.slugged)) continue;
     out.push({ repo, ref, path: '', url: treeUrl(repo.slug, ref.name) });
     for (const e of ref.tree) {
-      if (e.type === 'tree') out.push({ repo, ref, path: e.path, url: treeUrl(repo.slug, ref.name, e.path) });
+      if (e.type === 'tree' && isRawServable(e.path)) out.push({ repo, ref, path: e.path, url: treeUrl(repo.slug, ref.name, e.path) });
     }
   }
   return out;
 }
 
-/** Every file (blob) route. Submodules are excluded; symlinks get a page. */
+/**
+ * Every file (blob) route. Submodules are excluded; symlinks get a page. Unservable paths
+ * and refs are skipped for the same reason as `treeRoutes`.
+ */
 export function blobRoutes(repo: Repo): Array<FileRoute & { url: string }> {
   const out: Array<FileRoute & { url: string }> = [];
   for (const ref of browsableRefs(repo)) {
+    if (!isRawServable(ref.slugged)) continue;
     for (const e of ref.tree) {
-      if (e.type === 'blob' || e.type === 'symlink') out.push({ repo, ref, entry: e, url: blobUrl(repo.slug, ref.name, e.path) });
+      if ((e.type === 'blob' || e.type === 'symlink') && isRawServable(e.path)) {
+        out.push({ repo, ref, entry: e, url: blobUrl(repo.slug, ref.name, e.path) });
+      }
     }
   }
   return out;
 }
 
-/** Raw routes exist only for stored blobs (content available in the blob store). */
+/**
+ * Raw routes exist only for stored blobs (content available in the blob store). Derived from
+ * `blobRoutes`, so it inherits the unservable-path exclusion.
+ */
 export function rawRoutes(repo: Repo): Array<FileRoute & { url: string }> {
   return blobRoutes(repo)
     .filter(({ ref, entry }) => ref.files[entry.path]?.stored)

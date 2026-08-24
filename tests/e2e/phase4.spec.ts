@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForIslands } from './helpers';
 
 /** Open the palette, retrying Ctrl+K until the island has hydrated. */
 async function openPalette(page: Page) {
@@ -75,6 +76,7 @@ test.describe('command palette', () => {
 
   test('sidebar search button opens the palette', async ({ page }) => {
     await page.goto('/repos/');
+    await waitForIslands(page); // the trigger is inert markup until the palette island hydrates
     await page.locator('#hf-search-open').click();
     await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
   });

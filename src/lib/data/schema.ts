@@ -273,6 +273,8 @@ export const WarningCode = z.enum([
    * still renders on the note page but gets no raw/download route (schema v4).
    */
   'note-file-unservable',
+  /** A committed repo path or ref name holds `#`/`%`; no static URL can reach it, so it gets no page. */
+  'repo-path-unservable',
   /** An `organizations[].repos` entry names a slug no ingested repo has; ignored (schema v4). */
   'org-unknown-repo',
   /** A repo source declares `org` naming an organization that is not configured; ignored (schema v4). */

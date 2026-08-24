@@ -22,6 +22,7 @@ import { mergeMeta, readRepoMetaFile, repoBasename, slugFor } from './meta';
 import { findReadmeEntry } from './readme';
 import { detectDefaultBranch, listBranchRefs, loadBranches, loadTags } from './refs';
 import { listRootTree, scanTree } from './tree';
+import { isRawServable } from '../routes';
 
 export interface ScanSource {
   absPath: string;
@@ -213,6 +214,36 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
   if (readmeEntry && (readmeEntry.size ?? 0) <= opts.maxBlobBytes) {
     const buf = await readContent(readmeEntry.sha);
     if (!looksBinary(buf)) readme = { path: readmeEntry.path, sha: readmeEntry.sha, content: buf.toString('utf8') };
+  }
+
+  // A committed path (or ref name) carrying `#` or `%` can be listed but not linked: see
+  // `isRawServable`. Warn once per offender so the owner learns why a file has no page,
+  // rather than the build aborting on an invalid URL or the site shipping a dead link.
+  // Refs are checked on the slugged name, which is what actually goes into the URL.
+  for (const [refName, entries] of [
+    [def.name, treeRes.tree] as const,
+    ...Object.values(refTrees).map((rt) => [rt.name, rt.tree] as const),
+  ]) {
+    if (refName === null) continue;
+    if (!isRawServable(refSlug(refName))) {
+      warn({
+        code: 'repo-path-unservable',
+        repo: null,
+        message: `ref '${refName}' contains '#' or '%', which a static URL cannot round-trip; its files are not browsable`,
+      });
+      continue;
+    }
+    for (const e of entries) {
+      if (e.type !== 'blob' && e.type !== 'symlink' && e.type !== 'tree') continue;
+      if (isRawServable(e.path)) continue;
+      warn({
+        code: 'repo-path-unservable',
+        repo: null,
+        message:
+          `'${e.path}' on ref '${refName}' contains '#' or '%', which a static URL cannot ` +
+          `round-trip; it is listed in the file table but has no page`,
+      });
+    }
   }
 
   // dates

@@ -145,3 +145,35 @@ test.describe('releases', () => {
     await expect(page.locator('.hf-empty')).toContainText('Releases are created from annotated tags');
   });
 });
+
+test.describe('URL-hostile committed paths', () => {
+  // The fixture repo commits `docs/read me.md`, `docs/50% off.txt` and `docs/c#-tips.md`.
+  // Before the fix, the space produced `href="/repos/alpha/blob/main/read me.md/"` and the
+  // `%` aborted `astro build` outright — so this suite existing and passing IS the fix.
+  test('a name with a space is browsable through an encoded URL', async ({ page }) => {
+    await page.goto('/repos/alpha/tree/main/docs/');
+    const link = page.locator('.hf-files a.hf-fname', { hasText: 'read me.md' });
+    await expect(link).toHaveAttribute('href', '/repos/alpha/blob/main/docs/read%20me.md/');
+    await link.click();
+    await expect(page).toHaveURL(/read%20me\.md/);
+    // the file really rendered — not a 404 page that merely happens to load
+    await expect(page.locator('.hf-blob-md h1')).toHaveText('Read me');
+  });
+
+  test('its raw URL serves the exact committed bytes', async ({ request }) => {
+    const res = await request.get('/repos/alpha/raw/main/docs/read%20me.md');
+    expect(res.status()).toBe(200);
+    expect(await res.text()).toBe('# Read me\n\nA name with a space.\n');
+  });
+
+  test('names holding # or % are listed but not linked', async ({ page }) => {
+    await page.goto('/repos/alpha/tree/main/docs/');
+    for (const name of ['50% off.txt', 'c#-tips.md']) {
+      const row = page.locator('.hf-files tbody tr', { hasText: name });
+      await expect(row).toBeVisible();
+      // present as text, but with no anchor — a dead link would be worse than none
+      await expect(row.locator('a.hf-fname')).toHaveCount(0);
+      await expect(row.locator('.hf-fname')).toContainText('not linkable');
+    }
+  });
+});

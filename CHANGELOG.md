@@ -27,6 +27,9 @@ initial release
 
 ## Bug Fixes
 
+- Repo file routes no longer break on URL-special characters in a committed path. Every `tree`/`blob`/`raw` segment (and the ref slug) is now percent-encoded, so a file named `read me.md` gets a valid link instead of `href="…/read me.md/"`, and a `%` in a name no longer aborts `astro build`. `#` and `%` cannot round-trip a static host at all, so those paths are listed in the file table without a link and ingest raises `repo-path-unservable` — the same rule the notes side already applied.
+- The sidebar owner link and theme toggle no longer fail WCAG 2.5.3 "Label in Name" (Lighthouse `label-content-name-mismatch`, previously failing on every page). Their `aria-label`s replaced the visible text rather than containing it; the purpose is now appended in a visually hidden span, and the mobile layout clips those labels instead of removing them so both controls keep an accessible name when the sidebar collapses.
+
 - Code views no longer render a phantom trailing line: a file ending in a newline made Shiki emit one extra `.line`, so the gutter showed one more line than the "N lines" label. Affected every repo file view and, once they landed, note files.
 
 ## Other

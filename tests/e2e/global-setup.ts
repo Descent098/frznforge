@@ -128,6 +128,13 @@ export default async function globalSetup() {
     fs.mkdirSync(path.join(d, 'assets'));
     // a few PNG header bytes (incl. NULs) so ingest classifies it as a binary image
     fs.writeFileSync(path.join(d, 'assets', 'dot.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01]));
+    // URL-hostile committed names, in this same commit so the commit-day count is unchanged.
+    // A space must survive percent-encoding (it used to emit an invalid href); '#' and '%'
+    // cannot be served statically at all, so they must be listed-but-unlinked rather than
+    // aborting the build. See src/lib/routes.ts `isRawServable`.
+    fs.writeFileSync(path.join(d, 'docs', 'read me.md'), '# Read me\n\nA name with a space.\n');
+    fs.writeFileSync(path.join(d, 'docs', '50% off.txt'), 'percent in the name\n');
+    fs.writeFileSync(path.join(d, 'docs', 'c#-tips.md'), '# C# tips\n\nHash in the name.\n');
     commitAll(d, 'initial commit', '2024-01-01T00:00:00Z');
     // feature branch with an extra file (branched before the last main commit)
     git(d, ['checkout', '-q', '-b', 'feature/extra'], '2024-01-15T00:00:00Z');

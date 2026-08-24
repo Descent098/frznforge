@@ -52,15 +52,32 @@ const siteHost = cfg.site.url ? prettyUrl(cfg.site.url) : null;
     </nav>
 
     <div class="hf-sidebar-foot">
-      <button class="hf-theme-btn" type="button" id="hf-theme-toggle" aria-label="Theme — toggle light/dark">
+      {/*
+        Same Label-in-Name reasoning as the owner link below: the old
+        aria-label="Theme — toggle light/dark" did not contain this button's visible text
+        ("Theme" plus the "T" shortcut hint), so speech input on "Theme T" missed it. The
+        purpose is appended in a hidden span instead, and the mobile rule clips the label
+        rather than removing it, so the button keeps a name when it collapses to an icon.
+      */}
+      <button class="hf-theme-btn" type="button" id="hf-theme-toggle">
         <svg class="hf-i hf-i-sun"><use href="#i-sun" /></svg>
         <svg class="hf-i hf-i-moon"><use href="#i-moon" /></svg>
         <span>Theme</span>
         <kbd class="hf-kbd">T</kbd>
+        <span class="hf-sr">— switch between light and dark</span>
       </button>
-      <a class="hf-owner" href="/" aria-label={`${cfg.owner.name} (@${cfg.owner.handle}) — overview`}>
+      {/*
+        No aria-label: an aria-label replaces the accessible name outright, and one that did
+        not contain the visible text ("Kieran Wood @kieran") failed WCAG 2.5.3 Label in Name —
+        speech-input users saying what they can see would not match the link. The purpose is
+        appended in a visually hidden span instead, so the accessible name still *starts with*
+        the visible text. On mobile `.hf-owner-text` is hidden with the same clip technique
+        rather than `display: none`, so the name survives there too (see global.css).
+      */}
+      <a class="hf-owner" href="/">
         <span class="hf-avatar" aria-hidden="true">{initials(cfg.owner.name)}</span>
         <span class="hf-owner-text"><strong>{cfg.owner.name}</strong><span>@{cfg.owner.handle}</span></span>
+        <span class="hf-sr">— overview</span>
       </a>
     </div>
   </div>

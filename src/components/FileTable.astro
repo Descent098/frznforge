@@ -3,7 +3,7 @@
  * File listing table for a directory of a ref: dirs first, name links to tree/blob pages,
  * last-commit subject links to the commit page, heat-coloured age. Optional ".." parent row.
  */
-import { blobUrl, commitUrl, treeUrl } from '../lib/routes';
+import { blobUrl, commitUrl, isRawServable, treeUrl } from '../lib/routes';
 import { heatFor, relativeTime } from '../lib/site';
 import type { Repo, TreeEntry } from '../lib/data/schema';
 
@@ -20,7 +20,16 @@ const now = new Date();
 const sorted = [...entries].sort(
   (a, b) => Number(b.type === 'tree') - Number(a.type === 'tree') || a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }),
 );
-const hrefFor = (e: TreeEntry) => (e.type === 'tree' ? treeUrl(repo.slug, refName, e.path) : e.type === 'commit' ? null : blobUrl(repo.slug, refName, e.path));
+/**
+ * Why a row may not be a link: a submodule has no page here at all, and a path holding
+ * `#`/`%` has no URL a static host can round-trip (`isRawServable` — ingest warned with
+ * `repo-path-unservable`). Both still list, so the tree stays an honest view of the commit.
+ */
+type Unlinkable = 'submodule' | 'unservable';
+const unlinkable = (e: TreeEntry): Unlinkable | null =>
+  e.type === 'commit' ? 'submodule' : !isRawServable(e.path) ? 'unservable' : null;
+const hrefFor = (e: TreeEntry) =>
+  unlinkable(e) ? null : e.type === 'tree' ? treeUrl(repo.slug, refName, e.path) : blobUrl(repo.slug, refName, e.path);
 ---
 <div class="hf-card hf-files">
   <table>
@@ -36,6 +45,7 @@ const hrefFor = (e: TreeEntry) => (e.type === 'tree' ? treeUrl(repo.slug, refNam
       {sorted.map((e) => {
         const c = repo.commits[e.lastCommit];
         const href = hrefFor(e);
+        const why = unlinkable(e);
         return (
           <tr>
             <td>
@@ -43,8 +53,15 @@ const hrefFor = (e: TreeEntry) => (e.type === 'tree' ? treeUrl(repo.slug, refNam
                 <a href={href} class={`hf-fname${e.type === 'tree' ? ' is-dir' : ''}`}>
                   <svg class="hf-i"><use href={e.type === 'tree' ? '#i-folder' : '#i-file'} /></svg>{e.name}
                 </a>
-              ) : (
+              ) : why === 'submodule' ? (
                 <span class="hf-fname"><svg class="hf-i"><use href="#i-package" /></svg>{e.name} <small class="hf-muted">(submodule)</small></span>
+              ) : (
+                <span
+                  class={`hf-fname${e.type === 'tree' ? ' is-dir' : ''}`}
+                  title={`'${e.name}' contains a character (# or %) that a static URL cannot round-trip, so it has no page here.`}
+                >
+                  <svg class="hf-i"><use href={e.type === 'tree' ? '#i-folder' : '#i-file'} /></svg>{e.name} <small class="hf-muted">(not linkable)</small>
+                </span>
               )}
             </td>
             <td class="hf-fmsg">{c ? <a href={commitUrl(repo.slug, c.sha)}>{c.subject}</a> : ''}</td>

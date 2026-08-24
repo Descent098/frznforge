@@ -381,8 +381,24 @@ annotated-tag derivation, newest first either way. `SiteRelease.source` (`'provi
 | `notes-dir-missing`         | site  | A configured `notes.dir` does not exist or is not a directory. No notes were collected; the build continues and `/notes/` renders empty. Only raised when the config declares a `notes` block — a site that never opted into notes is not warned about the defaulted folder being absent. |
 | `note-slug-collision`       | site  | Two notes slugified to the same value; the later one in walk order was suffixed `-2`, `-3`, … `repo` is `null`. |
 | `note-file-unservable`      | site  | A note file's name contains `#` or `%`, which no static raw URL can round-trip (the build escapes `#` in the emitted filename, and `%` aborts the build outright). The file is still collected, stored and rendered inline; it just gets no `/notes/<slug>/raw/<path>` route and no Raw/Download link. `repo` is `null`. |
+| `repo-path-unservable`     | repo  | A committed path (or a ref name) contains `#` or `%`, which no static URL can round-trip — same cause as `note-file-unservable`. The path is still ingested and still listed in the file table, but gets no `tree`/`blob`/`raw` route and is rendered unlinked. A ref whose name is affected loses the whole ref's file routes. |
 | `org-unknown-repo`          | site  | An `organizations[].repos` entry names a slug no ingested repo has (typo, or the repo was removed/skipped). The entry is dropped from `Organization.repos`. |
 | `repo-unknown-org`          | repo  | A repo source declares `org: '<slug>'` that is not in `organizations[]`. The repo joins no org. `repo` holds the repo's slug. |
+
+### Path encoding in repo routes
+
+`tree`, `blob` and `raw` URLs carry a committed path, which — like a note file name — is not
+a slug: spaces, `&`, `+`, `;` and non-ASCII are all legal in git. Every segment is
+percent-encoded (`docs/read me.md` → `/repos/x/blob/main/docs/read%20me.md/`) while `/` stays
+literal, so the tree structure survives; the ref slug is encoded the same way (`~` is
+unreserved, so ordinary refs are unchanged).
+
+`#` and `%` survive no static round-trip — the build writes `c%23-tips.md` to disk, so even a
+correctly encoded request misses, and a literal `%` is invalid percent-encoding that aborts
+the build. Paths and refs holding either get no route at all: `isRawServable()` in
+`src/lib/routes.ts` gates `treeRoutes`/`blobRoutes`/`rawRoutes`, ingest raises
+`repo-path-unservable`, and the file table lists the entry unlinked rather than emitting a
+dead href. This is the same rule the notes side applies — see `note-file-unservable`.
 
 ## Notes (schema v4)
 
@@ -525,7 +541,10 @@ releaseMode? }`. The site config's `overrides` for that repo win field-by-field.
   `repo-unknown-org`; new config `notes.{dir,useMtime,maxFileBytes}`, `organizations[]`,
   `content.orgs`, and `org?` on every repo source; note content shares the existing `blobs/`
   store, keyed by `sha1('note <len>\0' + bytes)` so a note key can never collide with a git
-  object id. Fifth new warning: `note-file-unservable`.
+  object id. Fifth new warning: `note-file-unservable`; sixth, `repo-path-unservable` (the
+  same `#`/`%` rule applied to committed repo paths and ref names — see "Path encoding in
+  repo routes"). Both were added additively inside v4 rather than bumping: they widen the
+  `WarningCode` enum only, and `data/` is regenerated from scratch on every build.
 - **v3** — remote sources: `RepoSource` gains `github` / `gitlab` / `gitea` / `forgejo`
   variants (`host`, `owner`+`repo` or `project`, `webUrl`, `cloneUrl`); `Repo.releases`
   (`Release[]`, with `ReleaseAsset[]`); `Repo.releaseMode` widened to `'tags' | 'provider'`;
