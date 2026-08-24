@@ -1,0 +1,107 @@
+---
+/**
+ * /notes/ — every gist-style note, newest first (the artifact's own `compareNotes` order).
+ *
+ * Deliberately a PLAIN STATIC LIST, not a Svelte island: notes are a handful of hand-written
+ * files, they arrive pre-sorted newest-first, and the Ctrl+K palette already indexes note
+ * titles and tags — a second filter box here would duplicate it for a list that fits on one
+ * screen. Nothing on this page needs JavaScript.
+ *
+ * The page always exists, even with no notes (`NOTES_INDEX_URL` is unconditional in
+ * `allRoutes`), so the empty state has to say where notes come from.
+ */
+import Base from '../../layouts/Base.astro';
+import { getData } from '../../lib/site';
+import { formatBytes, heatClass, heatFor, isoDay, relativeTime } from '../../lib/format';
+import { noteUrl } from '../../lib/routes';
+import '../../styles/notes.css';
+
+const data = await getData();
+const notes = data.notes;
+/** Heat is relative to build time, like the repo listing (`src/pages/repos/index.astro`). */
+const now = new Date();
+
+/** How many file names to name on a card before collapsing the rest into "+N more". */
+const FILES_SHOWN = 4;
+
+---
+<Base
+  title="Notes"
+  description={`${notes.length} note${notes.length === 1 ? '' : 's'} — snippets, cheatsheets and single-file writing.`}
+  active="notes"
+>
+  <div class="hf-container">
+    <header class="hf-page-head">
+      <h1>Notes</h1>
+      <p>
+        {notes.length} note{notes.length === 1 ? '' : 's'} · snippets, cheatsheets and small
+        multi-file gists. Newest first; heat = how recently each one was written.
+      </p>
+    </header>
+
+    {notes.length === 0 ? (
+      <div class="hf-empty">
+        <svg class="hf-i" aria-hidden="true"><use href="#i-note" /></svg>
+        <p>
+          <strong>No notes yet.</strong> Drop a markdown file into <code>content/notes/</code> for a
+          single-file note, or a folder of files for a multi-file one, then run
+          <code>npm run ingest</code>.
+        </p>
+      </div>
+    ) : (
+      <ul class="hf-note-list">
+        {notes.map((note) => {
+          const shown = note.files.slice(0, FILES_SHOWN);
+          const hidden = note.files.length - shown.length;
+          // One bucket drives both the card's heat rail (`heat-*`, like `.hf-repo-card`) and
+          // the date's text colour (`t-*`), so they can never disagree.
+          const heat = heatFor(note.date, now);
+          return (
+            <li>
+              <article class={`hf-note-card heat-${heat}`}>
+                <div class="hf-note-card-top">
+                  <span class="hf-note-card-icon" aria-hidden="true">
+                    <svg class="hf-i"><use href={note.kind === 'folder' ? '#i-folder' : '#i-note'} /></svg>
+                  </span>
+                  <h2 class="hf-note-card-title"><a href={noteUrl(note.slug)}>{note.title}</a></h2>
+                  {note.date ? (
+                    <time class={`hf-age ${heatClass(heat)}`} datetime={note.date} title={isoDay(note.date)}>
+                      {relativeTime(note.date, now)}
+                    </time>
+                  ) : (
+                    <span class={`hf-age ${heatClass(heat)}`}>undated</span>
+                  )}
+                </div>
+
+                {note.description && <p class="hf-note-desc">{note.description}</p>}
+
+                {note.tags.length > 0 && (
+                  <ul class="hf-note-tags" aria-label={`Tags for ${note.title}`}>
+                    {note.tags.map((tag) => <li><span class="hf-tag">{tag}</span></li>)}
+                  </ul>
+                )}
+
+                <ul class="hf-note-files" aria-label={`Files in ${note.title}`}>
+                  <li class="hf-note-kind">
+                    {note.kind === 'folder'
+                      ? `${note.files.length} file${note.files.length === 1 ? '' : 's'}`
+                      : 'single file'}
+                    {' · '}
+                    {formatBytes(note.totalBytes)}
+                  </li>
+                  {shown.map((file) => (
+                    <li>
+                      <code>{file.path}</code>
+                      {file.language && <span class="hf-badge hf-lang-badge">{file.language}</span>}
+                    </li>
+                  ))}
+                  {hidden > 0 && <li class="hf-note-more">+{hidden} more</li>}
+                </ul>
+              </article>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </div>
+</Base>

@@ -1,0 +1,32 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+  # Ingest walks history; Netlify shallow-clones unless told otherwise.
+  GIT_LFS_ENABLED = "false"
+
+[[headers]]
+  for = "/blobs/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Content-Security-Policy = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'"
+
+# Astro emits <route>/index.html; ask Netlify to keep the slash rather than stripping it.
+[[redirects]]
+  from = "/*"
+  to = "/:splat/"
+  status = 301
+  force = false

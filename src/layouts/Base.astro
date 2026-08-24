@@ -14,8 +14,8 @@ import { getConfig, getData } from '../lib/site';
 interface Props {
   title: string;
   description?: string;
-  /** Which primary nav item is current. */
-  active?: 'profile' | 'repos' | null;
+  /** Which primary nav item is current. `'notes'` / `'orgs'` were added in schema v4. */
+  active?: 'profile' | 'repos' | 'notes' | 'orgs' | null;
 }
 const { title, description, active = null } = Astro.props;
 const cfg = await getConfig();
@@ -46,7 +46,12 @@ const fullTitle = title === cfg.site.title ? title : `${title} · ${cfg.site.tit
     <IconSprite />
     <CommandPalette client:load />
     <div class="hf-shell">
-      <Sidebar active={active} repoCount={data.repos.length} />
+      <Sidebar
+        active={active}
+        repoCount={data.repos.length}
+        noteCount={data.notes.length}
+        orgCount={data.organizations.length}
+      />
       <main class="hf-main" id="main">
         <slot />
         <footer class="hf-footer">

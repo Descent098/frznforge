@@ -1,0 +1,168 @@
+---
+/**
+ * One file of a note, rendered as a card.
+ *
+ * This is the note-side mirror of the repo blob viewer
+ * (`src/pages/repos/[slug]/blob/[ref]/[...path].astro`): same `.hf-blob` card, same meta row,
+ * same Raw / Download / Copy path affordances, same Shiki gutter, same binary / too-large
+ * fallback, and the same no-JS Preview/Source radio toggle for markdown. A note page stacks
+ * several of these, which is the one structural difference: the blob page can key its toggle
+ * CSS off the fixed ids `#hf-md-preview` / `#hf-md-source`, while here every card needs its
+ * own radio group. The state rules therefore live in `src/styles/notes.css` keyed off the
+ * `hf-nv-*` classes rather than off ids.
+ *
+ * Markdown is rendered TRUSTED (the `renderMarkdown` default). Notes are the site owner's own
+ * files on their own disk — `notes.dir` is not something a third party can push to — which is
+ * exactly the condition `isTrustedSource` (src/lib/markdown.ts) checks for repos. Nothing here
+ * ever came off someone else's forge, so raw HTML in a note is the author's own HTML.
+ */
+import { isRawServable, noteRawUrl } from '../lib/routes';
+import { readBlob } from '../lib/data/load';
+import { splitFrontmatter, stripLeadingHeading } from '../lib/frontmatter';
+import { countLines, highlightToHtml } from '../lib/highlight';
+import { renderMarkdown } from '../lib/markdown';
+import { formatBytes, formatInt, getConfig } from '../lib/site';
+import type { NoteFile } from '../lib/data/schema';
+
+interface Props {
+  /** Slug of the note this file belongs to — used to build the raw URL. */
+  slug: string;
+  /**
+   * The note's title, as the page prints it in its one `<h1>`. Used to decide whether this
+   * file's opening heading is that title repeating itself — see `stripLeadingH1`.
+   */
+  noteTitle: string;
+  file: NoteFile;
+  /** Fragment id for this file's section; the note page's table of contents links to it. */
+  anchor: string;
+  /**
+   * Discriminator for this card's radio group. Must be unique within the page, because two
+   * cards sharing a `name` would toggle each other.
+   */
+  group: string;
+}
+const { slug, noteTitle, file, anchor, group } = Astro.props;
+const cfg = await getConfig();
+
+/** Same ceilings as the repo blob viewer: past these, show plain text instead of Shiki. */
+const HIGHLIGHT_MAX_BYTES = 500 * 1024;
+const HIGHLIGHT_MAX_LINES = 5000;
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|ico)$/i;
+
+/**
+ * Markdown as the preview renders it: no frontmatter, no duplicated title heading.
+ *
+ * Both halves come from `src/lib/frontmatter.ts`, the module ingest parses notes with, rather
+ * than from regexes of this component's own — while the two had separate ideas of where a
+ * frontmatter block ends, a `...`-terminated block parsed fine during ingest and then rendered
+ * its own metadata as prose here. Note frontmatter is metadata (title/description/date/tags),
+ * not prose, and the artifact already carries it on the `Note`; left in place, marked reads
+ * the closing `---` as a setext underline and renders `title: …` as a giant heading.
+ *
+ * The *source* view is deliberately untouched: its whole point is to show the file exactly as
+ * it is on disk, which is also what the raw endpoint serves.
+ */
+function previewSource(src: string): string {
+  return stripLeadingHeading(splitFrontmatter(src).body, noteTitle);
+}
+
+// A file with no raw route (unstored, or a name a static URL cannot round-trip) still renders
+// inline; it just has nothing to link Raw / Download / an <img> at.
+const raw = file.stored && isRawServable(file.path) ? noteRawUrl(slug, file.path) : null;
+const showImage = raw !== null && IMAGE_EXT.test(file.path);
+const isMarkdown = file.markdown && !file.binary && file.stored && !showImage;
+
+/** Text content (stored, non-binary files only). */
+const text = file.stored && !file.binary ? readBlob(cfg.outDir, file.sha) : null;
+const lineCount = text !== null ? countLines(text) : null;
+const tooBigToHighlight = text !== null && (file.size > HIGHLIGHT_MAX_BYTES || (lineCount ?? 0) > HIGHLIGHT_MAX_LINES);
+
+const codeHtml = text !== null && !tooBigToHighlight && !isMarkdown && !showImage
+  ? await highlightToHtml(text, file.language, file.path)
+  : null;
+const mdPreviewHtml = isMarkdown && text !== null ? renderMarkdown(previewSource(text)) : null;
+const mdSourceHtml = isMarkdown && text !== null && !tooBigToHighlight
+  ? await highlightToHtml(text, 'Markdown', file.path)
+  : null;
+
+const previewId = `hf-nv-${group}-preview`;
+const sourceId = `hf-nv-${group}-source`;
+---
+<section class="hf-note-file" id={anchor} aria-labelledby={`${anchor}-name`}>
+  <div class="hf-card hf-blob">
+    {isMarkdown && mdSourceHtml && (
+      <>
+        <input type="radio" name={`hf-nv-${group}`} id={previewId} class="hf-mdview-input hf-nv-input hf-nv-input--preview" checked />
+        <input type="radio" name={`hf-nv-${group}`} id={sourceId} class="hf-mdview-input hf-nv-input hf-nv-input--source" />
+      </>
+    )}
+
+    <div class="hf-blob-head hf-note-file-head">
+      <h2 class="hf-note-file-name" id={`${anchor}-name`}>
+        <svg class="hf-i" aria-hidden="true"><use href="#i-file" /></svg>
+        <a href={`#${anchor}`}>{file.path}</a>
+      </h2>
+      <div class="hf-blob-meta">
+        {lineCount !== null && <span><b>{formatInt(lineCount)}</b> lines</span>}
+        {lineCount !== null && <span class="hf-dot">·</span>}
+        <span>{formatBytes(file.size)}</span>
+        {file.language && <span class="hf-badge hf-lang-badge">{file.language}</span>}
+        {file.binary && <span class="hf-badge">binary</span>}
+        {file.tooLarge && <span class="hf-badge">too large</span>}
+      </div>
+      <div class="hf-blob-actions">
+        {isMarkdown && mdSourceHtml && (
+          <span class="hf-seg hf-mdview-seg" role="group" aria-label={`View ${file.path} as`}>
+            <label for={previewId} class="hf-mdview-lbl hf-nv-lbl hf-nv-lbl--preview">Preview</label>
+            <label for={sourceId} class="hf-mdview-lbl hf-nv-lbl hf-nv-lbl--source">Source</label>
+          </span>
+        )}
+        {raw && <a class="hf-btn hf-btn--sm" href={raw}>Raw</a>}
+        {raw && <a class="hf-btn hf-btn--sm" href={raw} download={file.name}><svg class="hf-i" aria-hidden="true"><use href="#i-download" /></svg> Download</a>}
+        <button type="button" class="hf-btn hf-btn--sm" data-copy={file.path} aria-label={`Copy path of ${file.path}`}><svg class="hf-i" aria-hidden="true"><use href="#i-copy" /></svg> Copy path</button>
+      </div>
+    </div>
+
+    {isMarkdown && mdSourceHtml ? (
+      <>
+        <div class="hf-blob-body hf-nv-preview">
+          <div class="hf-md hf-blob-md" set:html={mdPreviewHtml} />
+        </div>
+        <div class="hf-blob-body hf-nv-source">
+          <div class="hf-code" set:html={mdSourceHtml} />
+        </div>
+      </>
+    ) : isMarkdown ? (
+      // Markdown too large to highlight: the preview still renders, there is just nothing to
+      // toggle to, so no radios are emitted and no toggle is offered.
+      <div class="hf-blob-body">
+        <div class="hf-md hf-blob-md" set:html={mdPreviewHtml} />
+      </div>
+    ) : showImage ? (
+      <div class="hf-blob-body hf-blob-image">
+        <img src={raw} alt={file.name} />
+      </div>
+    ) : codeHtml ? (
+      <div class="hf-blob-body">
+        <div class="hf-code" set:html={codeHtml} />
+      </div>
+    ) : text !== null ? (
+      <div class="hf-blob-body">
+        <p class="hf-code-note">Syntax highlighting skipped — file exceeds {formatInt(HIGHLIGHT_MAX_LINES)} lines / {formatBytes(HIGHLIGHT_MAX_BYTES)}.</p>
+        <div class="hf-code"><pre class="hf-code-plain"><code>{text}</code></pre></div>
+      </div>
+    ) : (
+      <div class="hf-blob-body">
+        <div class="hf-empty hf-blob-fallback">
+          <svg class="hf-i" aria-hidden="true"><use href="#i-file" /></svg>
+          {file.tooLarge ? (
+            <p><strong>File too large to display.</strong> {formatBytes(file.size)}.</p>
+          ) : (
+            <p><strong>Binary file</strong> · {formatBytes(file.size)}</p>
+          )}
+          {raw && <a class="hf-btn" href={raw} download={file.name}><svg class="hf-i" aria-hidden="true"><use href="#i-download" /></svg> Download</a>}
+        </div>
+      </div>
+    )}
+  </div>
+</section>

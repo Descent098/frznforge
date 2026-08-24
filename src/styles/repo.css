@@ -126,6 +126,34 @@
   }
 }
 
+/* Comment contrast in dark mode.
+   github-dark paints comments #6A737D, which was chosen against that theme's own near-black
+   background. On Hearth's warmer dark surface (--hf-surface, #221b17) it lands at 3.5:1 —
+   under the 4.5:1 WCAG AA floor, so every code comment on the site failed the axe
+   color-contrast check. Comments are the part of a file a reader most needs when skimming
+   unfamiliar code, so they cannot be the least legible thing on the page.
+
+   #8b949e is github's own lighter comment grey and reaches 5.5:1 here. Matching on the inline
+   style is the only handle available — shiki bakes theme colours into `style` and gives comment
+   spans no class. If shiki ever changes that literal the selector simply stops matching, which
+   is the pre-existing behaviour, not a broken page.
+
+   This sets `color`, NOT `--shiki-dark`: the custom property is declared in the span's own
+   `style` attribute, and an inline declaration beats any stylesheet rule, so redefining the
+   variable here would silently lose. `color` is only ever set by the rules above, so the extra
+   attribute selector is enough to win on specificity.
+
+   Light mode needs no fix — #6A737D on white is 4.9:1 — so both dark mechanisms are matched
+   individually rather than restyling the token globally. */
+:root[data-theme="dark"] .hf-code .shiki span[style*="--shiki-dark:#6A737D"] {
+  color: #8b949e;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .hf-code .shiki span[style*="--shiki-dark:#6A737D"] {
+    color: #8b949e;
+  }
+}
+
 /* ---- markdown preview/source toggle (no JS: radio inputs) ---------------- */
 .hf-mdview-input {
   position: absolute;

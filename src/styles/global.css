@@ -25,6 +25,8 @@
   --hf-ember-2: #ff8a3d;
   --hf-ember-soft: rgba(234, 90, 20, 0.12);
   --hf-amber: #d98c12;
+  /* Warm ramp's far end. Deliberately palette-independent, like the ramp it belongs to. */
+  --hf-amber-2: #f4c35a;
   --hf-amber-soft: rgba(217, 140, 18, 0.14);
   --hf-neutral: #8c8a86;
   --hf-neutral-soft: rgba(140, 138, 134, 0.16);
@@ -222,6 +224,21 @@
     radial-gradient(640px 360px at 100% 100%, rgba(255, 138, 76, 0.18), transparent 70%),
     linear-gradient(120deg, rgba(31, 127, 214, 0.05), transparent 40%, rgba(242, 106, 43, 0.04));
 }
+
+/* ==========================================================================
+   Heat ramp — age as temperature.
+
+   Keyed off the `heat-*` class alone, with no component in the selector, so every card type
+   (repo, note, organization) reads the ramp from one place. A card opts in by carrying
+   `heat-<bucket>` from `heatFor()` and painting `var(--heat)` / `var(--heat-soft)`; the
+   buckets themselves are defined once here. Three near-identical copies of this ramp — one
+   per stylesheet — is exactly how the warm end came to drift out of the token system.
+   ========================================================================== */
+.heat-hot { --heat: linear-gradient(90deg, var(--hf-ember), var(--hf-ember-2)); --heat-soft: var(--hf-ember-soft); }
+.heat-warm { --heat: linear-gradient(90deg, var(--hf-amber), var(--hf-amber-2)); --heat-soft: var(--hf-amber-soft); }
+.heat-neutral { --heat: var(--hf-neutral); --heat-soft: var(--hf-neutral-soft); }
+.heat-cool { --heat: linear-gradient(90deg, var(--hf-ice-2), var(--hf-ice)); --heat-soft: var(--hf-ice-soft); }
+.heat-cold { --heat: linear-gradient(90deg, var(--hf-ice), var(--hf-ice-2)); --heat-soft: var(--hf-ice-soft); }
 
 /* ---- reset-ish ---------------------------------------------------------- */
 *, *::before, *::after { box-sizing: border-box; }
@@ -639,10 +656,6 @@ code, kbd, pre { font-family: var(--hf-mono); }
   pointer-events: none;
 }
 .hf-repo-card:hover { transform: translateY(-2px); box-shadow: var(--hf-shadow-lg); border-color: var(--hf-border-strong); }
-.hf-repo-card.heat-hot { --heat: linear-gradient(90deg, var(--hf-ember), var(--hf-ember-2)); --heat-soft: var(--hf-ember-soft); }
-.hf-repo-card.heat-warm { --heat: linear-gradient(90deg, var(--hf-amber), #f4c35a); --heat-soft: var(--hf-amber-soft); }
-.hf-repo-card.heat-neutral { --heat: var(--hf-neutral); --heat-soft: var(--hf-neutral-soft); }
-.hf-repo-card.heat-cold { --heat: linear-gradient(90deg, var(--hf-ice), var(--hf-ice-2)); --heat-soft: var(--hf-ice-soft); }
 .hf-repo-card > * { position: relative; }
 .hf-repo-top { display: flex; align-items: center; gap: 10px; }
 .hf-repo-top .hf-repo-icon {
@@ -1086,7 +1099,6 @@ code, kbd, pre { font-family: var(--hf-mono); }
    Site additions (Phase 2): listing, facets, pager, empty/404, banners
    ========================================================================== */
 .t-cool { color: var(--hf-ice-2); }
-.hf-repo-card.heat-cool { --heat: linear-gradient(90deg, var(--hf-ice-2), var(--hf-ice)); --heat-soft: var(--hf-ice-soft); }
 .hf-muted { color: var(--hf-text-3); }
 .hf-count--plain { font-size: 11.5px; color: var(--hf-text-3); font-weight: 500; }
 

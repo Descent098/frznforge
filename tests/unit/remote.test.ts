@@ -601,7 +601,7 @@ describe('prepareRemote', () => {
     // The end-to-end guarantee: this repo can be written to disk.
     await expect(
       writeArtifact(
-        { schemaVersion: SCHEMA_VERSION, repos: [scanned.repo], warnings: [] },
+        { schemaVersion: SCHEMA_VERSION, repos: [scanned.repo], notes: [], organizations: [], warnings: [] },
         new Map(),
         new Map(),
         tempDir('out'),

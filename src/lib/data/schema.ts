@@ -10,11 +10,14 @@
  *    updates the snapshot fixtures + sync tests in the same change.
  *  - The artifact is deterministic: same repos at the same commits → byte-identical JSON.
  *    Nothing in here is a wall-clock timestamp; all dates come from git.
- *  - Only committed content is ever represented. Ingest never reads the working tree.
+ *  - Only committed content is ever represented for *repositories*. Ingest never reads a
+ *    repository's working tree. Notes (schema v4) are the one deliberate exception: they are
+ *    a plain folder on disk, not a git repo, so reading them from disk *is* the source of
+ *    truth. The rule is about git repos, not about the filesystem.
  */
 import { z } from 'astro/zod';
 
-export const SCHEMA_VERSION = 3 as const;
+export const SCHEMA_VERSION = 4 as const;
 
 /* ---- primitives -------------------------------------------------------- */
 
@@ -261,6 +264,19 @@ export const WarningCode = z.enum([
   'remote-rate-limited',
   /** A previously fetched mirror/cache was used without refreshing (`ingest.fetch: 'never'` or a failed fetch). */
   'remote-cache-stale',
+  /** Two notes resolved to the same slug; the later one (walk order) was suffixed (schema v4). */
+  'note-slug-collision',
+  /** `notes.dir` does not exist or is not a directory; no notes were collected (schema v4). */
+  'notes-dir-missing',
+  /**
+   * A note file's name contains `#` or `%`, which a static raw URL cannot round-trip; the file
+   * still renders on the note page but gets no raw/download route (schema v4).
+   */
+  'note-file-unservable',
+  /** An `organizations[].repos` entry names a slug no ingested repo has; ignored (schema v4). */
+  'org-unknown-repo',
+  /** A repo source declares `org` naming an organization that is not configured; ignored (schema v4). */
+  'repo-unknown-org',
 ]);
 export type WarningCode = z.infer<typeof WarningCode>;
 
@@ -414,12 +430,101 @@ export const Repo = z.object({
 });
 export type Repo = z.infer<typeof Repo>;
 
+/* ---- notes (schema v4) --------------------------------------------------- */
+
+/**
+ * One file belonging to a note.
+ *
+ * Deliberately the same shape as `FileInfo` plus `name` and `markdown`, so the note viewer
+ * can reuse the repo file viewer's rendering (binary fallback, "too large" fallback, Shiki
+ * language) without a translation layer.
+ *
+ * `sha` is the sha1 of the file's raw bytes and is the key into the same content-addressed
+ * blob store as repo files (`<outDir>/blobs/<sha>`). That is NOT a git blob object id — git
+ * hashes a `blob <len>\0` header first — so a note and a repo file with identical content
+ * are stored twice. Accepted: notes are few, and the alternative is faking git object ids
+ * for content that never was in git.
+ */
+export const NoteFile = z.object({
+  /** Last path segment, e.g. "snippet.py". */
+  name: z.string(),
+  /** Path relative to the note root, forward slashes, no leading slash. For a single-file note this equals `name`. */
+  path: z.string(),
+  /** sha1 of the raw bytes — the blob store key when `stored` is true. */
+  sha: Sha,
+  size: z.number().int().nonnegative(),
+  binary: z.boolean(),
+  /** Over `notes.maxFileBytes` (defaults to `ingest.maxBlobBytes`); content not stored. */
+  tooLarge: z.boolean(),
+  /** Content was written to `<outDir>/blobs/<sha>`. */
+  stored: z.boolean(),
+  /** Detected language name (same extension/filename map as repo files) or null. */
+  language: z.string().nullable(),
+  /** True for markdown files — the viewer offers the preview/source toggle for these. */
+  markdown: z.boolean(),
+});
+export type NoteFile = z.infer<typeof NoteFile>;
+
+/**
+ * A gist-style note: one file, or one folder of files, under `notes.dir`.
+ *
+ * `date` is `IsoDate` like everything else in the artifact, so a `YYYY-MM-DD` frontmatter
+ * value is normalised to midnight UTC (`2026-08-23` → `2026-08-23T00:00:00Z`). It comes from
+ * frontmatter only unless `notes.useMtime` is set — filesystem mtimes are not reproducible
+ * across checkouts, so opting into them opts out of a byte-identical artifact.
+ */
+export const Note = z.object({
+  /** URL slug: the file/folder name (extension dropped) slugified. Collisions are suffixed `-2`, `-3`, … */
+  slug: Slug,
+  /** Frontmatter `title`, else the first H1 of the first markdown file, else the humanised name. */
+  title: z.string(),
+  description: z.string().nullable(),
+  tags: z.array(z.string()),
+  /** Frontmatter date (normalised to UTC), or the mtime when `notes.useMtime` is on, else null. */
+  date: IsoDate.nullable(),
+  /** `'file'` = a single file directly in `notes.dir`; `'folder'` = a sub-folder and everything under it. */
+  kind: z.enum(['file', 'folder']),
+  /** Every file in the note, sorted by path. Exactly one entry when `kind` is `'file'`. */
+  files: z.array(NoteFile),
+  /** Sum of `files[].size`. */
+  totalBytes: z.number().int().nonnegative(),
+});
+export type Note = z.infer<typeof Note>;
+
+/* ---- organizations (schema v4) ------------------------------------------- */
+
+/**
+ * A named grouping of repos with its own overview page.
+ *
+ * Membership is the union of two directions: the org's own `repos` list in the site config,
+ * and every repo source that declares `org: '<slug>'`. Dangling references on either side are
+ * warnings (`org-unknown-repo`, `repo-unknown-org`), never build failures.
+ */
+export const Organization = z.object({
+  slug: Slug,
+  name: z.string(),
+  description: z.string().nullable(),
+  /** Member repo slugs, sorted, de-duplicated; every one of them exists in `ForgeData.repos`. */
+  repos: z.array(Slug),
+});
+export type Organization = z.infer<typeof Organization>;
+
 /* ---- artifact ---------------------------------------------------------- */
 
+/**
+ * The artifact. **Key order is part of the contract** — `serializeForgeData` writes the
+ * object in declaration order, so the fields below are emitted as
+ * `schemaVersion`, `repos`, `notes`, `organizations`, `warnings`. `notes` and `organizations`
+ * were added after `repos` and before `warnings` in schema v4; do not reorder them.
+ */
 export const ForgeData = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   /** Sorted by slug. */
   repos: z.array(Repo),
+  /** Notes (schema v4), ordered by `date` desc with null dates last, then `title` asc. */
+  notes: z.array(Note),
+  /** Organizations (schema v4), sorted by slug. */
+  organizations: z.array(Organization),
   /** Site-level warnings (repo-level ones are also mirrored here with `repo` set). */
   warnings: z.array(Warning),
 });
@@ -432,5 +537,20 @@ export function parseForgeData(value: unknown): ForgeData {
 
 /** Empty artifact — what the site builds from when no repos are configured. */
 export function emptyForgeData(): ForgeData {
-  return { schemaVersion: SCHEMA_VERSION, repos: [], warnings: [] };
+  return { schemaVersion: SCHEMA_VERSION, repos: [], notes: [], organizations: [], warnings: [] };
+}
+
+/**
+ * Compare two notes for artifact order: newest first, notes without a date last, ties broken
+ * by title then slug (code-point order — never `localeCompare`, which depends on the build
+ * machine's ICU data). Exported so ingest and the site sort identically.
+ */
+export function compareNotes(a: Note, b: Note): number {
+  if (a.date !== b.date) {
+    if (a.date === null) return 1;
+    if (b.date === null) return -1;
+    return a.date < b.date ? 1 : -1;
+  }
+  if (a.title !== b.title) return a.title < b.title ? -1 : 1;
+  return a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0;
 }

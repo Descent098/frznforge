@@ -3,10 +3,18 @@ import { getConfig } from '../lib/site';
 import { initials, prettyUrl } from '../lib/site';
 
 interface Props {
-  active: 'profile' | 'repos' | null;
+  /** Which primary nav item is current. Pages pass `'notes'` / `'orgs'` for the schema-v4 sections. */
+  active: 'profile' | 'repos' | 'notes' | 'orgs' | null;
   repoCount: number;
+  /**
+   * Notes / organizations counts (schema v4). Optional and 0-defaulted so a caller written
+   * before Phase 6 still compiles; a section with a count of 0 is not rendered at all, since
+   * an always-empty nav entry is just a dead end for keyboard and screen-reader users.
+   */
+  noteCount?: number;
+  orgCount?: number;
 }
-const { active, repoCount } = Astro.props;
+const { active, repoCount, noteCount = 0, orgCount = 0 } = Astro.props;
 const cfg = await getConfig();
 const siteHost = cfg.site.url ? prettyUrl(cfg.site.url) : null;
 ---
@@ -31,6 +39,16 @@ const siteHost = cfg.site.url ? prettyUrl(cfg.site.url) : null;
       <a href="/repos/" aria-current={active === 'repos' ? 'page' : undefined}>
         <svg class="hf-i"><use href="#i-repo" /></svg> Repositories <span class="hf-count">{repoCount}</span>
       </a>
+      {noteCount > 0 && (
+        <a href="/notes/" aria-current={active === 'notes' ? 'page' : undefined}>
+          <svg class="hf-i"><use href="#i-note" /></svg> Notes <span class="hf-count">{noteCount}</span>
+        </a>
+      )}
+      {orgCount > 0 && (
+        <a href="/orgs/" aria-current={active === 'orgs' ? 'page' : undefined}>
+          <svg class="hf-i"><use href="#i-layers" /></svg> Organizations <span class="hf-count">{orgCount}</span>
+        </a>
+      )}
     </nav>
 
     <div class="hf-sidebar-foot">

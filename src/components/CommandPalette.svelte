@@ -27,23 +27,64 @@
 
   let actions: SearchDoc[] = $state([]);
 
-  const KIND_LABEL: Record<SearchDoc['kind'], string> = { repo: 'Repositories', file: 'Files', page: 'Pages', action: 'Actions' };
-  const KIND_ICON: Record<SearchDoc['kind'], string> = { repo: '#i-repo', file: '#i-file', page: '#i-home', action: '#i-bolt' };
+  const KIND_LABEL: Record<SearchDoc['kind'], string> = {
+    repo: 'Repositories',
+    org: 'Organizations',
+    note: 'Notes',
+    file: 'Files',
+    page: 'Pages',
+    action: 'Actions',
+  };
+  const KIND_ICON: Record<SearchDoc['kind'], string> = {
+    repo: '#i-repo',
+    org: '#i-layers',
+    note: '#i-note',
+    file: '#i-file',
+    page: '#i-home',
+    action: '#i-bolt',
+  };
+
+  /**
+   * How many docs of each kind the empty-query view shows; a kind absent from this map is
+   * hidden entirely. Files and notes are numerous and carry dates that would sort them above
+   * the repos, so the default list stays a short "where do I go" menu — the Notes /
+   * Organizations index pages are in it as `page` docs.
+   *
+   * Quotas rather than one flat `slice`: organizations carry no `date`, so under a single
+   * recency sort every dated repo (plus the actions and page docs, which come first in the
+   * array) pushed them past the cut and the ORGANIZATIONS group never appeared at all.
+   */
+  const DEFAULT_VIEW_QUOTA: Partial<Record<SearchDoc['kind'], number>> = {
+    action: 2,
+    repo: 5,
+    org: 3,
+    page: 4,
+  };
 
   const results: ScoredDoc[] = $derived.by(() => {
     const all = [...actions, ...(docs ?? [])];
     if (!query.trim()) {
-      // empty query: show pages, repos (by recency) and actions
-      const dflt = all.filter((d) => d.kind !== 'file');
+      // empty query: actions, repos (by recency), organizations and the index pages
+      const left = new Map<SearchDoc['kind'], number>(
+        Object.entries(DEFAULT_VIEW_QUOTA) as Array<[SearchDoc['kind'], number]>,
+      );
+      const dflt = all.filter((d) => left.has(d.kind));
       dflt.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
-      return dflt.slice(0, 9).map((doc) => ({ doc, score: 0 }));
+      const out: ScoredDoc[] = [];
+      for (const doc of dflt) {
+        const remaining = left.get(doc.kind)!;
+        if (remaining === 0) continue;
+        left.set(doc.kind, remaining - 1);
+        out.push({ doc, score: 0 });
+      }
+      return out;
     }
     return search(all, query, 12);
   });
 
   /** Group results for display while preserving rank order inside groups. */
   const groups = $derived.by(() => {
-    const order: SearchDoc['kind'][] = ['action', 'repo', 'file', 'page'];
+    const order: SearchDoc['kind'][] = ['action', 'repo', 'org', 'note', 'file', 'page'];
     return order
       .map((kind) => ({ kind, label: KIND_LABEL[kind], items: results.filter((r) => r.doc.kind === kind) }))
       .filter((g) => g.items.length > 0);
@@ -127,8 +168,8 @@
           bind:value={query}
           onkeydown={onKeydown}
           type="text"
-          placeholder="Search repos, files, actions…"
-          aria-label="Search repos, files and actions"
+          placeholder="Search repos, notes, files, actions…"
+          aria-label="Search repositories, notes, organizations, files and actions"
           autocomplete="off"
           spellcheck="false"
         />

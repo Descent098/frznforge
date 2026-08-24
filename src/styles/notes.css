@@ -1,0 +1,152 @@
+/* ==========================================================================
+   frznforge — notes (schema v4). Hearth design, `hf-` prefix, tokens from global.css.
+
+   Imported by the notes PAGES rather than by Base.astro, so the rest of the site does not
+   pay for it. Everything here is either a new `hf-note-*` / `hf-nv-*` block or a narrow
+   override of a shared class inside one of those blocks — nothing redefines a global.
+   ========================================================================== */
+
+/* ---- notes index --------------------------------------------------------- */
+
+.hf-note-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Same card language as `.hf-repo-card` (heat rail on top, soft wash under it), laid out
+   as a wide row instead of a grid tile: a note has prose, not a language bar. */
+.hf-note-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 20px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--hf-border);
+  background: var(--hf-surface);
+  box-shadow: var(--hf-shadow);
+  overflow: hidden;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s;
+}
+.hf-note-card::before {
+  content: "";
+  position: absolute; left: 0; right: 0; top: 0; height: 4px;
+  background: var(--heat, var(--hf-neutral));
+}
+.hf-note-card::after {
+  content: "";
+  position: absolute; left: 0; right: 0; top: 4px; height: 28px;
+  background: linear-gradient(180deg, var(--heat-soft, transparent), transparent);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.hf-note-card:hover { transform: translateY(-2px); box-shadow: var(--hf-shadow-lg); border-color: var(--hf-border-strong); }
+.hf-note-card > * { position: relative; }
+/* `heat-*` itself is defined once in global.css; the card only consumes --heat/--heat-soft. */
+
+.hf-note-card-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hf-note-card-icon {
+  width: 30px; height: 30px; border-radius: 9px;
+  display: grid; place-items: center;
+  background: var(--hf-canvas); border: 1px solid var(--hf-border);
+  color: var(--hf-text-2);
+  flex: none;
+}
+.hf-note-card-title { font-size: 16px; font-weight: 680; letter-spacing: -0.01em; min-width: 0; }
+.hf-note-card-title a { color: var(--hf-text); }
+.hf-note-card-title a:hover { color: var(--hf-accent); }
+.hf-note-card-top .hf-age { margin-left: auto; font-size: 12.5px; }
+.hf-note-desc { color: var(--hf-text-2); font-size: 13.5px; max-width: 80ch; }
+
+.hf-note-tags { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.hf-note-tags:empty { display: none; }
+/* Note tags are labels, not links — cancel the shared `.hf-tag` hover affordance. */
+.hf-note-tags .hf-tag:hover { background: var(--hf-ice-soft); color: var(--hf-ice); }
+
+.hf-note-files {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: auto; padding-top: 12px;
+  border-top: 1px solid var(--hf-border);
+  font-size: 12.5px; color: var(--hf-text-2);
+  list-style: none;
+}
+.hf-note-files li { display: inline-flex; align-items: center; gap: 6px; }
+.hf-note-files code { font-family: var(--hf-mono); font-size: 12px; color: var(--hf-text); }
+.hf-note-files .hf-note-kind { color: var(--hf-text-3); margin-right: 4px; white-space: nowrap; }
+.hf-note-files .hf-note-more { color: var(--hf-text-3); }
+.hf-note-files .hf-dot { color: var(--hf-text-3); }
+
+/* ---- one note ------------------------------------------------------------ */
+
+.hf-note-backlink { font-size: 13px; margin-bottom: 10px; }
+.hf-note-backlink a { display: inline-flex; align-items: center; gap: 6px; color: var(--hf-text-2); font-weight: 560; }
+.hf-note-backlink a:hover { color: var(--hf-ice); }
+
+.hf-note-head { display: flex; flex-direction: column; gap: 10px; }
+.hf-note-head h1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hf-note-head > p { color: var(--hf-text-2); font-size: 15px; max-width: 74ch; }
+.hf-note-meta {
+  display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap;
+  list-style: none; margin: 0; padding: 0;
+  font-size: 13px; color: var(--hf-text-2);
+}
+.hf-note-meta li { display: inline-flex; align-items: center; gap: 6px; }
+.hf-note-meta svg { color: var(--hf-text-3); }
+.hf-note-meta b { color: var(--hf-text); font-weight: 640; }
+
+.hf-note-toc { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+.hf-note-toc h2 { font-size: 13px; font-weight: 660; color: var(--hf-text-2); }
+.hf-note-toc ol {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 8px;
+  counter-reset: hf-toc;
+}
+.hf-note-toc li { display: inline-flex; }
+.hf-note-toc a {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--hf-border); background: var(--hf-surface);
+  font-family: var(--hf-mono); font-size: 12.5px; color: var(--hf-text-2);
+}
+.hf-note-toc a:hover { border-color: var(--hf-ice); color: var(--hf-ice); }
+.hf-note-toc a small { font-family: var(--hf-font); color: var(--hf-text-3); }
+
+.hf-note-body { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+/* Anchor targets must clear nothing (no sticky header), but a little breathing room makes
+   the jump land on the card rather than flush against the viewport edge. */
+.hf-note-file { scroll-margin-top: 16px; }
+.hf-note-file-head { align-items: baseline; }
+.hf-note-file-name {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13.5px; font-weight: 660; min-width: 0;
+  font-family: var(--hf-mono);
+}
+.hf-note-file-name svg { color: var(--hf-text-3); align-self: center; }
+.hf-note-file-name a { color: var(--hf-text); overflow-wrap: anywhere; }
+.hf-note-file-name a:hover { color: var(--hf-ice); text-decoration: underline; }
+
+/* ---- per-file markdown Preview/Source toggle ----------------------------- */
+/* The repo blob viewer keys this off the fixed ids `#hf-md-preview` / `#hf-md-source`
+   (repo.css). A note page stacks many files, so each card needs its own radio group and the
+   rules have to be class-based. Structure, appearance and no-JS behaviour are identical —
+   `.hf-mdview-input`, `.hf-mdview-seg` and `.hf-mdview-lbl` from repo.css still do the
+   hiding and the chrome; only the :checked wiring below is local. */
+.hf-nv-input--preview:checked ~ .hf-blob-head .hf-nv-lbl--preview,
+.hf-nv-input--source:checked ~ .hf-blob-head .hf-nv-lbl--source {
+  background: var(--hf-accent-soft); color: var(--hf-text); font-weight: 640;
+}
+.hf-nv-input:focus-visible ~ .hf-blob-head .hf-mdview-seg {
+  outline: 2px solid var(--hf-accent); outline-offset: 2px;
+}
+.hf-nv-input--preview:checked ~ .hf-nv-source { display: none; }
+.hf-nv-input--source:checked ~ .hf-nv-preview { display: none; }
+
+@media (max-width: 760px) {
+  .hf-note-card-top .hf-age { margin-left: 0; }
+  .hf-note-file-head { align-items: flex-start; }
+  .hf-note-file-head .hf-blob-actions { margin-left: 0; }
+}

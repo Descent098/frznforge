@@ -1,0 +1,111 @@
+---
+/**
+ * /orgs/ — one card per organization (schema v4).
+ *
+ * Always built, even with no organizations, exactly like /repos/: `allRoutes()` lists it
+ * unconditionally and the sync test asserts the build against that list. Only the sidebar
+ * entry hides at count 0.
+ */
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { getOrgRoutes, orgReposUrl, unmatchedOrgContent } from '../../lib/routes';
+import { aggregateLanguages, formatInt, getData, heatFor, initials, relativeTime } from '../../lib/site';
+import '../../styles/orgs.css';
+
+const data = await getData();
+const now = new Date();
+
+// Frontmatter is the optional half of an organization; an org with no markdown file still
+// gets a card, built from config alone.
+const entries = await getCollection('orgs');
+const frontmatter = new Map(entries.map((e) => [e.id, e.data]));
+
+// A typo in an orgs filename makes the whole file disappear with no other symptom, so say so
+// the way the pinned-slug check on the org page does. See `unmatchedOrgContent`.
+for (const id of unmatchedOrgContent(data, entries.map((e) => e.id))) {
+  console.warn(`[frznforge] content/orgs/${id}.md does not match any organization in frznforge.config.ts — ignored.`);
+}
+
+const orgs = getOrgRoutes(data).map(({ org, repos, url }) => {
+  // Newest member wins: an org is "hot" when anything inside it moved recently.
+  const updatedAt = repos.reduce<string | null>((newest, r) => (r.updatedAt && (!newest || r.updatedAt > newest) ? r.updatedAt : newest), null);
+  return {
+    org,
+    url,
+    count: repos.length,
+    languages: aggregateLanguages(repos, 3).filter((l) => l.name !== 'Other'),
+    updatedAt,
+    heat: heatFor(updatedAt, now),
+    description: frontmatter.get(org.slug)?.description ?? org.description,
+  };
+});
+---
+<Base title="Organizations" description={`${orgs.length} organizations`} active="orgs">
+  <div class="hf-container">
+    <header class="hf-page-head">
+      <h1>Organizations</h1>
+      <p>
+        {orgs.length} organization{orgs.length === 1 ? '' : 's'} · groups of repositories with their own overview.
+        Heat = how recently anything inside the group moved.
+      </p>
+    </header>
+
+    {orgs.length ? (
+      <ul class="hf-org-grid">
+        {orgs.map((o) => (
+          <li>
+            <article class={`hf-org-card heat-${o.heat}`} data-slug={o.org.slug}>
+              <div class="hf-org-top">
+                <span class="hf-avatar" aria-hidden="true">{initials(o.org.name)}</span>
+                <h2><a href={o.url}>{o.org.name}</a></h2>
+                <span class="hf-handle">@{o.org.slug}</span>
+              </div>
+              <p class="hf-org-desc">{o.description ?? 'No description.'}</p>
+              <ul class="hf-org-facts">
+                <li>
+                  <svg class="hf-i"><use href="#i-repo" /></svg>
+                  <b>{formatInt(o.count)}</b> repositor{o.count === 1 ? 'y' : 'ies'}
+                </li>
+                <li>
+                  <!--
+                    Every card carries this link, so the org name has to reach the accessible
+                    name — but WCAG 2.5.3 needs the visible text to survive inside it, or
+                    "click Browse the listing" fails as a speech command. Hence the visible
+                    label first, the org appended.
+                  -->
+                  <a href={orgReposUrl(o.org.slug)} aria-label={`Browse the listing for ${o.org.name}`}>Browse the listing →</a>
+                </li>
+              </ul>
+              <div class="hf-org-foot">
+                <span class="hf-langs">
+                  {o.languages.length ? (
+                    o.languages.map((l) => (
+                      <span><i class="hf-lang-dot" style={`background:${l.color ?? 'var(--hf-lang-other)'}`}></i>{l.name} {l.percent}%</span>
+                    ))
+                  ) : (
+                    <span class="hf-muted">{o.count ? 'No code detected' : 'No repositories'}</span>
+                  )}
+                </span>
+                <span class={`hf-age t-${o.heat}`} title={o.updatedAt ?? ''}>
+                  {o.updatedAt ? relativeTime(o.updatedAt, now) : 'never'}
+                </span>
+              </div>
+            </article>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <div class="hf-empty hf-card">
+        <!-- #i-layers everywhere organizations appear: sidebar, palette, hero, here. -->
+        <svg class="hf-i"><use href="#i-layers" /></svg>
+        <p>
+          <strong>No organizations yet.</strong> Add one to <code>organizations</code> in
+          <code>frznforge.config.ts</code> — it needs a <code>slug</code> and a <code>name</code> —
+          then list its members there with <code>repos: ['my-repo']</code> or set
+          <code>org: 'my-org'</code> on a repo source. Prose and links come from
+          <code>content/orgs/&lt;slug&gt;.md</code>. Run <code>npm run ingest</code> to pick the change up.
+        </p>
+      </div>
+    )}
+  </div>
+</Base>

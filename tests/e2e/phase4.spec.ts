@@ -60,6 +60,19 @@ test.describe('command palette', () => {
     await expect(palette).toBeHidden();
   });
 
+  test('the empty-query view reserves room for organizations', async ({ page }) => {
+    await page.goto('/');
+    await openPalette(page);
+    const palette = page.getByRole('dialog', { name: 'Command palette' });
+    // Organizations carry no date, so under one flat recency sort every dated repo (plus the
+    // actions and page docs ahead of them) pushed them past the cut and the group never
+    // appeared. Per-kind quotas are what put it back.
+    await expect(palette.locator('.hf-palette-group h4', { hasText: 'Organizations' })).toBeVisible();
+    await expect(palette.locator('.hf-palette-group h4', { hasText: 'Repositories' })).toBeVisible();
+    // and the default view is still a short menu, not the whole index
+    expect(await palette.locator('.hf-palette-item').count()).toBeLessThanOrEqual(14);
+  });
+
   test('sidebar search button opens the palette', async ({ page }) => {
     await page.goto('/repos/');
     await page.locator('#hf-search-open').click();

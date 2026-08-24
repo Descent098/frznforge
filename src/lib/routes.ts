@@ -5,7 +5,17 @@
  * Ref names appear in URLs as a "ref slug": '/' → '~' (git refnames can never contain '~'),
  * so `feat/zip` browses at /repos/<slug>/tree/feat~zip/.
  */
-import type { FileInfo, ForgeData, ReleaseAsset, Repo, Tag, TreeEntry } from './data/schema';
+import type {
+  FileInfo,
+  ForgeData,
+  Note,
+  NoteFile,
+  Organization,
+  ReleaseAsset,
+  Repo,
+  Tag,
+  TreeEntry,
+} from './data/schema';
 
 /**
  * Code-point string order, matching what the importers use when they sort the artifact
@@ -161,6 +171,136 @@ export function resolveReleases(repo: Repo): SiteRelease[] {
   return out.sort((a, b) => cmp(b.date, a.date) || cmp(a.tag, b.tag));
 }
 
+/* ---- notes & organizations (schema v4) ------------------------------------ */
+
+/** Index of every note. Always exists, even with no notes (like `/repos/`). */
+export const NOTES_INDEX_URL = '/notes/';
+/** Index of every organization. Always exists, even with no organizations. */
+export const ORGS_INDEX_URL = '/orgs/';
+
+/** One note's page: all of its files. */
+export const noteUrl = (slug: string) => `/notes/${slug}/`;
+
+/**
+ * Characters in a note file name that no static raw URL can round-trip.
+ *
+ * Note file names are whatever the author typed on disk, not slugs, so they can contain
+ * anything the filesystem allows. Percent-encoding handles almost all of it — spaces, `&`,
+ * `+`, `;`, non-ASCII all survive, because the build writes the file under its literal name
+ * and the browser's decoded request matches it. Two characters do not:
+ *
+ *  - `#` — the build escapes it in the OUTPUT FILENAME (`c%23-tips.md` lands on disk with a
+ *    literal `%23`), so the encoded URL decodes to a name that is not there;
+ *  - `%` — the generated path is re-encoded and then decoded, and `50%%20off.txt` is not
+ *    valid percent-encoding, which aborts the whole build.
+ *
+ * Rather than emit a dead link (or fail), such a file is published without a raw route: it
+ * still renders inline on the note page, and ingest raises `note-file-unservable`.
+ */
+const UNSERVABLE_CHARS = /[#%]/;
+
+/**
+ * Whether a note file's path can be served as static raw bytes. See `UNSERVABLE_CHARS`.
+ *
+ * @param filePath `NoteFile.path` — relative to the note root, forward slashes.
+ */
+export function isRawServable(filePath: string): boolean {
+  return !UNSERVABLE_CHARS.test(filePath);
+}
+
+/**
+ * Raw bytes of one file in a note. `filePath` is `NoteFile.path` (relative to the note root,
+ * forward slashes); each segment is percent-encoded, because a note file name is authored by
+ * hand and may hold spaces, `&`, `+` or non-ASCII. Directory separators stay literal so the
+ * URL keeps the note's folder structure. No trailing slash, matching `rawUrl` for repo files.
+ *
+ * Only call this for paths `isRawServable` accepts — the two characters it rejects have no
+ * encoding that survives a static build (see `UNSERVABLE_CHARS`).
+ */
+export const noteRawUrl = (slug: string, filePath: string) =>
+  `/notes/${slug}/raw/${filePath.split('/').map(encodeURIComponent).join('/')}`;
+/** An organization's overview page (profile markdown + pinned repos + members). */
+export const orgUrl = (slug: string) => `/orgs/${slug}/`;
+/** The full repo listing scoped to one organization. */
+export const orgReposUrl = (slug: string) => `/orgs/${slug}/repos/`;
+
+export interface NoteRoute { slug: string; url: string; note: Note }
+
+/** One route per note, in artifact order. */
+export function getNoteRoutes(data: ForgeData): NoteRoute[] {
+  return data.notes.map((note) => ({ slug: note.slug, url: noteUrl(note.slug), note }));
+}
+
+export interface NoteFileRoute { note: Note; file: NoteFile; url: string }
+
+/**
+ * Raw routes exist only for stored note files whose path a static URL can round-trip — the
+ * rest either have no bytes to serve (`stored: false`) or no URL that would reach them
+ * (`isRawServable`, which ingest has already warned about).
+ */
+export function noteRawRoutes(data: ForgeData): NoteFileRoute[] {
+  const out: NoteFileRoute[] = [];
+  for (const note of data.notes) {
+    for (const file of note.files) {
+      if (file.stored && isRawServable(file.path)) out.push({ note, file, url: noteRawUrl(note.slug, file.path) });
+    }
+  }
+  return out;
+}
+
+export interface OrgRoute { slug: string; url: string; org: Organization; repos: Repo[] }
+
+/** One route per organization, in artifact order (slug asc), with its member repos resolved. */
+export function getOrgRoutes(data: ForgeData): OrgRoute[] {
+  return data.organizations.map((org) => ({
+    slug: org.slug,
+    url: orgUrl(org.slug),
+    org,
+    repos: reposInOrg(data, org),
+  }));
+}
+
+/**
+ * Member repos of an organization, in `Organization.repos` order (slug asc). Slugs with no
+ * matching repo are dropped — ingest already warned (`org-unknown-repo`), and a page must not
+ * blow up over a stale config entry.
+ */
+export function reposInOrg(data: ForgeData, org: Organization): Repo[] {
+  const bySlug = new Map(data.repos.map((r) => [r.slug, r]));
+  return org.repos.map((slug) => bySlug.get(slug)).filter((r): r is Repo => r !== undefined);
+}
+
+/** Every static URL the site emits for notes: the index, each note, each stored file's raw URL. */
+export function notesRoutes(data: ForgeData): string[] {
+  const urls = [NOTES_INDEX_URL];
+  for (const { url } of getNoteRoutes(data)) urls.push(url);
+  for (const { url } of noteRawRoutes(data)) urls.push(url);
+  return urls;
+}
+
+/**
+ * Ids in the `orgs` content collection that no configured organization claims, sorted.
+ *
+ * An orgs markdown file is only ever reached through an organization's slug, so one typo in
+ * the filename silently discards the whole file — prose, sites, links, pinned repos — with no
+ * page and no other symptom. Ingest cannot catch it (the collection is a site-build concern,
+ * not an artifact one), so `/orgs/` reports it at build time instead.
+ *
+ * @param data The artifact, for the organizations that exist.
+ * @param contentIds Collection entry ids — for `content/orgs/<slug>.md`, the `<slug>`.
+ */
+export function unmatchedOrgContent(data: ForgeData, contentIds: readonly string[]): string[] {
+  const configured = new Set(data.organizations.map((o) => o.slug));
+  return contentIds.filter((id) => !configured.has(id)).sort(cmp);
+}
+
+/** Every static URL the site emits for organizations: the index, each org, each org's listing. */
+export function orgRoutes(data: ForgeData): string[] {
+  const urls = [ORGS_INDEX_URL];
+  for (const org of data.organizations) urls.push(orgUrl(org.slug), orgReposUrl(org.slug));
+  return urls;
+}
+
 /* ---- exhaustive route listing (pages + sync tests) ------------------------- */
 
 export const COMMITS_PER_PAGE = 50;
@@ -223,7 +363,20 @@ export function repoRoutes(repo: Repo): string[] {
   return urls;
 }
 
-/** Every static URL the site emits. */
+/**
+ * Every static URL the site emits.
+ *
+ * The Phase 6 sync test asserts the build against exactly this list, so the notes and orgs
+ * index pages are included unconditionally — like `/repos/`, they exist (and say "nothing
+ * here yet") even when the artifact has none. Only the sidebar hides them at count 0.
+ */
 export function allRoutes(data: ForgeData): string[] {
-  return ['/', '/repos/', '/404', ...data.repos.flatMap((r) => repoRoutes(r))];
+  return [
+    '/',
+    '/repos/',
+    '/404',
+    ...data.repos.flatMap((r) => repoRoutes(r)),
+    ...notesRoutes(data),
+    ...orgRoutes(data),
+  ];
 }

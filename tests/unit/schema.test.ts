@@ -3,7 +3,13 @@ import { SCHEMA_VERSION, emptyForgeData, parseForgeData } from '../../src/lib/da
 
 describe('schema', () => {
   it('accepts the empty artifact', () => {
-    expect(parseForgeData(emptyForgeData())).toEqual({ schemaVersion: SCHEMA_VERSION, repos: [], warnings: [] });
+    expect(parseForgeData(emptyForgeData())).toEqual({
+      schemaVersion: SCHEMA_VERSION,
+      repos: [],
+      notes: [],
+      organizations: [],
+      warnings: [],
+    });
   });
 
   it('rejects a corrupted artifact', () => {

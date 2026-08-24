@@ -1,0 +1,55 @@
+# .github/workflows/pages.yml — build the forge and publish it to GitHub Pages.
+# fetch-depth: 0 is not optional: ingest reads history, and a shallow clone has none.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; let a newer push win.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Tags carry the releases when releases come from tags rather than a provider API.
+          filter: tree:0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # `npm run build` = ingest (git -> data/forge.json + blobs/) then astro build.
+      - run: npm run build
+        env:
+          # Only needed for github/gitlab/gitea sources; local sources need nothing.
+          FRZNFORGE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

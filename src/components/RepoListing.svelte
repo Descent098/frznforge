@@ -22,8 +22,15 @@
     now: number;
     /** Initial query string (from the build: empty). */
     initialSearch?: string;
+    /**
+     * Path this listing lives at, used by every link it emits that is not a bare query string
+     * (tag chips, and the pager's "no filters left" href). Defaults to the site-wide listing;
+     * `/orgs/<slug>/repos/` passes its own so filtering inside an organization stays inside it.
+     * Must end in a slash.
+     */
+    basePath?: string;
   }
-  let { repos, pageSize, now, initialSearch = '' }: Props = $props();
+  let { repos, pageSize, now, initialSearch = '', basePath = '/repos/' }: Props = $props();
 
   let query = $state<ListingQuery>(parseQuery(new URLSearchParams(initialSearch), pageSize));
   let hydrated = $state(false);
@@ -62,7 +69,11 @@
   /** Page link href (works without JS: server renders page 1; links hit the same page with ?page=N). */
   function pageHref(p: number): string {
     const qs = toSearchParams({ ...query, page: p }).toString();
-    return qs ? `?${qs}` : '/repos/';
+    return qs ? `?${qs}` : basePath;
+  }
+  /** Tag chip href: the same listing, filtered to one tag. */
+  function tagHref(tag: string): string {
+    return `${basePath}?tag=${encodeURIComponent(tag)}`;
   }
   function goto(p: number, e: MouseEvent) {
     e.preventDefault();
@@ -138,7 +149,7 @@
   {:else}
     <div class="hf-repo-grid hf-repo-grid--listing">
       {#each result.items as repo (repo.slug)}
-        <RepoCard {repo} {now} tagHref={(t) => `/repos/?tag=${encodeURIComponent(t)}`} />
+        <RepoCard {repo} {now} {tagHref} />
       {/each}
     </div>
   {/if}

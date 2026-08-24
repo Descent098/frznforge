@@ -1,0 +1,113 @@
+---
+/**
+ * /notes/<slug>/ — one note: its header, and every file it contains rendered in order.
+ *
+ * A single-file note is just the degenerate case of the same layout, so there is one code
+ * path: header, then one `NoteFileView` card per file. Multi-file notes additionally get an
+ * in-page table of contents, because a folder note can be four files long and the file
+ * switcher has to be reachable without scrolling.
+ */
+import Base from '../../../layouts/Base.astro';
+import CopyScript from '../../../components/CopyScript.astro';
+import NoteFileView from '../../../components/NoteFileView.astro';
+import { getNoteRoutes, NOTES_INDEX_URL } from '../../../lib/routes';
+import { formatBytes, heatClass, heatFor, isoDay, relativeTime } from '../../../lib/format';
+import { getData } from '../../../lib/site';
+import type { Note } from '../../../lib/data/schema';
+import '../../../styles/notes.css';
+
+export async function getStaticPaths() {
+  const data = await getData();
+  return getNoteRoutes(data).map(({ slug, note }) => ({ params: { slug }, props: { note } }));
+}
+
+interface Props { note: Note }
+const { note } = Astro.props;
+const now = new Date();
+const heat = heatFor(note.date, now);
+
+/**
+ * Fragment id for one file section. Derived from the path so the anchor is readable and
+ * stable across rebuilds; a positional suffix is appended only if two paths were to collapse
+ * onto the same id (e.g. `a/b.md` and `a-b.md`), which keeps every id unique either way.
+ */
+function anchorFor(path: string, index: number, seen: Set<string>): string {
+  const base = `f-${path.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()}`;
+  const id = seen.has(base) ? `${base}-${index + 1}` : base;
+  seen.add(id);
+  return id;
+}
+
+const seen = new Set<string>();
+const files = note.files.map((file, i) => ({ file, anchor: anchorFor(file.path, i, seen), group: String(i + 1) }));
+
+---
+<Base title={note.title} description={note.description ?? undefined} active="notes">
+  <div class="hf-container">
+    <p class="hf-note-backlink">
+      <a href={NOTES_INDEX_URL}><svg class="hf-i" aria-hidden="true"><use href="#i-arrow-left" /></svg> All notes</a>
+    </p>
+
+    <header class="hf-page-head hf-note-head">
+      <h1>
+        <svg class="hf-i" aria-hidden="true"><use href={note.kind === 'folder' ? '#i-folder' : '#i-note'} /></svg>
+        {note.title}
+      </h1>
+      {note.description && <p>{note.description}</p>}
+
+      <ul class="hf-note-meta">
+        <li>
+          <svg class="hf-i" aria-hidden="true"><use href="#i-history" /></svg>
+          {note.date ? (
+            <time class={`hf-age ${heatClass(heat)}`} datetime={note.date}>{relativeTime(note.date, now)}</time>
+          ) : (
+            <span class={`hf-age ${heatClass(heat)}`}>undated</span>
+          )}
+          {note.date && <span class="hf-muted">({isoDay(note.date)})</span>}
+        </li>
+        <li>
+          <svg class="hf-i" aria-hidden="true"><use href="#i-file" /></svg>
+          <b>{note.files.length}</b> file{note.files.length === 1 ? '' : 's'}
+        </li>
+        <li>
+          <svg class="hf-i" aria-hidden="true"><use href="#i-layers" /></svg>
+          <b>{formatBytes(note.totalBytes)}</b>
+        </li>
+        <li>
+          <svg class="hf-i" aria-hidden="true"><use href={note.kind === 'folder' ? '#i-folder' : '#i-note'} /></svg>
+          {note.kind === 'folder' ? 'folder note' : 'single-file note'}
+        </li>
+      </ul>
+
+      {note.tags.length > 0 && (
+        <ul class="hf-note-tags" aria-label="Tags">
+          {note.tags.map((tag) => <li><span class="hf-tag">{tag}</span></li>)}
+        </ul>
+      )}
+    </header>
+
+    {files.length > 1 && (
+      <nav class="hf-card hf-note-toc" aria-labelledby="hf-note-toc-h">
+        <h2 id="hf-note-toc-h">Files in this note</h2>
+        <ol>
+          {files.map(({ file, anchor }) => (
+            <li>
+              <a href={`#${anchor}`}>
+                <svg class="hf-i" aria-hidden="true"><use href="#i-file" /></svg>
+                {file.path}
+                {file.language && <small>{file.language}</small>}
+              </a>
+            </li>
+          ))}
+        </ol>
+      </nav>
+    )}
+
+    <div class="hf-note-body">
+      {files.map(({ file, anchor, group }) => (
+        <NoteFileView slug={note.slug} noteTitle={note.title} file={file} anchor={anchor} group={group} />
+      ))}
+    </div>
+  </div>
+  <CopyScript />
+</Base>

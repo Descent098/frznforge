@@ -241,7 +241,7 @@ describe('activity', () => {
 });
 
 describe('search', () => {
-  const data = { schemaVersion: 3 as const, repos: [repo], warnings: [] };
+  const data = { schemaVersion: 4 as const, repos: [repo], notes: [], organizations: [], warnings: [] };
   const index = buildSearchIndex(data);
   it('indexes pages, repos and default-branch files only', () => {
     const kinds = index.docs.map((d) => d.kind);

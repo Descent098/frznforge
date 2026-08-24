@@ -9,6 +9,9 @@ initial release
 - Empty/odd repos never fail a build: empty repo, last-commit-wiped tree, and unborn HEAD with work on another branch are all emitted with warnings (`repo-empty`, `default-branch-empty-tree`, `default-branch-fallback`); non-repo paths are skipped (`repo-not-found`).
 - `frznforge.config.ts` is now the full site config (site, owner, theme.palette, repos, ingest limits, listing page size) validated with zod and `defineConfig()`; `FRZNFORGE_OUT_DIR` env override for tests.
 - `npm run build` runs ingest first.
+- **Phase 6 — notes & organizations.** **Notes** are a gist-style folder (`content/notes/`): a file is a single-file note, a subfolder is a multi-file note. Markdown notes take optional frontmatter (title, description, date, tags) and render with the same Preview/Source toggle as repo files; everything else gets Shiki-highlighted source with a line gutter, images render inline, and every stored file has a raw URL. There is a searchable notes index, and notes join the Ctrl+K palette.
+- **Organizations** group repos under a named umbrella with their own overview page — hero, aggregated KPIs and languages, a markdown profile from `content/orgs/<slug>.md`, pinned/member repo cards, and a `/orgs/<slug>/repos/` listing that reuses the Phase 2 listing island. Membership can be declared from either side (`organizations[].repos` or `org:` on a repo source); mismatches warn instead of failing.
+- Schema v4: `notes` and `organizations` in the artifact, four new warning codes (`note-slug-collision`, `notes-dir-missing`, `org-unknown-repo`, `repo-unknown-org`). Note content shares the content-addressed blob store with repo files.
 - **Phase 5 — importers.** Repositories hosted on **GitHub, GitLab, Gitea and Forgejo** can be listed in `frznforge.config.ts` instead of pointed at locally: frznforge reads their metadata and releases over the provider REST API, mirror-clones them into a local cache (`ingest.cacheDir`), and runs the existing scanner over the mirror, so every Phase 2–4 feature works for imported repos. Tokens come from environment variables only (never written to config, never logged, never in the artifact); public repos work anonymously.
 - Provider **releases** (name, markdown notes, prerelease flag, author, assets with sizes) are imported into the artifact and rendered on the releases pages, falling back to annotated tags for local repos. Release pages label their source.
 - Offline/failure behaviour: an unreachable, unauthenticated or rate-limited forge never fails a build — it warns (`remote-fetch-failed`, `remote-auth-missing`, `remote-rate-limited`, `remote-cache-stale`) and falls back to the local mirror. `ingest.fetch: 'auto' | 'never' | 'always'` controls network use; `'never'` builds fully offline from the cache.
@@ -23,6 +26,8 @@ initial release
 - Hearth chosen as the design direction. Added `frznforge.config.ts` with `theme.palette: 'hearth' | 'frost'` (build-time) — same layout, warm vs cool colour palette.
 
 ## Bug Fixes
+
+- Code views no longer render a phantom trailing line: a file ending in a newline made Shiki emit one extra `.line`, so the gutter showed one more line than the "N lines" label. Affected every repo file view and, once they landed, note files.
 
 ## Other
 

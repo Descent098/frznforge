@@ -8,7 +8,13 @@ const opts = { maxBlobBytes: 1024 * 1024, maxCommits: null };
 async function scan(r: FixtureRepo): Promise<Repo> {
   const res = await scanRepo({ absPath: r.dir }, opts);
   if ('skipped' in res) throw new Error(`unexpected skip: ${res.warning.message}`);
-  parseForgeData({ schemaVersion: SCHEMA_VERSION, repos: [res.repo], warnings: res.repo.warnings });
+  parseForgeData({
+    schemaVersion: SCHEMA_VERSION,
+    repos: [res.repo],
+    notes: [],
+    organizations: [],
+    warnings: res.repo.warnings,
+  });
   return res.repo;
 }
 

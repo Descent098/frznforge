@@ -2,6 +2,8 @@
 
 exports[`ingest > matches the artifact snapshot (paths redacted) 1`] = `
 {
+  "notes": [],
+  "organizations": [],
   "repos": [
     {
       "archives": [
@@ -1553,7 +1555,7 @@ Hello.
       "warnings": [],
     },
   ],
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "warnings": [
     {
       "code": "repo-not-found",

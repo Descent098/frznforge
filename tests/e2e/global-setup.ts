@@ -267,11 +267,25 @@ export default async function globalSetup() {
     {
       ...userConfig,
       repos: [
-        { type: 'local', path: path.join(REPOS, 'alpha') },
+        // `org` here exercises the repo → organization direction of membership; `bravo` is
+        // claimed from the other side, by the organization's own `repos` list below.
+        { type: 'local', path: path.join(REPOS, 'alpha'), org: 'canadian-coding' },
         { type: 'local', path: path.join(REPOS, 'bravo') },
         { type: 'local', path: path.join(REPOS, 'empty') },
         { type: 'github', owner: 'fixture', repo: 'charlie' },
         { type: 'gitea', host: 'https://gitea.example.com', owner: 'fixture', repo: 'delta' },
+      ],
+      // The shipped config's organization points at `frznforge`, which this fixture does not
+      // build, so its members are re-pointed at fixture repos. The SLUG is kept so the org
+      // still picks up the real `content/orgs/canadian-coding.md` (body, sites, links) — the
+      // markdown half of an organization is repo content, not fixture data.
+      organizations: [
+        {
+          slug: 'canadian-coding',
+          name: 'Canadian Coding',
+          description: "Small, sturdy, source-available tools that keep working when the server doesn't.",
+          repos: ['bravo'],
+        },
       ],
       ingest: { ...(userConfig.ingest ?? {}), outDir: DATA, cacheDir: CACHE },
     },

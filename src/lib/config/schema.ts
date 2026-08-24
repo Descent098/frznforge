@@ -26,6 +26,12 @@ const remoteSourceFields = {
   releases: z.enum(['provider', 'tags']).optional(),
   /** Env var holding the API token; overrides the provider defaults. Never the token itself. */
   tokenEnv: z.string().min(1).optional(),
+  /**
+   * Slug of an organization this repo belongs to (schema v4). A plain string rather than
+   * `Slug` on purpose: naming an organization that is not configured must be a
+   * `repo-unknown-org` warning, not a config parse error that fails the whole build.
+   */
+  org: z.string().min(1).optional(),
 } as const;
 
 export const LocalSourceConfig = z.object({
@@ -38,6 +44,8 @@ export const LocalSourceConfig = z.object({
   overrides: RepoMetaInput.optional(),
   /** Where releases come from. Default for local sources: 'tags'. */
   releases: z.enum(['provider', 'tags']).optional(),
+  /** Slug of an organization this repo belongs to (schema v4). See `remoteSourceFields.org`. */
+  org: z.string().min(1).optional(),
 });
 export type LocalSourceConfig = z.infer<typeof LocalSourceConfig>;
 
@@ -111,6 +119,29 @@ export function defaultReleaseMode(source: RepoSourceConfig): 'provider' | 'tags
   return source.releases ?? (source.type === 'local' ? 'tags' : 'provider');
 }
 
+/**
+ * One organization (schema v4): a named grouping of repos with its own overview page.
+ *
+ * `repos` is one of the two ways a repo joins an org; the other is `org: '<slug>'` on the repo
+ * source. Membership is the union, so either direction alone is enough. Entries that name a
+ * slug no ingested repo has produce an `org-unknown-repo` warning — hence `z.string()` rather
+ * than `Slug`, which would turn a typo into a build failure.
+ *
+ * Prose, links and pinned repos live in `<content.orgs>/<slug>.md`, exactly like the owner's
+ * `profile.md`; the org still gets a page when that file is absent.
+ */
+export const OrganizationConfig = z.object({
+  /** URL slug and the value repo sources use in their `org` field. */
+  slug: Slug,
+  /** Display name. */
+  name: z.string().min(1),
+  /** Short blurb; the `<content.orgs>/<slug>.md` frontmatter `description` wins over it. */
+  description: z.string().max(300).optional(),
+  /** Repo slugs that belong to this org. */
+  repos: z.array(z.string().min(1)).optional(),
+});
+export type OrganizationConfig = z.infer<typeof OrganizationConfig>;
+
 export const FrznforgeConfigSchema = z.object({
   site: z.object({
     title: z.string().min(1).default('frznforge'),
@@ -125,7 +156,45 @@ export const FrznforgeConfigSchema = z.object({
   theme: z.object({
     palette: Palette.default('hearth'),
   }).prefault({}),
+  /**
+   * Where hand-written markdown lives, other than `owner.profile` (which keeps its own key for
+   * backwards compatibility). One small block so there is a single obvious home for the next
+   * one of these; today it holds exactly one entry.
+   */
+  content: z.object({
+    /**
+     * Directory of organization profile pages: `<dir>/<org-slug>.md`, same frontmatter+body
+     * mechanism as `owner.profile`. Absolute, or relative to frznforge.config.ts. Resolved to
+     * `ResolvedConfig.orgsDir`. The directory may be absent — orgs then render from config only.
+     */
+    orgs: z.string().min(1).default('./content/orgs'),
+  }).prefault({}),
   repos: z.array(RepoSourceConfig).default([]),
+  /** Gist-style notes read from a plain folder on disk (schema v4). */
+  notes: z.object({
+    /**
+     * Folder holding the notes. Absolute, or relative to frznforge.config.ts. Resolved to
+     * `ResolvedConfig.notesDir`. A file directly inside it is a single-file note; a sub-folder
+     * is a multi-file note. Missing directory → no notes, plus a `notes-dir-missing` warning
+     * if (and only if) this `notes` block is present — see `ResolvedConfig.notesConfigured`.
+     *
+     * This folder is NOT a git repository, which is why ingest reads it straight from disk.
+     * The "never read the working tree" rule is about repositories.
+     */
+    dir: z.string().min(1).default('./content/notes'),
+    /**
+     * Fall back to the file's modification time when a note has no frontmatter `date`.
+     *
+     * Off by default because mtimes are not reproducible: a fresh checkout stamps every file
+     * with the clone time, so two builds of the same content would emit different bytes.
+     * Turning this on is an explicit trade of determinism for convenience.
+     */
+    useMtime: z.boolean().default(false),
+    /** Byte cap for storing note content. Defaults to `ingest.maxBlobBytes` when unset. */
+    maxFileBytes: z.number().int().positive().optional(),
+  }).prefault({}),
+  /** Organizations repos can be grouped under (schema v4). */
+  organizations: z.array(OrganizationConfig).default([]),
   ingest: z.object({
     outDir: z.string().min(1).default('./data'),
     maxBlobBytes: z.number().int().positive().default(512 * 1024),

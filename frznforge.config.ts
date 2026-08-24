@@ -38,8 +38,35 @@ export default defineConfig({
   repos: [
     // Until you add repos here, the site builds with an empty listing.
     // Self-host demo: the frznforge repo itself.
-    { type: 'local', path: '.', slug: 'frznforge' },
+    { type: 'local', path: '.', slug: 'frznforge', org: 'canadian-coding' },
   ],
+
+  /**
+   * Organizations repos can be grouped under. Membership is the union of this `repos` list and
+   * any repo source's own `org` field, so either direction alone is enough — frznforge is
+   * named here *and* declares `org` above, on purpose, to exercise the de-duplication.
+   *
+   * Prose, links and pinned repos come from `./content/orgs/<slug>.md` (see `content.orgs`);
+   * an org with no such file still gets a page, built from this block plus its repos.
+   */
+  organizations: [
+    {
+      slug: 'canadian-coding',
+      name: 'Canadian Coding',
+      description: 'Small, sturdy, source-available tools that keep working when the server doesn\'t.',
+      repos: ['frznforge'],
+    },
+  ],
+
+  /**
+   * Gist-style notes. The defaults are what this site uses, so this block only documents them:
+   * notes are read from `./content/notes` — a file directly inside it is a single-file note,
+   * a sub-folder is a multi-file note. Dates come from YAML frontmatter only; `useMtime: true`
+   * would fall back to filesystem mtimes and give up byte-identical rebuilds.
+   */
+  notes: {
+    dir: './content/notes',
+  },
 
   ingest: {
     /** Where forge.json + blobs/ are written. Relative to this file. */

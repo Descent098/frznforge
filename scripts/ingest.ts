@@ -58,6 +58,15 @@ if (cached.length > 0 || skipped.length > 0) {
 }
 
 const ms = Math.round(performance.now() - started);
+// Notes and organizations are reported only when there are any: most sites configure neither,
+// and a permanent "0 note(s), 0 organization(s)" would just be noise in every run.
+const extras = [
+  data.notes.length > 0 ? `${data.notes.length} note(s)` : null,
+  data.organizations.length > 0 ? `${data.organizations.length} organization(s)` : null,
+]
+  .filter(Boolean)
+  .join(', ');
 console.log(
-  `done: ${data.repos.length} repo(s), ${blobs.size} blob(s), ${archives.size} archive(s), ${data.warnings.length} warning(s) in ${ms}ms`,
+  `done: ${data.repos.length} repo(s), ${extras ? extras + ', ' : ''}${blobs.size} blob(s), ` +
+    `${archives.size} archive(s), ${data.warnings.length} warning(s) in ${ms}ms`,
 );

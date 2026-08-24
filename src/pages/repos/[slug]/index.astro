@@ -5,7 +5,7 @@ import RefSwitcher from '../../../components/RefSwitcher.astro';
 import FileTable from '../../../components/FileTable.astro';
 import { archiveUrl, browsableRefs, commitUrl, commitsUrl, getRepoRoutes } from '../../../lib/routes';
 import { isMarkdownPath, isTrustedSource, renderMarkdown } from '../../../lib/markdown';
-import { formatInt, getConfig, getData, heatFor, initials, prettyUrl, relativeTime } from '../../../lib/site';
+import { formatBytes, formatInt, getConfig, getData, heatFor, initials, prettyUrl, relativeTime } from '../../../lib/site';
 import type { Repo } from '../../../lib/data/schema';
 
 export async function getStaticPaths() {
@@ -26,11 +26,6 @@ const defaultArchive = repo.defaultBranch
   ? repo.archives.find((a) => a.kind === 'branch' && a.ref === repo.defaultBranch) ?? null
   : null;
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 /** Root-level entries of the default-branch tree (dirs first, then files). */
 const rootEntries = repo.tree.filter((e) => !e.path.includes('/'));

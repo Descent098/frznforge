@@ -187,29 +187,29 @@ Tests
 
 ---
 
-## Phase 6 — Notes & organizations *(next)*
+## Phase 6 — Notes & organizations ✅ *(done 2026-08-23)*
 
 Goal: the two remaining "content types".
 
 Ships
-- [ ] **Notes** (gist-style): a configured folder where each file is a single note and each
+- [x] **Notes** (gist-style): a configured folder where each file is a single note and each
   sub-folder is a multi-file note. Markdown gets preview/source toggle; everything else
   gets highlighted source. Notes index page with search; notes appear in the palette.
-- [ ] **Organizations**: grouping of repos under a named org with its own profile overview
+- [x] **Organizations**: grouping of repos under a named org with its own profile overview
   (same `profile.md` mechanism, own pinned repos, own links). Org listing and per-org
   repo listing reuse the Phase 2 listing component.
 
 Done when
-- [ ] Notes and orgs are routable, searchable, and covered by the sync tests.
+- [x] Notes and orgs are routable, searchable, and covered by the sync tests.
 
 Tests
-- [ ] Unit: note folder → note model; org config → membership resolution.
-- [ ] UI: note preview/source toggle; org page renders pinned repos.
-- [ ] Sync: every note file/folder has a page; every repo with an `org` appears under it.
+- [x] Unit: note folder → note model; org config → membership resolution.
+- [x] UI: note preview/source toggle; org page renders pinned repos.
+- [x] Sync: every note file/folder has a page; every repo with an `org` appears under it.
 
 ---
 
-## Phase 7 — Insights, polish, 1.0
+## Phase 7 — Insights, polish, 1.0 *(next)*
 
 Goal: make it something other people can adopt.
 

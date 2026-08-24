@@ -94,6 +94,11 @@ const loaded = new Set<string>();
  */
 export async function highlightToHtml(code: string, language: string | null, path?: string): Promise<string> {
   const hl = await getHighlighter();
+  // Shiki emits one `.line` per newline-separated segment, so a file that ends with a
+  // trailing newline (almost all of them) gets an extra empty line and a phantom gutter
+  // number that disagrees with the "N lines" label countLines() produces. Drop that one
+  // newline so the gutter and the label always agree.
+  const source = code.endsWith('\n') ? code.slice(0, -1) : code;
   let lang = shikiLang(language, path);
   if (lang !== 'text' && !loaded.has(lang)) {
     try {
@@ -103,7 +108,7 @@ export async function highlightToHtml(code: string, language: string | null, pat
       lang = 'text';
     }
   }
-  return hl.codeToHtml(code, {
+  return hl.codeToHtml(source, {
     lang: loaded.has(lang) ? lang : 'text',
     themes: { light: 'github-light', dark: 'github-dark' },
     defaultColor: false,

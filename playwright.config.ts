@@ -13,7 +13,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `node tests/e2e/serve.mjs tests/.tmp/e2e/dist ${PORT}`,
+    // tsx, so the server can import the same `src/lib/mime.ts` the site's raw endpoints use.
+    command: `npx tsx tests/e2e/serve.ts tests/.tmp/e2e/dist ${PORT}`,
     port: PORT,
     reuseExistingServer: false,
     timeout: 30_000,

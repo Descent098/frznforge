@@ -1,0 +1,89 @@
+---
+/**
+ * /orgs/<slug>/ — one organization's overview (schema v4).
+ *
+ * The owner profile page for a group: same hero + KPI band (see OrgHeader), the rendered
+ * body of `<content.orgs>/<slug>.md` when that file exists, and a pinned/member repo grid.
+ * The markdown file is optional — membership and name come from the artifact — so every
+ * branch below has to work with `fm === null`.
+ */
+import { getCollection, render } from 'astro:content';
+import Base from '../../../layouts/Base.astro';
+import OrgHeader from '../../../components/OrgHeader.astro';
+import RepoCard from '../../../components/RepoCard.svelte';
+import type { Organization, Repo } from '../../../lib/data/schema';
+import { summarize } from '../../../lib/listing';
+import { getOrgRoutes, orgReposUrl } from '../../../lib/routes';
+import { getData } from '../../../lib/site';
+import '../../../styles/orgs.css';
+
+export async function getStaticPaths() {
+  const data = await getData();
+  return getOrgRoutes(data).map(({ slug, org, repos }) => ({ params: { slug }, props: { org, repos } }));
+}
+
+interface Props { org: Organization; repos: Repo[] }
+const { org, repos } = Astro.props;
+const now = new Date();
+
+const entries = await getCollection('orgs');
+const entry = entries.find((e) => e.id === org.slug) ?? null;
+const fm = entry?.data ?? null;
+const Content = entry ? (await render(entry)).Content : null;
+
+// Pinned repos must be members: pinning a repo that belongs to another org would make the
+// page lie about the group. Unknown/non-member slugs are dropped with a build warning, the
+// same treatment profile.md's `pinned` gets.
+const pinnedSlugs = fm?.pinned ?? [];
+const pinned = pinnedSlugs
+  .map((slug) => repos.find((r) => r.slug === slug))
+  .filter((r): r is Repo => Boolean(r))
+  .map(summarize);
+for (const slug of pinnedSlugs) {
+  if (!repos.some((r) => r.slug === slug)) {
+    console.warn(`[frznforge] content/orgs/${org.slug}.md pins "${slug}", which is not a member of this organization`);
+  }
+}
+
+const shown = pinned.length ? pinned : repos.slice(0, 6).map(summarize);
+const description = fm?.description ?? org.description;
+---
+<Base title={org.name} description={description ?? `${org.name} — organization`} active="orgs">
+  <div class="hf-container">
+    <OrgHeader org={org} repos={repos} fm={fm} now={now} />
+
+    {Content && (
+      <section class="hf-two-col hf-two-col--single" style="margin-top:16px">
+        <article class="hf-card hf-readme" aria-label={`About ${org.name}`}>
+          <div class="hf-md"><Content /></div>
+        </article>
+      </section>
+    )}
+
+    <section aria-labelledby="org-repos-h" style="margin-top:28px">
+      <div class="hf-section-head">
+        <h2 id="org-repos-h">{pinned.length ? 'Pinned' : 'Repositories'}</h2>
+        <p>Heat = how recently each repo moved</p>
+        {repos.length > 0 && (
+          <a class="hf-more" href={orgReposUrl(org.slug)}>
+            View all {repos.length} repositor{repos.length === 1 ? 'y' : 'ies'} →
+          </a>
+        )}
+      </div>
+      {shown.length ? (
+        <div class="hf-repo-grid">
+          {shown.map((repo) => <RepoCard repo={repo} now={now.getTime()} />)}
+        </div>
+      ) : (
+        <div class="hf-empty hf-card">
+          <svg class="hf-i"><use href="#i-repo" /></svg>
+          <p>
+            <strong>No repositories in this organization yet.</strong> Add its slug to a repo source
+            (<code>org: '{org.slug}'</code>) or list the repo under <code>organizations</code> in
+            <code>frznforge.config.ts</code>, then run <code>npm run ingest</code>.
+          </p>
+        </div>
+      )}
+    </section>
+  </div>
+</Base>

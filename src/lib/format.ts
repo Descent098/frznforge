@@ -88,6 +88,20 @@ export function formatInt(n: number): string {
   return n.toLocaleString('en');
 }
 
+/**
+ * A byte count for humans: `947 B`, `12.4 KB`, `3.1 MB` (binary units, one decimal).
+ *
+ * Deliberately not `toLocaleString`-based: this string is baked into static HTML, so it must
+ * not vary with the build machine's locale the way `formatInt` may.
+ *
+ * @param n Size in bytes.
+ */
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 /* ---- aggregates ---------------------------------------------------------- */
 
 /** Aggregate language stats across repos (bytes summed; percents recomputed). */

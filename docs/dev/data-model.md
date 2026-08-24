@@ -2,8 +2,10 @@
 
 `npm run ingest` turns the repositories listed in `frznforge.config.ts` — local directories
 and, since schema v3, repos hosted on GitHub / GitLab / Gitea / Forgejo — into one JSON
-artifact plus a blob store. Every page of the site is built from this artifact and nothing
-else — the site never talks to git and never talks to a forge.
+artifact plus a blob store. Since schema v4 it also collects **notes** (a plain folder of
+files on disk) and resolves **organizations** (groupings of repos) into the same artifact.
+Every page of the site is built from this artifact and nothing else — the site never talks to
+git and never talks to a forge.
 
 The schema is defined once, as zod objects + inferred types, in `src/lib/data/schema.ts`.
 This document explains the layout and the meaning of each field; the schema file is the
@@ -26,7 +28,14 @@ source of truth for exact shapes.
 - `blobs/<sha>` holds the bytes of each file whose `FileInfo.stored` is `true` — since
   schema v2 this includes binary files within the size cap. The sha is the git blob object
   id, so identical content across repos/paths/branches is stored once.
-  `readBlob(outDir, sha)` returns it as UTF-8 text.
+  `readBlob(outDir, sha)` returns it as UTF-8 text. Since schema v4 **note** content lives in
+  the same directory, keyed by `NoteFile.sha` — `sha1('note <len>\0' + bytes)`. The `note`
+  prefix mirrors git's own `blob <len>\0` domain separation and is load-bearing: the two key
+  spaces share one directory, so hashing note bytes bare would let a note whose raw bytes
+  happen to *be* a `blob <len>\0…` pre-image take that repo file's key and — notes are merged
+  last — overwrite it. Domain-separated, no note key can ever come from a `blob` pre-image. A
+  note and a repo file with identical content therefore occupy two entries; notes are few and
+  the alternative is minting fake git object ids for content that never was in git.
 - `archives/<slug>/<ref-slug>.zip` are produced with `git archive --format=zip <commit>`
   (committed content only, never the working tree). `<ref-slug>` is the ref name with every
   `/` replaced by `~` (git refnames can never contain `~`, so this is collision-free), e.g.
@@ -84,8 +93,15 @@ git-ignored) and the ordinary local scanner then runs on that bare mirror:
   `files` keys (paths) are inserted in sorted order.
 - Arrays have a defined order: `repos` by slug; `tree` by path; `branches` by name;
   `gitTags` by name; `contributors` by commit count desc, then name, then email;
-  `languages` by bytes desc, then name; `Branch.commits` newest-first (topological).
-- Warnings are collected in a fixed order (site-level first, then per repo in slug order).
+  `languages` by bytes desc, then name; `Branch.commits` newest-first (topological);
+  `notes` by date desc with undated notes last, then title, then slug (`compareNotes`);
+  `Note.files` by path; `organizations` by slug; `Organization.repos` by slug.
+- Warnings are collected in a fixed order: site-level, then notes, then organizations, then
+  per repo in slug order.
+- **One opt-out, and it is loud.** `notes.useMtime` lets an undated note take its date from
+  the filesystem. Mtimes are not reproducible — a fresh clone stamps every file with the clone
+  time — so switching it on trades away byte-identical output. It is off by default and
+  documented as non-deterministic wherever it appears.
 - **No volatile counters.** Provider APIs report values that change without the repository
   changing — stars, forks, watchers, open-issue counts, release asset download counts, "last
   fetched at" timestamps. None of them are imported. If a field would differ between two
@@ -93,10 +109,15 @@ git-ignored) and the ordinary local scanner then runs on that bare mirror:
 - Imported timestamps are normalised to `IsoDate` (UTC, seconds precision) by the importer,
   so a provider changing its date formatting cannot change the bytes.
 
-**Committed content only.** Ingest never reads the working tree or the index. It uses
-only git plumbing that reads committed objects (`for-each-ref`, `rev-list`, `log`,
-`ls-tree`, `cat-file`, `rev-parse`). Untracked files, unstaged modifications and staged
+**Committed content only — for repositories.** Ingest never reads a repository's working tree
+or index. It uses only git plumbing that reads committed objects (`for-each-ref`, `rev-list`,
+`log`, `ls-tree`, `cat-file`, `rev-parse`). Untracked files, unstaged modifications and staged
 but uncommitted changes are invisible; bare repositories work the same as checkouts.
+
+Notes (schema v4) are the one deliberate exception, and they do not weaken the rule: `notes.dir`
+is a plain folder, not a git repository. There is no committed tree to prefer and no working
+copy to avoid, so `src/lib/ingest/notes.ts` reads it with `node:fs`. If you ever point
+`notes.dir` inside a checkout, ingest still sees whatever is on disk — that is the contract.
 
 **Never fails on odd repositories.** Empty repos, repos whose HEAD tree is empty, unborn
 default branches, missing metadata files, etc. are reported as warnings; the repo entry is
@@ -117,10 +138,15 @@ on the remote URL and never via `git clone -c` — so it cannot be persisted int
 
 ## `ForgeData` (top level)
 
+Emitted in exactly this key order — `serializeForgeData` writes the object in the order the
+fields are declared in `ForgeData`, and the snapshot tests compare bytes.
+
 | field           | meaning                                                                          |
 | --------------- | -------------------------------------------------------------------------------- |
-| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `3`). The site refuses artifacts of another version. |
+| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `4`). The site refuses artifacts of another version. |
 | `repos`         | `Repo[]`, sorted by slug.                                                        |
+| `notes`         | `Note[]` (schema v4), date desc / undated last / title asc — see "Notes".         |
+| `organizations` | `Organization[]` (schema v4), sorted by slug — see "Organizations".               |
 | `warnings`      | `Warning[]` — site-level warnings plus a mirror of every repo's own warnings (with `repo` set). |
 
 ## `Repo`
@@ -352,6 +378,138 @@ annotated-tag derivation, newest first either way. `SiteRelease.source` (`'provi
 | `remote-auth-missing`       | repo  | The provider answered 401/403/404 and no token was configured for that source — most likely a private repo. Names the env vars that were consulted, never a value. |
 | `remote-rate-limited`       | repo  | The provider rate-limited the build. Cache used, or repo skipped.               |
 | `remote-cache-stale`        | repo  | A previously fetched mirror was used without refreshing — `ingest.fetch: 'never'`, or a fetch that failed while a cache existed. |
+| `notes-dir-missing`         | site  | A configured `notes.dir` does not exist or is not a directory. No notes were collected; the build continues and `/notes/` renders empty. Only raised when the config declares a `notes` block — a site that never opted into notes is not warned about the defaulted folder being absent. |
+| `note-slug-collision`       | site  | Two notes slugified to the same value; the later one in walk order was suffixed `-2`, `-3`, … `repo` is `null`. |
+| `note-file-unservable`      | site  | A note file's name contains `#` or `%`, which no static raw URL can round-trip (the build escapes `#` in the emitted filename, and `%` aborts the build outright). The file is still collected, stored and rendered inline; it just gets no `/notes/<slug>/raw/<path>` route and no Raw/Download link. `repo` is `null`. |
+| `org-unknown-repo`          | site  | An `organizations[].repos` entry names a slug no ingested repo has (typo, or the repo was removed/skipped). The entry is dropped from `Organization.repos`. |
+| `repo-unknown-org`          | repo  | A repo source declares `org: '<slug>'` that is not in `organizations[]`. The repo joins no org. `repo` holds the repo's slug. |
+
+## Notes (schema v4)
+
+Gist-style snippets. They come from a plain folder on disk (`notes.dir`, default
+`./content/notes`), not from git — see "Committed content only" above for why that is not a
+rule violation.
+
+### Folder convention
+
+```
+content/notes/
+├── ripgrep-cheatsheet.md      → Note { kind: 'file',   files: [ripgrep-cheatsheet.md] }
+├── xdg-basedirs.txt           → Note { kind: 'file',   files: [xdg-basedirs.txt] }
+├── dotfiles/                  → Note { kind: 'folder', files: [index.md, bin/setup.sh, …] }
+│   ├── index.md                 frontmatter + title are read from here
+│   └── bin/setup.sh             NoteFile.path = "bin/setup.sh"
+├── .drafts/                   → ignored
+└── _wip.md                    → ignored
+```
+
+- A **file** directly in `notes.dir` is a single-file note. A **sub-folder** is a multi-file
+  note holding every file underneath it, recursively; `NoteFile.path` is relative to the note
+  root and uses forward slashes on every platform.
+- Anything whose name starts with `.` or `_` is skipped, at any depth. There is no special
+  README convention beyond the frontmatter lookup below — a folder's `README.md` is an
+  ordinary note file that happens to be where frontmatter is read from.
+- Only files are notes; there is nothing to collect from an empty folder, so it is skipped.
+
+### Frontmatter, title and date
+
+Markdown notes may carry YAML frontmatter with `title`, `description`, `date` and `tags`. For
+a folder note it is read from `index.md`, else `README.md`, inside the folder; other files'
+frontmatter is left alone (it is part of their content).
+
+| field         | resolution                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| `title`       | frontmatter `title` → the first `# H1` in the (first) markdown file → the file/folder name humanised (`xdg-basedirs` → "Xdg basedirs"). |
+| `description` | frontmatter `description`, else `null`.                                                          |
+| `tags`        | frontmatter `tags[]`, else `[]`.                                                                 |
+| `date`        | frontmatter `date`, normalised to `IsoDate` (UTC, seconds precision). Two shapes are accepted: `YYYY-MM-DD` (→ midnight UTC), and `YYYY-MM-DD` plus a time separated by `T` or a space, with or without a `Z`/`±HH:MM` zone. **A missing zone means UTC, not the build machine's zone** — `Date.parse` reads a bare date-time as local time, which would give the same frontmatter a different date, a different note order and a different `forge.json` on every machine. Anything else (`March 4, 2026`, `03/04/2026`, RFC 2822) is dropped for that same reason. With `notes.useMtime: true`, an undated note falls back to the file's mtime. Otherwise `null`. |
+| `slug`        | the file/folder name with the extension dropped, slugified. Collisions are suffixed `-2`, `-3`, … in walk order, with a `note-slug-collision` warning. |
+
+**`notes.useMtime` is the artifact's only non-deterministic input.** Off by default; see
+"Guarantees".
+
+### `Note`
+
+| field        | meaning                                                                            |
+| ------------ | ------------------------------------------------------------------------------------ |
+| `slug`       | URL slug — `/notes/<slug>/`.                                                        |
+| `title`      | Resolved as above.                                                                  |
+| `description`| `string \| null`.                                                                   |
+| `tags`       | Free-form tags from frontmatter; drive the filters on `/notes/`.                    |
+| `date`       | `IsoDate \| null`.                                                                  |
+| `kind`       | `'file'` (a file directly in `notes.dir`) or `'folder'`.                             |
+| `files`      | `NoteFile[]`, sorted by path. Exactly one entry when `kind` is `'file'`.            |
+| `totalBytes` | Sum of `files[].size`.                                                              |
+
+### `NoteFile`
+
+Same shape as `FileInfo` plus `name` and `markdown`, so the note viewer reuses the repo file
+viewer's rendering (binary fallback, "too large" fallback, Shiki language) unchanged.
+
+| field      | meaning                                                                            |
+| ---------- | ------------------------------------------------------------------------------------ |
+| `name`     | Last path segment.                                                                  |
+| `path`     | Path relative to the note root, forward slashes. Equals `name` for a single-file note. |
+| `sha`      | `sha1('note <len>\0' + bytes)` — the `blobs/` key when `stored`. **Not** a git blob id; see "Layout on disk". |
+| `size`     | Bytes.                                                                              |
+| `binary`   | A NUL byte occurs in the first 8000 bytes (same heuristic as repo files).           |
+| `tooLarge` | `size > notes.maxFileBytes` (which defaults to `ingest.maxBlobBytes`).              |
+| `stored`   | Content was written to `blobs/<sha>`. Necessary but not sufficient for a raw route — a path holding `#` or `%` gets none either (`note-file-unservable`). |
+| `language` | From the same extension/filename map as repo files, or `null`.                      |
+| `markdown` | The viewer offers the preview/source toggle for these.                              |
+
+### Routes
+
+`/notes/` (index, always built), `/notes/<slug>/`, and `/notes/<slug>/raw/<file-path>` for
+every stored file whose path `isRawServable()` accepts. Derived by `notesRoutes(data)` in
+`src/lib/routes.ts`.
+
+Note file names are authored by hand rather than slugified, so each raw-URL segment is
+percent-encoded — `read me.md` → `/notes/n/raw/read%20me.md` — while `/` stays literal so the
+folder structure survives. `#` and `%` have no encoding that survives a static build and are
+excluded; see `note-file-unservable`.
+
+## Organizations (schema v4)
+
+A named grouping of repos with its own overview page. Configured in `frznforge.config.ts`;
+prose lives in an optional markdown file.
+
+### Membership
+
+The union of two directions, so either alone is enough and both together is a no-op:
+
+1. `organizations[].repos` — the org lists the repo slugs it contains.
+2. `repos[].org` — a repo source declares which org it belongs to.
+
+Resolution runs **after** slug-collision renaming, so membership always names the slug that
+actually reached the artifact. Dangling references never fail a build: an org naming a repo
+that does not exist raises `org-unknown-repo` and the entry is dropped; a repo naming an org
+that is not configured raises `repo-unknown-org` and the repo joins no org.
+
+### `Organization`
+
+| field         | meaning                                                                           |
+| ------------- | ----------------------------------------------------------------------------------- |
+| `slug`        | URL slug and the value repo sources put in their `org` field.                       |
+| `name`        | Display name, from config.                                                          |
+| `description` | Config `description`, or `null`. The markdown file's frontmatter `description` wins at render time. |
+| `repos`       | Member repo slugs, sorted and de-duplicated; every one exists in `ForgeData.repos`. |
+
+An org with no members is still emitted — it has a page either way.
+
+### `<content.orgs>/<org-slug>.md`
+
+Optional, exactly the `content/profile.md` mechanism: an Astro content collection (`orgs` in
+`src/content.config.ts`) whose entry `id` is the filename without the extension — i.e. the org
+slug. Frontmatter is `{ description?, sites: url[] = [], links?: Record<string, url>,
+pinned: string[] = [] }` and the body is rendered on the overview. Missing file = the org
+still gets a page, built from config plus its member repos.
+
+### Routes
+
+`/orgs/` (index, always built), `/orgs/<slug>/` (overview) and `/orgs/<slug>/repos/` (the full
+repo listing scoped to the org, reusing the Phase 2 listing island). Derived by
+`orgRoutes(data)` in `src/lib/routes.ts`.
 
 ## Per-repo metadata: `.frznforge.json`
 
@@ -361,6 +519,13 @@ releaseMode? }`. The site config's `overrides` for that repo win field-by-field.
 
 ## Version history
 
+- **v4** — notes and organizations: `ForgeData.notes` (`Note[]` with `NoteFile[]`) and
+  `ForgeData.organizations` (`Organization[]`), both declared after `repos` and before
+  `warnings`; new warnings `notes-dir-missing`, `note-slug-collision`, `org-unknown-repo`,
+  `repo-unknown-org`; new config `notes.{dir,useMtime,maxFileBytes}`, `organizations[]`,
+  `content.orgs`, and `org?` on every repo source; note content shares the existing `blobs/`
+  store, keyed by `sha1('note <len>\0' + bytes)` so a note key can never collide with a git
+  object id. Fifth new warning: `note-file-unservable`.
 - **v3** — remote sources: `RepoSource` gains `github` / `gitlab` / `gitea` / `forgejo`
   variants (`host`, `owner`+`repo` or `project`, `webUrl`, `cloneUrl`); `Repo.releases`
   (`Release[]`, with `ReleaseAsset[]`); `Repo.releaseMode` widened to `'tags' | 'provider'`;

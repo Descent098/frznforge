@@ -16,6 +16,8 @@ import {
   type Warning,
 } from '../data/schema';
 import { slugFor, slugify } from './meta';
+import { collectNotes } from './notes';
+import { resolveOrganizations, type OrgRepoInput } from './orgs';
 import { prepareRemote, type MirrorAction, type PrepareRemoteDeps } from './remote';
 import { scanRepo, type ScanResult, type ScanSource } from './scan';
 
@@ -23,6 +25,10 @@ export { scanRepo } from './scan';
 export type { ScanOptions, ScanResult, ScanSource } from './scan';
 export { ensureMirror, prepareRemote } from './remote';
 export type { EnsureMirrorOptions, EnsureMirrorResult, GitRunner, MirrorAction, PrepareRemoteDeps } from './remote';
+export { collectNotes } from './notes';
+export type { CollectNotesOptions, CollectNotesResult } from './notes';
+export { resolveOrganizations } from './orgs';
+export type { OrgRepoInput, ResolveOrganizationsResult } from './orgs';
 
 /** What ingest did with one remote source. Reporting only — never enters the artifact. */
 export interface RemoteStatus {
@@ -101,6 +107,10 @@ export async function ingest(
     }
     hooks.onRepoStart?.(slug);
 
+    // Carried alongside the scan result so organization membership can be resolved against the
+    // *final* slug (after collision renaming) without putting a site-config concern on `Repo`.
+    const org = src.org ?? null;
+
     let scanSource: ScanSource = { absPath: src.absPath, slug: src.slug, overrides: src.overrides };
     // Remote warnings are raised with `repo: null`; the slug is stamped on here so they read
     // the same as scanner warnings and follow the repo through a slug-collision rename.
@@ -114,6 +124,7 @@ export async function ingest(
       },
       remoteWarnings,
       remote,
+      org,
     });
 
     if (isRemoteSourceConfig(src)) {
@@ -136,12 +147,17 @@ export async function ingest(
 
     const r = await scanRepo(scanSource, opts);
     if (!('skipped' in r)) hooks.onRepoDone?.(r.repo);
-    return { result: r, remoteWarnings, remote };
+    return { result: r, remoteWarnings, remote, org };
   });
 
-  const scanned: Array<{ repo: Repo; blobs: Map<string, Buffer>; archives: Array<{ file: string; data: Buffer }> }> = [];
+  const scanned: Array<{
+    repo: Repo;
+    blobs: Map<string, Buffer>;
+    archives: Array<{ file: string; data: Buffer }>;
+    org: string | null;
+  }> = [];
   const remotes: RemoteStatus[] = [];
-  for (const { result, remoteWarnings, remote } of results) {
+  for (const { result, remoteWarnings, remote, org } of results) {
     if (remote) remotes.push(remote);
     const r: ScanResult = result;
     if ('skipped' in r) {
@@ -149,7 +165,7 @@ export async function ingest(
     } else {
       // Carried on the repo so they show on its page and get renamed with it.
       r.repo.warnings.unshift(...remoteWarnings);
-      scanned.push(r);
+      scanned.push({ ...r, org });
     }
   }
 
@@ -181,18 +197,34 @@ export async function ingest(
 
   scanned.sort((a, b) => cmpStr(a.repo.slug, b.repo.slug));
 
+  // Notes: a plain folder on disk, not a git repo — see src/lib/ingest/notes.ts. Their content
+  // goes into the very same content-addressed map `writeArtifact` persists to `blobs/`, so the
+  // note viewer reads them with the same `readBlob(outDir, sha)` the file viewer uses.
+  const noteRes = await collectNotes(config);
+
+  // Organizations: resolved after the collision pass, so membership names the slugs that
+  // actually reach the artifact. `scanned` is already slug-sorted, which makes the resolver's
+  // repo-side iteration order deterministic.
+  const orgInputs: OrgRepoInput[] = scanned.map((s) => ({ slug: s.repo.slug, org: s.org }));
+  const orgRes = resolveOrganizations(config, orgInputs);
+
   const blobs = new Map<string, Buffer>();
   const archives = new Map<string, Buffer>();
-  const warnings: Warning[] = [...siteWarnings];
+  // Fixed warning order: site-level, then notes, then organizations, then per repo in slug order.
+  const warnings: Warning[] = [...siteWarnings, ...noteRes.warnings, ...orgRes.warnings];
   for (const { repo, blobs: b, archives: a } of scanned) {
     for (const w of repo.warnings) warnings.push({ ...w, repo: repo.slug });
     for (const [sha, buf] of b) blobs.set(sha, buf);
     for (const { file, data } of a) archives.set(file, data);
   }
+  for (const [sha, buf] of noteRes.blobs) blobs.set(sha, buf);
 
+  // Key order here is the key order in forge.json — keep it identical to `ForgeData`.
   const data: ForgeData = {
     schemaVersion: SCHEMA_VERSION,
     repos: scanned.map((s) => s.repo),
+    notes: noteRes.notes,
+    organizations: orgRes.organizations,
     warnings,
   };
   return { data, blobs, archives, remotes };

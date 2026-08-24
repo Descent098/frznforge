@@ -1,0 +1,30 @@
+# Cloudflare Pages, driven from wrangler + a _headers file.
+# Pages has no per-route config file of its own, so the interesting parts are the build
+# settings you set once in the dashboard and the _headers file you emit into dist/.
+name: frznforge
+compatibility_date: "2026-01-15"
+
+pages_build_output_dir: dist
+
+build:
+  command: npm run build
+  # Pages defaults to a depth-1 clone; ingest needs the whole history.
+  environment:
+    NODE_VERSION: "24"
+    GIT_DEPTH: "0"
+
+# Copy this into dist/_headers as part of the build (or commit it to public/_headers).
+headers:
+  - path: /blobs/*
+    values:
+      Cache-Control: public, max-age=31536000, immutable
+  - path: /*.html
+    values:
+      Cache-Control: public, max-age=0, must-revalidate
+  - path: /*
+    values:
+      X-Content-Type-Options: nosniff
+      Referrer-Policy: strict-origin-when-cross-origin
+      Content-Security-Policy: >-
+        default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';
+        object-src 'none'; base-uri 'none'

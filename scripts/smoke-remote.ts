@@ -298,7 +298,7 @@ console.log(
 console.log(`artifact: ${path.join(DATA, 'forge.json')} (schemaVersion ${(data as ForgeData).schemaVersion})`);
 console.log('next:');
 console.log(`  FRZNFORGE_OUT_DIR=${DATA} npx astro build --outDir ${DIST}`);
-console.log(`  node tests/e2e/serve.mjs ${DIST} 4400`);
+console.log(`  npx tsx tests/e2e/serve.ts ${DIST} 4400`);
 
 if (failed.length > 0) {
   console.error('\nFAILED providers:');

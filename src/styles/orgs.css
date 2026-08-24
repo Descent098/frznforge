@@ -1,0 +1,80 @@
+/* ==========================================================================
+   Organizations (Phase 6). Imported by the /orgs/* pages only, not by Base.astro,
+   so the rest of the site does not pay for CSS it never uses.
+
+   Everything here is built from the tokens in global.css — no new colours, no new
+   radii. The org card is the repo card's sibling: same heat stripe vocabulary
+   (fire = moved recently, ice = dormant), one size up because an org is a container.
+   ========================================================================== */
+
+.hf-org-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--hf-gutter);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+@media (max-width: 880px) {
+  .hf-org-grid { grid-template-columns: 1fr; }
+}
+
+.hf-org-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 20px 22px 18px;
+  border-radius: var(--hf-radius);
+  border: 1px solid var(--hf-border);
+  background: var(--hf-surface);
+  box-shadow: var(--hf-shadow);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+/* Heat stripe across the top, same language as .hf-repo-card. */
+.hf-org-card::before {
+  content: "";
+  position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: var(--heat, var(--hf-neutral));
+}
+.hf-org-card:hover { transform: translateY(-2px); box-shadow: var(--hf-shadow-lg); border-color: var(--hf-border-strong); }
+.hf-org-card > * { position: relative; }
+/* `heat-*` itself is defined once in global.css; the card only consumes --heat. */
+
+.hf-org-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.hf-org-top h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.015em; min-width: 0; }
+.hf-org-top h2 a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hf-org-top h2 a:hover { color: var(--hf-accent); }
+.hf-org-top .hf-handle { font-family: var(--hf-mono); font-size: 12.5px; color: var(--hf-text-3); }
+
+.hf-org-desc { color: var(--hf-text-2); font-size: 13.5px; min-height: 2.9em; }
+
+.hf-org-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--hf-text-2); }
+.hf-org-facts li { display: inline-flex; align-items: center; gap: 6px; }
+.hf-org-facts svg { color: var(--hf-text-3); }
+.hf-org-facts b { font-weight: 640; color: var(--hf-text); }
+/* The listing link sits in a row of static facts, so it needs the design system's own
+   secondary-link affordance (ice + hover underline) — the arrow alone is not a cue. */
+.hf-org-facts a { color: var(--hf-ice); font-weight: 560; }
+.hf-org-facts a:hover { text-decoration: underline; }
+
+.hf-org-foot {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: auto; padding-top: 12px;
+  border-top: 1px solid var(--hf-border);
+  font-size: 12.5px; color: var(--hf-text-2);
+}
+.hf-org-foot .hf-langs { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hf-org-foot .hf-langs span { display: inline-flex; align-items: center; gap: 5px; }
+.hf-org-foot .hf-age { margin-left: auto; }
+
+/* Back link above a scoped page's <h1> ("← Canadian Coding"). */
+.hf-org-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 560; color: var(--hf-text-2);
+  margin-bottom: 6px;
+}
+.hf-org-back:hover { color: var(--hf-ice); text-decoration: underline; }
+.hf-org-back svg { color: var(--hf-text-3); }

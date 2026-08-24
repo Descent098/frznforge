@@ -29,6 +29,27 @@ export interface ResolvedConfig extends FrznforgeConfig {
   /** Absolute path to the profile markdown file. */
   profilePath: string;
   /**
+   * Absolute notes folder (`notes.dir`). May not exist — ingest then emits no notes, and warns
+   * `notes-dir-missing` only when `notesConfigured` says the folder was actually asked for.
+   */
+  notesDir: string;
+  /**
+   * Whether the user config declared a `notes` block at all.
+   *
+   * `notes.dir` has a default, so `notesDir` always points somewhere; without this flag a site
+   * that never opted into notes would raise `notes-dir-missing` on every single build and show
+   * a permanent "1 ingest warning" in its footer. A warning has to mean "something you asked
+   * for did not happen", so the missing-folder warning is reserved for the case where the user
+   * configured notes and the path is wrong.
+   */
+  notesConfigured: boolean;
+  /**
+   * Absolute organization-profile folder (`content.orgs`). May not exist — orgs then render
+   * from config alone. Named `orgsDir` rather than `contentOrgs` because that is what every
+   * consumer calls it.
+   */
+  orgsDir: string;
+  /**
    * Repos with an absolute path to scan. For `type: 'local'` that is the configured
    * directory; for remote sources it is the mirror clone inside `cacheDir`, which may not
    * exist yet — the importer creates it before the scanner runs. Downstream code therefore
@@ -135,7 +156,9 @@ export function sourceRepoName(source: RemoteRepoSourceConfig): string {
  * Validate, apply defaults, and resolve paths against the project root.
  * `FRZNFORGE_OUT_DIR` / `FRZNFORGE_CACHE_DIR` (env) override `ingest.outDir` and
  * `ingest.cacheDir` — used by the e2e tests to build the site against a fixture artifact
- * without touching the real one.
+ * without touching the real one. `notes.dir` and `content.orgs` have no env override: nothing
+ * needs one (the tests point the config itself at a fixture folder), and every extra env knob
+ * is another way for a build to differ from the config that is checked in.
  */
 export function resolveConfig(input: FrznforgeConfigInput, root: string = PROJECT_ROOT): ResolvedConfig {
   const cfg = FrznforgeConfigSchema.parse(input);
@@ -147,6 +170,11 @@ export function resolveConfig(input: FrznforgeConfigInput, root: string = PROJEC
     outDir: path.resolve(root, env.FRZNFORGE_OUT_DIR || cfg.ingest.outDir),
     cacheDir,
     profilePath: path.resolve(root, cfg.owner.profile),
+    notesDir: path.resolve(root, cfg.notes.dir),
+    // Read from the *raw* input: zod's `.prefault({})` makes an omitted `notes` block
+    // indistinguishable from `notes: {}` once parsed.
+    notesConfigured: input.notes !== undefined,
+    orgsDir: path.resolve(root, cfg.content.orgs),
     repos: cfg.repos.map((r) => ({
       ...r,
       absPath: r.type === 'local' ? path.resolve(root, r.path) : cachePathFor(cacheDir, r)!,
