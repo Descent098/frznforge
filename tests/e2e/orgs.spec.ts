@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import { waitForIslands } from './helpers';
 
 interface ArtifactOrg { slug: string; name: string; description: string | null; repos: string[] }
 
@@ -96,6 +97,7 @@ test.describe('organizations', () => {
     const cards = page.locator('.hf-repo-card');
     await expect(cards).toHaveCount(org!.repos.length);
 
+    await waitForIslands(page); // typing into the SSR'd input is a no-op until it hydrates
     await page.getByRole('searchbox', { name: /search repositories/i }).fill('zzz-no-such-repo');
     await expect(cards).toHaveCount(0);
     await expect(page.locator('.hf-empty')).toContainText('Nothing matches');

@@ -225,7 +225,7 @@ Ships
 - [ ] User docs in `docs/user/`: quick start, config reference, deploy guides (GitHub Pages,
   Cloudflare Pages, any static host), migrating from a forge.
 - [ ] `create-frznforge` / template repo for new users.
-- [ ] Cut `v1.0.0`.
+- [ ] Cut `v0.1.0`.
 
 Done when
 - [ ] Documentation is enough for someone to go from zero to a deployed site without reading

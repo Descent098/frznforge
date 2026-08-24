@@ -19,7 +19,9 @@ import {
   commitUrl,
   commitsPageCount,
   commitsUrl,
+  encodePathSegments,
   findRef,
+  isRawServable,
   rawRoutes,
   releaseUrl,
   releasesOf,
@@ -79,6 +81,13 @@ describe('phase 3: artifact ↔ file/route sync', () => {
         // the ref root itself
         expect(urls.has(treeUrl(r.slug, ref.name))).toBe(true);
         for (const e of ref.tree) {
+          // A path holding '#'/'%' is deliberately routeless — no static URL reaches it, and
+          // ingest warned with 'repo-path-unservable'. See repo-path-encoding.test.ts.
+          if (!isRawServable(e.path)) {
+            expect(urls.has(treeUrl(r.slug, ref.name, e.path))).toBe(false);
+            expect(urls.has(blobUrl(r.slug, ref.name, e.path))).toBe(false);
+            continue;
+          }
           if (e.type === 'tree') expect(urls.has(treeUrl(r.slug, ref.name, e.path))).toBe(true);
           else if (e.type === 'blob' || e.type === 'symlink') expect(urls.has(blobUrl(r.slug, ref.name, e.path))).toBe(true);
         }
@@ -99,8 +108,9 @@ describe('phase 3: artifact ↔ file/route sync', () => {
       const rawUrls = new Set(raw.map((x) => x.url));
       for (const ref of browsableRefs(r)) {
         for (const [p, info] of Object.entries(ref.files)) {
-          if (info.stored) {
-            expect(rawUrls.has(`/repos/${r.slug}/raw/${ref.slugged}/${p}`)).toBe(true);
+          if (info.stored && isRawServable(p)) {
+            // hand-built rather than via rawUrl(), so the encoding contract itself is asserted
+            expect(rawUrls.has(`/repos/${r.slug}/raw/${ref.slugged}/${encodePathSegments(p)}`)).toBe(true);
             expect(readBlobBuffer(outDir, info.sha)).not.toBeNull();
           }
         }
