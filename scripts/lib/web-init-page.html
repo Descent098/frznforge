@@ -1,0 +1,966 @@
+<!doctype html>
+<!--
+  The whole UI for `npm run frznforge -- init --web`, served by scripts/lib/web-init.ts.
+
+  Self-contained on purpose: inline CSS, inline JS, no build step, no CDN, no framework. The
+  server sends a CSP of `default-src 'none'; connect-src 'self'` so the page physically cannot
+  reach anything but the local server that served it.
+
+  It is a *static* document — the server never interpolates anything into it. Everything the
+  page knows arrives over /api/*, and every provider-supplied string (repo names, descriptions)
+  is put on the page with textContent, never innerHTML.
+
+  The session token lives in `?s=…` and is echoed on every request. The provider token never
+  comes near this file.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>frznforge init</title>
+<style>
+/* Tokens lifted from src/styles/global.css (hearth palette) so the wizard looks like the site. */
+:root {
+  color-scheme: light;
+  --canvas: #f6f1ea;
+  --canvas-2: #efe8df;
+  --surface: #fffcf8;
+  --surface-2: #f9f4ee;
+  --border: rgba(70, 45, 25, 0.12);
+  --border-strong: rgba(70, 45, 25, 0.22);
+  --shadow: 0 1px 2px rgba(60, 35, 15, 0.06), 0 8px 24px -12px rgba(60, 35, 15, 0.18);
+  --text: #24190f;
+  --text-2: #5c4e43;
+  --text-3: #7a6c60;
+  --ember: #ea5a14;
+  --ember-2: #ff8a3d;
+  --ember-soft: rgba(234, 90, 20, 0.12);
+  --amber: #d98c12;
+  --amber-soft: rgba(217, 140, 18, 0.14);
+  --ice: #2f86c7;
+  --ice-2: #6cc1ff;
+  --ice-soft: rgba(47, 134, 199, 0.12);
+  --danger: #c0392b;
+  --danger-soft: rgba(192, 57, 43, 0.1);
+  --on-accent: #fff7f0;
+  --accent-shadow: rgba(234, 90, 20, 0.55);
+  --code-bg: rgba(70, 45, 25, 0.07);
+  --radius: 14px;
+  --radius-sm: 9px;
+  --pill: 999px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --canvas: #171210;
+    --canvas-2: #1d1714;
+    --surface: #221b17;
+    --surface-2: #29211c;
+    --border: rgba(255, 220, 190, 0.10);
+    --border-strong: rgba(255, 220, 190, 0.2);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
+    --text: #f4ece4;
+    --text-2: #c2b3a6;
+    --text-3: #a4968a;
+    --ember: #ff7a2f;
+    --ember-2: #ffa15c;
+    --ember-soft: rgba(255, 122, 47, 0.16);
+    --amber: #f0a62a;
+    --amber-soft: rgba(240, 166, 42, 0.16);
+    --ice: #5fb1ee;
+    --ice-2: #9ad6ff;
+    --ice-soft: rgba(95, 177, 238, 0.16);
+    --danger: #ff8a7a;
+    --danger-soft: rgba(255, 138, 122, 0.14);
+    --on-accent: #1c0f06;
+    --accent-shadow: rgba(255, 122, 47, 0.45);
+    --code-bg: rgba(255, 220, 190, 0.08);
+  }
+}
+
+* { box-sizing: border-box; }
+/* Several things here are flex/grid containers, whose `display` would otherwise beat [hidden]. */
+[hidden] { display: none !important; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font-family: var(--font);
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { margin: 0; line-height: 1.2; font-weight: 650; letter-spacing: -0.01em; }
+p { margin: 0; }
+code, pre, kbd { font-family: var(--mono); }
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+.wrap { max-width: 940px; margin: 0 auto; padding: 28px 20px 64px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ---- header ---- */
+.hdr { display: flex; align-items: center; gap: 14px; padding: 4px 2px 6px; flex-wrap: wrap; }
+.mark {
+  width: 38px; height: 38px; flex: none; border-radius: 11px;
+  display: grid; place-items: center;
+  background: linear-gradient(180deg, var(--ember-2), var(--ember));
+  color: var(--on-accent); font-size: 19px; font-weight: 700;
+  box-shadow: 0 6px 14px -6px var(--accent-shadow);
+}
+.hdr h1 { font-size: 19px; }
+.hdr .sub { color: var(--text-3); font-size: 13px; margin-top: 2px; }
+.hdr .sub code { font-size: 12.5px; background: var(--code-bg); padding: 1px 5px; border-radius: 5px; }
+.hdr .spacer { flex: 1; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 11px; border-radius: var(--pill);
+  background: var(--ice-soft); color: var(--ice);
+  font-size: 12px; font-weight: 560; white-space: nowrap;
+}
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ---- cards ---- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.card-head { display: flex; align-items: center; gap: 10px; padding: 13px 18px; border-bottom: 1px solid var(--border); }
+.card-head h2 { font-size: 14.5px; font-weight: 640; }
+.card-head .note { margin-left: auto; font-size: 12.5px; color: var(--text-3); }
+.card-body { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+.step {
+  width: 22px; height: 22px; flex: none; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--ember-soft); color: var(--ember);
+  font-size: 12px; font-weight: 700;
+}
+.card[aria-disabled="true"] { opacity: 0.55; }
+
+/* ---- forms ---- */
+fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+legend, .lbl {
+  padding: 0; font-size: 12px; font-weight: 620; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.segs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.seg { position: relative; }
+.seg input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.seg span {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 14px; border-radius: 10px;
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--text-2); font-size: 13.5px; font-weight: 560;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.seg:hover span { border-color: var(--text-3); }
+.seg input:checked + span {
+  border-color: transparent; color: var(--on-accent);
+  background: linear-gradient(180deg, var(--ember-2), var(--ember));
+  box-shadow: 0 6px 14px -8px var(--accent-shadow);
+}
+.seg input:focus-visible + span { outline: 2px solid var(--ember); outline-offset: 2px; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid2.solo { grid-template-columns: minmax(0, 460px); }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field label { font-size: 12px; font-weight: 620; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+input[type="text"], input[type="url"], input[type="search"] {
+  height: 36px; padding: 0 11px;
+  border-radius: 10px; border: 1px solid var(--border-strong);
+  background: var(--canvas); color: var(--text);
+  font: inherit; font-size: 13.5px; width: 100%; min-width: 0;
+}
+input::placeholder { color: var(--text-3); opacity: 0.8; }
+input:hover { border-color: var(--text-3); }
+input:focus { border-color: var(--ember); }
+.hint { font-size: 12px; color: var(--text-3); }
+.hint code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; font-size: 11.5px; }
+
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.row .spacer { flex: 1; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 34px; padding: 0 14px; border-radius: 10px;
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--text); font: inherit; font-size: 13.5px; font-weight: 560;
+  white-space: nowrap; cursor: pointer;
+  transition: background .12s, border-color .12s, transform .12s, filter .12s;
+}
+.btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--text-3); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary {
+  border-color: transparent; color: var(--on-accent);
+  background: linear-gradient(180deg, var(--ember-2), var(--ember));
+  box-shadow: 0 6px 14px -6px var(--accent-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.btn.primary:hover:not(:disabled) { filter: brightness(1.06); background: linear-gradient(180deg, var(--ember-2), var(--ember)); border-color: transparent; }
+.btn.small { height: 28px; padding: 0 10px; font-size: 12.5px; border-radius: 8px; }
+.btn.quiet { border-color: transparent; background: var(--ice-soft); color: var(--ice); }
+.btn.quiet:hover:not(:disabled) { background: var(--ice-soft); border-color: var(--ice); }
+
+.status { font-size: 13px; color: var(--text-3); }
+.status.busy::before {
+  content: ""; display: inline-block; width: 11px; height: 11px; margin-right: 7px;
+  vertical-align: -1px; border-radius: 50%;
+  border: 2px solid var(--ember-soft); border-top-color: var(--ember);
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .status.busy::before { animation-duration: 2.4s; } }
+
+.alert {
+  border-radius: var(--radius-sm); padding: 11px 13px;
+  background: var(--danger-soft); border: 1px solid var(--danger);
+  color: var(--danger); font-size: 13px;
+}
+.alert strong { display: block; margin-bottom: 2px; }
+.tokenline {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12.5px; color: var(--text-2);
+  background: var(--canvas-2); border-radius: var(--radius-sm); padding: 9px 12px;
+}
+.tokenline .key { flex: none; font-weight: 640; color: var(--text-3); }
+.tokenline code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; font-size: 11.5px; }
+
+/* ---- repo table ---- */
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.toolbar .filter { flex: 1 1 220px; min-width: 160px; }
+.toggles { display: flex; gap: 12px; flex-wrap: wrap; }
+.tg { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); cursor: pointer; }
+.tg input { accent-color: var(--ember); width: 15px; height: 15px; margin: 0; cursor: pointer; }
+.tg.off { opacity: 0.45; cursor: not-allowed; text-decoration: line-through; }
+.tg.off input { cursor: not-allowed; }
+.count { font-size: 13px; color: var(--text-2); }
+.count b { color: var(--text); font-weight: 660; }
+
+.tablewrap {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  overflow: auto; max-height: 46vh; background: var(--canvas);
+}
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  text-align: left; padding: 0; font-weight: 620; color: var(--text-3);
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;
+}
+thead th .th {
+  display: flex; align-items: center; gap: 5px;
+  padding: 9px 12px; width: 100%; background: none; border: 0;
+  font: inherit; color: inherit; text-align: left;
+}
+thead th button.th { cursor: pointer; }
+thead th button.th:hover { color: var(--text); }
+thead th[aria-sort]:not([aria-sort="none"]) button.th { color: var(--ember); }
+thead th .arrow { font-size: 9px; }
+tbody tr { border-bottom: 1px solid var(--border); }
+tbody tr:last-child { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+tbody tr.on { background: var(--ember-soft); }
+tbody tr.on:hover { background: var(--ember-soft); }
+td { padding: 8px 12px; vertical-align: top; }
+td.pick { width: 34px; padding-right: 0; }
+td.pick input { accent-color: var(--ember); width: 16px; height: 16px; margin: 2px 0 0; cursor: pointer; }
+td.name { white-space: nowrap; font-weight: 560; }
+td.name .owner { color: var(--text-3); font-weight: 500; }
+td.desc { color: var(--text-2); }
+td.tags { width: 1%; white-space: nowrap; text-align: right; }
+.tag {
+  display: inline-block; margin-left: 5px; padding: 1px 7px;
+  border-radius: var(--pill); font-size: 11px; font-weight: 600;
+  background: var(--canvas-2); color: var(--text-3); border: 1px solid var(--border);
+}
+.tag.fork { background: var(--ice-soft); color: var(--ice); border-color: transparent; }
+.tag.archived { background: var(--amber-soft); color: var(--amber); border-color: transparent; }
+.tag.private { background: var(--ember-soft); color: var(--ember); border-color: transparent; }
+.empty { padding: 22px; text-align: center; color: var(--text-3); font-size: 13px; }
+
+/* ---- preview ---- */
+pre.preview {
+  margin: 0; padding: 13px 15px; overflow: auto; max-height: 240px;
+  background: var(--canvas); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 12.5px; line-height: 1.55; color: var(--text-2);
+  white-space: pre; tab-size: 2;
+}
+.dest { font-size: 12.5px; color: var(--text-3); overflow-wrap: break-word; }
+.dest code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+
+.radios { display: flex; flex-direction: column; gap: 8px; margin-top: 9px; }
+.radio { display: flex; align-items: flex-start; gap: 9px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.radio:hover { border-color: var(--border-strong); }
+.radio:has(input:checked) { border-color: var(--ember); background: var(--ember-soft); }
+.radio input { accent-color: var(--ember); margin: 3px 0 0; width: 15px; height: 15px; flex: none; cursor: pointer; }
+.radio b { font-weight: 600; font-size: 13.5px; }
+.radio small { display: block; color: var(--text-3); font-size: 12px; }
+
+/* ---- final state ---- */
+.done-body { display: flex; flex-direction: column; gap: 12px; padding: 22px; }
+.done-body h2 { font-size: 17px; }
+.done-body ul { margin: 0; padding-left: 18px; color: var(--text-2); font-size: 13px; }
+.done-body li { margin: 2px 0; }
+.done-body code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; font-size: 12px; word-break: break-all; }
+.tick { color: var(--ember); font-size: 22px; line-height: 1; }
+
+footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top: 4px; }
+
+@media (max-width: 760px) {
+  .grid2 { grid-template-columns: 1fr; }
+  .wrap { padding: 18px 12px 48px; }
+}
+@media (max-width: 620px) {
+  td.desc, th.desc { display: none; }
+  .tablewrap { max-height: 55vh; }
+  td.name { white-space: normal; word-break: break-word; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hdr">
+    <div class="mark" aria-hidden="true">&#9670;</div>
+    <div>
+      <h1>frznforge init</h1>
+      <p class="sub">Add repositories to <code id="cfgname">frznforge.config.ts</code></p>
+    </div>
+    <div class="spacer"></div>
+    <span class="chip" title="This page is served by a local process and is not reachable from anywhere else.">
+      <span class="dot" aria-hidden="true"></span>127.0.0.1 &middot; this machine only
+    </span>
+  </header>
+
+  <noscript>
+    <div class="card"><div class="card-body"><div class="alert">
+      <strong>JavaScript is required.</strong>
+      This wizard talks to the local process that opened it. Use <code>npm run frznforge -- init</code> in the
+      terminal instead.
+    </div></div></div>
+  </noscript>
+
+  <!-- 1. where the repositories come from -->
+  <section class="card" aria-labelledby="h-source">
+    <div class="card-head"><span class="step" aria-hidden="true">1</span><h2 id="h-source">Source</h2></div>
+    <div class="card-body">
+      <fieldset>
+        <legend>Provider</legend>
+        <div class="segs" id="providers"></div>
+      </fieldset>
+
+      <div class="grid2">
+        <div class="field" id="host-field">
+          <label for="host">API host</label>
+          <input id="host" type="url" spellcheck="false" autocapitalize="off" autocomplete="off">
+          <p class="hint" id="host-hint"></p>
+        </div>
+        <div class="field">
+          <label for="account">Account</label>
+          <input id="account" type="text" spellcheck="false" autocapitalize="off" autocomplete="off"
+                 placeholder="e.g. Descent098">
+          <p class="hint" id="account-hint"></p>
+        </div>
+      </div>
+
+      <p class="tokenline" id="tokenline"><span class="key">Token</span><span id="tokentext">checking&hellip;</span></p>
+
+      <div class="row">
+        <button type="button" class="btn primary" id="load">Load repositories</button>
+        <button type="button" class="btn small quiet" id="host-toggle" hidden>Custom API host</button>
+        <div class="spacer"></div>
+        <span class="status" id="load-status" role="status" aria-live="polite"></span>
+      </div>
+      <div class="alert" id="load-error" role="alert" hidden></div>
+    </div>
+  </section>
+
+  <!-- 2. pick the repositories -->
+  <section class="card" id="repo-card" hidden aria-labelledby="h-repos">
+    <div class="card-head">
+      <span class="step" aria-hidden="true">2</span><h2 id="h-repos">Repositories</h2>
+      <span class="note" id="repo-note"></span>
+    </div>
+    <div class="card-body">
+      <div class="toolbar">
+        <div class="field filter">
+          <label class="sr" for="filter">Filter repositories</label>
+          <input id="filter" type="search" placeholder="Filter by name or description&hellip;">
+        </div>
+        <div class="toggles" role="group" aria-label="Quick filters">
+          <label class="tg" id="tg-fork"><input type="checkbox" id="hide-forks">Hide forks</label>
+          <label class="tg" id="tg-archived"><input type="checkbox" id="hide-archived">Hide archived</label>
+          <label class="tg" id="tg-private"><input type="checkbox" id="hide-private">Hide private</label>
+        </div>
+      </div>
+      <div class="row">
+        <button type="button" class="btn small" id="sel-all">Select all</button>
+        <button type="button" class="btn small" id="sel-visible">Select visible</button>
+        <button type="button" class="btn small" id="sel-none">Select none</button>
+        <div class="spacer"></div>
+        <p class="count" id="count" role="status" aria-live="polite"></p>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <caption class="sr">Repositories found for this account. Tick the ones to add to the config.</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="pick"><span class="sr">Selected</span>
+                <button type="button" class="th" id="sort-sel" title="Sort by selection"><span aria-hidden="true">&#10003;</span></button>
+              </th>
+              <th scope="col"><button type="button" class="th" id="sort-name">Repository <span class="arrow" id="arrow-name" aria-hidden="true"></span></button></th>
+              <th scope="col" class="desc"><span class="th">Description</span></th>
+              <th scope="col"><span class="th"><span class="sr">Flags</span></span></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <p class="empty" id="empty" hidden>Nothing matches that filter.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. releases, preview, write -->
+  <section class="card" id="write-card" hidden aria-labelledby="h-write">
+    <div class="card-head"><span class="step" aria-hidden="true">3</span><h2 id="h-write">Write the config</h2></div>
+    <div class="card-body">
+      <fieldset>
+        <legend>Where releases come from</legend>
+        <div class="radios">
+          <label class="radio">
+            <input type="radio" name="releases" value="provider" checked>
+            <span><b>Provider releases</b><small>Imported over the API: titles, notes, dates and download assets.</small></span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="releases" value="tags">
+            <span><b>Annotated git tags</b><small>Built from the mirror. No API calls, works fully offline.</small></span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <span class="lbl" id="preview-label">Exactly what gets written</span>
+        <pre class="preview" id="preview" tabindex="0" aria-labelledby="preview-label">  repos: [
+  ],</pre>
+        <p class="dest" id="dest"></p>
+      </div>
+
+      <div class="alert" id="write-error" role="alert" hidden></div>
+
+      <div class="row">
+        <button type="button" class="btn primary" id="write">Write to config</button>
+        <button type="button" class="btn" id="cancel">Cancel</button>
+        <div class="spacer"></div>
+        <span class="status" id="write-status" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- terminal state: the server has exited by the time this is visible -->
+  <section class="card" id="done-card" hidden aria-labelledby="h-done">
+    <div class="done-body">
+      <h2 id="h-done"><span class="tick" aria-hidden="true">&#9670;</span> <span id="done-title">Done</span></h2>
+      <p id="done-text" class="hint"></p>
+      <ul id="done-list"></ul>
+      <p class="hint">The local server has stopped. You can close this tab.</p>
+    </div>
+  </section>
+
+  <footer>frznforge &middot; the provider token stays in this machine's environment and is never sent to this page.</footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var TOKEN = new URLSearchParams(location.search).get('s') || '';
+
+  /* ---------------------------------------------------------------- transport */
+
+  /**
+   * Every call carries the session token. `path` is always same-origin — the CSP the server
+   * sends makes anything else impossible anyway.
+   */
+  function api(path, body) {
+    var init = { method: body === undefined ? 'GET' : 'POST', headers: {} };
+    if (body !== undefined) {
+      init.headers['content-type'] = 'application/json';
+      init.body = JSON.stringify(body);
+    }
+    return fetch(path + '?s=' + encodeURIComponent(TOKEN), init).then(function (res) {
+      return res.text().then(function (text) {
+        var data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+        if (!res.ok) throw new Error((data && data.error) || (text || ('HTTP ' + res.status)));
+        return data;
+      });
+    });
+  }
+
+  /* ---------------------------------------------------------------- state */
+
+  var S = {
+    ctx: null,
+    provider: 'github',
+    repos: [],
+    // Which of fork/archived/private the loaded listing can actually report on.
+    flags: { fork: true, archived: true, private: true },
+    selected: Object.create(null),
+    loadedFor: null,
+    releases: 'provider',
+    sort: { key: 'name', dir: 1 },
+    hostShown: false,
+    finished: false
+  };
+
+  function info() { return S.ctx ? S.ctx.providers[S.provider] : null; }
+
+  /* ---------------------------------------------------------------- step 1 */
+
+  function buildProviders() {
+    var box = $('providers');
+    box.textContent = '';
+    S.ctx.order.forEach(function (name) {
+      var p = S.ctx.providers[name];
+      var wrap = document.createElement('label');
+      wrap.className = 'seg';
+      var input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'provider';
+      input.value = name;
+      input.checked = name === S.provider;
+      input.addEventListener('change', function () { S.provider = name; applyProvider(); });
+      var span = document.createElement('span');
+      span.textContent = p.label;
+      wrap.appendChild(input);
+      wrap.appendChild(span);
+      box.appendChild(wrap);
+    });
+  }
+
+  /** Host is only asked for when the provider has no sensible default (gitea/forgejo). */
+  function applyProvider() {
+    var p = info();
+    $('host').value = p.defaultHost || p.hostSuggestion;
+    $('host').placeholder = p.hostSuggestion;
+    // Say the token rule where the host is typed: a host other than the one named on the
+    // command line is listed anonymously, and the user should know that before they wonder
+    // where their private repositories went.
+    $('host-hint').textContent = p.hostRequired
+      ? 'The instance root, e.g. ' + p.hostSuggestion + '. A token is only sent to the --host you started init with.'
+      : 'API base URL. Change it only for self-hosted ' + p.label + ' — a custom host is listed without your token.';
+    $('account').placeholder = p.accountLabel === 'user or group path' ? 'e.g. gitlab-org/charts' : 'e.g. Descent098';
+    $('account-hint').textContent = p.accountLabel.charAt(0).toUpperCase() + p.accountLabel.slice(1) + '.';
+    S.hostShown = p.hostRequired;
+    $('host-toggle').hidden = p.hostRequired;
+    $('host-toggle').textContent = 'Custom API host';
+    renderHostField();
+    renderToken();
+    resetListing();
+  }
+
+  function renderHostField() {
+    $('host-field').hidden = !S.hostShown;
+    $('host-field').parentNode.classList.toggle('solo', !S.hostShown);
+  }
+
+  function renderToken() {
+    var t = info().token;
+    var el = $('tokentext');
+    el.textContent = '';
+    if (t.from) {
+      el.appendChild(document.createTextNode('using '));
+      var code = document.createElement('code');
+      code.textContent = '$' + t.from;
+      el.appendChild(code);
+      el.appendChild(document.createTextNode(' — read by the local process only; it never reaches this page.'));
+    } else {
+      el.appendChild(document.createTextNode('none set (checked '));
+      t.names.forEach(function (n, i) {
+        if (i) el.appendChild(document.createTextNode(', '));
+        var code = document.createElement('code');
+        code.textContent = '$' + n;
+        el.appendChild(code);
+      });
+      el.appendChild(document.createTextNode(') — public repositories only.'));
+    }
+  }
+
+  function resetListing() {
+    S.repos = [];
+    S.selected = Object.create(null);
+    S.loadedFor = null;
+    $('repo-card').hidden = true;
+    $('write-card').hidden = true;
+  }
+
+  function currentHost() {
+    var p = info();
+    var raw = (S.hostShown ? $('host').value : (p.defaultHost || $('host').value)) || '';
+    return raw.trim().replace(/\/+$/, '');
+  }
+
+  function load() {
+    var account = $('account').value.trim();
+    var host = currentHost();
+    $('load-error').hidden = true;
+    if (!account) {
+      fail('load-error', 'Enter an account', 'Which ' + info().accountLabel + ' should be listed?');
+      $('account').focus();
+      return;
+    }
+    if (!host) {
+      fail('load-error', 'Enter a host', info().label + ' needs the instance URL.');
+      $('host').focus();
+      return;
+    }
+    busy('load-status', 'Listing repositories…');
+    $('load').disabled = true;
+    api('/api/repos', { provider: S.provider, host: host, account: account })
+      .then(function (data) {
+        S.repos = data.repos;
+        S.loadedFor = { provider: S.provider, host: host, account: account };
+        S.flags = data.flags || { fork: true, archived: true, private: true };
+        applyFlagAvailability();
+        // Forks and archived repos are rarely what a showcase wants, so they start unticked —
+        // but only when the listing actually said which ones they are.
+        S.selected = Object.create(null);
+        S.repos.forEach(function (r) { if (!r.fork && !r.archived) S.selected[r.fullName] = true; });
+        idle('load-status', data.repos.length + ' repositor' + (data.repos.length === 1 ? 'y' : 'ies') + ' found.');
+        $('repo-note').textContent = data.account + ' on ' + data.hostLabel;
+        (data.warnings || []).forEach(function (w) { fail('load-error', 'Heads up', w); });
+        $('repo-card').hidden = false;
+        $('write-card').hidden = false;
+        render();
+        $('filter').focus();
+      })
+      .catch(function (err) {
+        idle('load-status', '');
+        fail('load-error', 'Could not list repositories', err.message);
+        resetListing();
+      })
+      .then(function () { $('load').disabled = false; });
+  }
+
+  /* ---------------------------------------------------------------- step 2 */
+
+  /**
+   * A quick filter the listing cannot answer for is turned off and disabled rather than left
+   * looking functional. GitLab's project listings never say which projects are forks, and only
+   * say `archived` for groups, so "Hide forks" there would tick and do nothing at all.
+   */
+  function applyFlagAvailability() {
+    [['fork', 'hide-forks', 'tg-fork', 'forks'],
+     ['archived', 'hide-archived', 'tg-archived', 'archived repositories'],
+     ['private', 'hide-private', 'tg-private', 'private repositories']].forEach(function (row) {
+      var known = S.flags[row[0]] !== false;
+      var box = $(row[1]);
+      box.disabled = !known;
+      if (!known) box.checked = false;
+      $(row[2]).classList.toggle('off', !known);
+      $(row[2]).title = known ? '' : 'This provider’s repository listing does not say which are ' + row[3] + '.';
+    });
+  }
+
+  function visibleRepos() {
+    var q = $('filter').value.trim().toLowerCase();
+    var list = S.repos.filter(function (r) {
+      if ($('hide-forks').checked && r.fork) return false;
+      if ($('hide-archived').checked && r.archived) return false;
+      if ($('hide-private').checked && r.private) return false;
+      if (!q) return true;
+      return r.fullName.toLowerCase().indexOf(q) !== -1
+        || (r.description || '').toLowerCase().indexOf(q) !== -1;
+    });
+    var dir = S.sort.dir;
+    if (S.sort.key === 'sel') {
+      list.sort(function (a, b) {
+        var d = (S.selected[b.fullName] ? 1 : 0) - (S.selected[a.fullName] ? 1 : 0);
+        return (d !== 0 ? d : a.fullName.localeCompare(b.fullName)) * dir;
+      });
+    } else {
+      list.sort(function (a, b) { return a.fullName.localeCompare(b.fullName) * dir; });
+    }
+    return list;
+  }
+
+  function selectedNames() {
+    return S.repos.filter(function (r) { return S.selected[r.fullName]; }).map(function (r) { return r.fullName; });
+  }
+
+  function render() {
+    var list = visibleRepos();
+    var body = $('rows');
+    body.textContent = '';
+    list.forEach(function (r) {
+      var tr = document.createElement('tr');
+      if (S.selected[r.fullName]) tr.className = 'on';
+
+      var pick = document.createElement('td');
+      pick.className = 'pick';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!S.selected[r.fullName];
+      cb.id = 'cb-' + r.fullName.replace(/[^\w.-]/g, '_');
+      cb.addEventListener('change', function () {
+        if (cb.checked) S.selected[r.fullName] = true; else delete S.selected[r.fullName];
+        tr.className = cb.checked ? 'on' : '';
+        afterSelectionChange();
+      });
+      pick.appendChild(cb);
+
+      var name = document.createElement('td');
+      name.className = 'name';
+      var label = document.createElement('label');
+      label.setAttribute('for', cb.id);
+      var owner = r.fullName.slice(0, r.fullName.length - r.name.length);
+      if (owner) {
+        var o = document.createElement('span');
+        o.className = 'owner';
+        o.textContent = owner;
+        label.appendChild(o);
+      }
+      label.appendChild(document.createTextNode(r.name));
+      name.appendChild(label);
+
+      var desc = document.createElement('td');
+      desc.className = 'desc';
+      desc.textContent = r.description || '';
+
+      var tags = document.createElement('td');
+      tags.className = 'tags';
+      [['private', r.private], ['archived', r.archived], ['fork', r.fork]].forEach(function (pair) {
+        if (!pair[1]) return;
+        var s = document.createElement('span');
+        s.className = 'tag ' + pair[0];
+        s.textContent = pair[0];
+        tags.appendChild(s);
+      });
+
+      tr.appendChild(pick);
+      tr.appendChild(name);
+      tr.appendChild(desc);
+      tr.appendChild(tags);
+      body.appendChild(tr);
+    });
+
+    $('empty').hidden = list.length !== 0;
+    $('arrow-name').textContent = S.sort.key === 'name' ? (S.sort.dir === 1 ? '▲' : '▼') : '';
+    $('sort-name').parentNode.setAttribute('aria-sort', S.sort.key === 'name' ? (S.sort.dir === 1 ? 'ascending' : 'descending') : 'none');
+    updateCount(list.length);
+  }
+
+  function updateCount(shown) {
+    var n = selectedNames().length;
+    var c = $('count');
+    c.textContent = '';
+    var b = document.createElement('b');
+    b.textContent = String(n);
+    c.appendChild(b);
+    c.appendChild(document.createTextNode(' of ' + S.repos.length + ' selected'
+      + (shown !== S.repos.length ? ' · ' + shown + ' shown' : '')));
+  }
+
+  function afterSelectionChange() {
+    updateCount(visibleRepos().length);
+    schedulePreview();
+  }
+
+  function setAll(which) {
+    if (which === 'none') S.selected = Object.create(null);
+    else if (which === 'all') S.repos.forEach(function (r) { S.selected[r.fullName] = true; });
+    else visibleRepos().forEach(function (r) { S.selected[r.fullName] = true; });
+    render();
+    schedulePreview();
+  }
+
+  function toggleSort(key) {
+    if (S.sort.key === key) S.sort.dir = -S.sort.dir;
+    else { S.sort.key = key; S.sort.dir = 1; }
+    render();
+  }
+
+  /* ---------------------------------------------------------------- step 3 */
+
+  var previewTimer = null;
+  function schedulePreview() {
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = setTimeout(refreshPreview, 180);
+  }
+
+  function refreshPreview() {
+    if (!S.loadedFor) return;
+    var names = selectedNames();
+    if (names.length === 0) {
+      $('preview').textContent = '  repos: [\n  ],';
+      $('dest').textContent = 'Nothing selected yet.';
+      $('write').disabled = true;
+      return;
+    }
+    api('/api/preview', {
+      provider: S.loadedFor.provider, host: S.loadedFor.host, account: S.loadedFor.account,
+      releases: S.releases, select: names
+    }).then(function (data) {
+      $('preview').textContent = data.snippet;
+      $('write').disabled = !S.ctx.configPath || !data.changed;
+      var dest = $('dest');
+      dest.textContent = '';
+      if (!S.ctx.configPath) {
+        dest.textContent = 'No frznforge.config.ts was found — copy the snippet above into your config by hand.';
+        return;
+      }
+      dest.appendChild(document.createTextNode(data.changed
+        ? 'Adds ' + data.added + ' entr' + (data.added === 1 ? 'y' : 'ies') + ' to '
+        : 'Every selected repository is already in '));
+      var code = document.createElement('code');
+      code.textContent = S.ctx.configPath;
+      dest.appendChild(code);
+      if (data.changed && data.skipped) {
+        dest.appendChild(document.createTextNode(' · ' + data.skipped + ' already present, skipped'));
+      }
+      dest.appendChild(document.createTextNode(data.changed
+        ? ' · a timestamped .bak copy is written first'
+        : ' · nothing to write, use Cancel to close the wizard'));
+    }).catch(function (err) {
+      $('preview').textContent = '';
+      fail('write-error', 'Preview failed', err.message);
+    });
+  }
+
+  function write() {
+    if (!S.loadedFor) return;
+    $('write-error').hidden = true;
+    $('write').disabled = true;
+    $('cancel').disabled = true;
+    busy('write-status', 'Writing…');
+    api('/api/write', {
+      provider: S.loadedFor.provider, host: S.loadedFor.host, account: S.loadedFor.account,
+      releases: S.releases, select: selectedNames()
+    }).then(function (data) {
+      S.finished = true;
+      finish(data.changed ? 'Written' : 'Already up to date', data.changed
+        ? 'The wizard has updated your config.'
+        : 'Everything you picked was already in the config, so nothing was changed.', [
+        data.added + ' entr' + (data.added === 1 ? 'y' : 'ies') + ' added'
+          + (data.skipped ? ', ' + data.skipped + ' already present and skipped' : ''),
+        ['Config', data.configPath],
+        data.backup ? ['Backup', data.backup] : null,
+        ['Next', 'npm run build']
+      ]);
+    }).catch(function (err) {
+      idle('write-status', '');
+      $('write').disabled = false;
+      $('cancel').disabled = false;
+      fail('write-error', 'Nothing was written', err.message);
+    });
+  }
+
+  function cancel() {
+    $('write').disabled = true;
+    $('cancel').disabled = true;
+    api('/api/cancel', {}).catch(function () { /* the server may close before answering */ })
+      .then(function () {
+        S.finished = true;
+        finish('Cancelled', 'No file was touched.', ['Run npm run frznforge -- init --web again when you are ready.']);
+      });
+  }
+
+  /** `lines` is a list of strings, or [label, value] pairs whose value is shown as code. */
+  function finish(title, text, lines) {
+    $('done-title').textContent = title;
+    $('done-text').textContent = text;
+    var ul = $('done-list');
+    ul.textContent = '';
+    lines.filter(Boolean).forEach(function (line) {
+      var li = document.createElement('li');
+      if (typeof line === 'string') {
+        li.textContent = line;
+      } else {
+        li.appendChild(document.createTextNode(line[0] + ' '));
+        var code = document.createElement('code');
+        code.textContent = line[1];
+        li.appendChild(code);
+      }
+      ul.appendChild(li);
+    });
+    ['repo-card', 'write-card'].forEach(function (id) { $(id).hidden = true; });
+    document.querySelector('.card').setAttribute('aria-disabled', 'true');
+    document.querySelectorAll('.card input, .card button').forEach(function (el) { el.disabled = true; });
+    $('done-card').hidden = false;
+    $('done-card').scrollIntoView({ block: 'nearest' });
+  }
+
+  /* ---------------------------------------------------------------- small helpers */
+
+  function busy(id, text) { var e = $(id); e.className = 'status busy'; e.textContent = text; }
+  function idle(id, text) { var e = $(id); e.className = 'status'; e.textContent = text; }
+  function fail(id, title, detail) {
+    var e = $(id);
+    e.textContent = '';
+    var s = document.createElement('strong');
+    s.textContent = title;
+    e.appendChild(s);
+    e.appendChild(document.createTextNode(detail || ''));
+    e.hidden = false;
+  }
+
+  /* ---------------------------------------------------------------- wiring */
+
+  $('load').addEventListener('click', load);
+  $('account').addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+  $('host').addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+  $('host-toggle').addEventListener('click', function () {
+    S.hostShown = !S.hostShown;
+    renderHostField();
+    $('host-toggle').textContent = S.hostShown ? 'Use the default host' : 'Custom API host';
+    if (S.hostShown) $('host').focus();
+  });
+  $('filter').addEventListener('input', render);
+  ['hide-forks', 'hide-archived', 'hide-private'].forEach(function (id) {
+    $(id).addEventListener('change', render);
+  });
+  $('sel-all').addEventListener('click', function () { setAll('all'); });
+  $('sel-visible').addEventListener('click', function () { setAll('visible'); });
+  $('sel-none').addEventListener('click', function () { setAll('none'); });
+  $('sort-name').addEventListener('click', function () { toggleSort('name'); });
+  $('sort-sel').addEventListener('click', function () { toggleSort('sel'); });
+  document.querySelectorAll('input[name="releases"]').forEach(function (el) {
+    el.addEventListener('change', function () { S.releases = el.value; schedulePreview(); });
+  });
+  $('write').addEventListener('click', write);
+  $('cancel').addEventListener('click', cancel);
+
+  /* ---------------------------------------------------------------- boot */
+
+  api('/api/context').then(function (ctx) {
+    S.ctx = ctx;
+    S.provider = ctx.defaults.provider || ctx.order[0];
+    S.releases = ctx.defaults.releases || 'provider';
+    buildProviders();
+    applyProvider();
+    if (ctx.defaults.host) { S.hostShown = true; renderHostField(); $('host').value = ctx.defaults.host; }
+    if (ctx.defaults.account) $('account').value = ctx.defaults.account;
+    document.querySelectorAll('input[name="releases"]').forEach(function (el) { el.checked = el.value === S.releases; });
+    if (ctx.configName) $('cfgname').textContent = ctx.configName;
+    $('account').focus();
+    if (ctx.defaults.account) load();
+  }).catch(function (err) {
+    fail('load-error', 'Could not reach the local wizard', err.message
+      + ' — open the exact URL printed in the terminal (it carries a one-time session key).');
+  });
+})();
+</script>
+</body>
+</html>

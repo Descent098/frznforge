@@ -139,7 +139,8 @@ What it does, in order:
 3. reports **which environment variable** it consulted for a token and whether one was found
    (never the value), then lists that account's repositories over the API, paginated,
    public-only when there is no token;
-4. lets you pick with a numbered multi-select — `1,3,5-8`, `all`, or repository names;
+4. lets you pick with a numbered multi-select — `1,3,5-8`, `all`, `all-nf` (all except forks),
+   or repository names; see [selection specifiers](#selection-specifiers);
 5. asks whether releases should come from the provider or from tags;
 6. prints the exact config snippet, shows a `+` line per entry it would add, and asks for a
    `y/N` confirmation before touching anything.
@@ -153,6 +154,69 @@ reported as "already present, skipped".
 If the config cannot be found or has no `repos` array, `init` just prints the snippet for you
 to paste.
 
+### Selection specifiers
+
+The same syntax works at the interactive prompt and in `--select=`.
+
+| Specifier | Selects |
+|---|---|
+| `all` | every listed repository |
+| `none` | nothing — `init` says "Nothing selected" and exits `0` |
+| `1,3,5-8` | by position in the listing (1-based, ranges allowed) |
+| `ezcv,sdu`, `me/ezcv` | by name or `owner/name`, case-insensitive |
+| `all-nf` | all **except forks** |
+| `all-na` | all **except archived** repositories |
+| `all-np` | all **except private** repositories |
+| `all-nfna`, `all-nf-na` | combined — flags concatenate or dash-separate, in any order |
+
+An **empty answer** is the one place the two differ. `--select=` with nothing after it means
+`none`; at the prompt an empty line takes the default the prompt shows in brackets, which is
+`[all]`. Nothing is written either way without the `y/N` confirmation that follows.
+
+A repository whose own name begins with `all-` — `all-contributors`, say — wins over the filter
+grammar: an exact name or `owner/name` match is looked up first, so `--select=all-contributors`
+selects that one repository and never reads `co` as a filter code.
+
+Every exclusion flag is `n` + the initial of what it drops. They are case-insensitive
+(`ALL-NF` works), and an unknown one is refused by name rather than silently ignored:
+
+```
+--select: unknown filter 'nx' in 'all-nx'; known: nf = forks, na = archived, np = private
+```
+
+Exclusions apply **only** to the `all` form: `1,3` and `ezcv,sdu` name repositories outright,
+so a fork or an archived repo you asked for by name is still added. They also cannot be mixed
+into a list — `all-nf,ezcv` is refused rather than half-honoured.
+
+**Not every provider can answer every flag.** GitLab's project listings do not report which
+projects are forks, and report `archived` only for groups, not for user accounts. Rather than
+quietly keep the repositories you asked to drop, `init` refuses the flag:
+
+```
+--select: 'nf' cannot be applied here: this provider's repository listing does not say which
+repositories are forks. Select by name or index instead (e.g. name,name or 1,3,5-8).
+```
+
+The same is true of the **Hide forks / Hide archived** toggles in `--web`: a toggle the listing
+cannot answer for is shown struck through and disabled instead of doing nothing.
+
+When a filter drops anything, `init` says what it dropped before printing the snippet:
+
+```
+selected 86 of 118 (excluded 32 forks)
+```
+
+When two filters would drop the same repository it is counted once, under the first reason in
+the `nf, na, np` order — so the numbers add up to the repositories actually removed
+(`118 − 71 = 47`), not to the account's totals for each flag.
+
+If a filter drops *everything*, `init` says so and exits `1` instead of writing an empty
+selection:
+
+```
+all-nf excluded all 4 repositories (4 forks) — nothing to add.
+```
+
 ### Flags (for scripting and CI)
 
 | Flag | Meaning |
@@ -160,15 +224,22 @@ to paste.
 | `--provider=github\|gitlab\|gitea\|forgejo` | Provider to query |
 | `--host=<url>` | API/instance base URL (required for gitea/forgejo) |
 | `--account=<name>` | User, organisation, or GitLab group path |
-| `--select=all\|1,3,5-8\|name,name` | Which listed repos to add |
+| `--select=<spec>` | Which listed repos to add — see [selection specifiers](#selection-specifiers) |
 | `--releases=provider\|tags` | Release source (default `provider`) |
 | `--config=<path>` | Config file to edit (default: nearest `frznforge.config.ts`) |
 | `--print` | Print the snippet and stop; never writes a file |
 | `--yes` | Write without the confirmation prompt |
+| `--web` | Pick the repos in a local browser UI (interactive; cannot be combined with `--print`) |
+| `--port=<n>` | Port for `--web` (default: a free one) |
+| `--no-open` | Do not launch a browser for `--web`; print the URL instead |
 | `--help`, `-h` | Usage |
 
 ```bash
 npm run frznforge -- init --provider=github --account=Descent098 --select=all --print
+
+# a big account in one go: everything except forks and archived repositories
+npm run frznforge -- init --provider=github --account=Descent098 --select=all-nfna --yes
+
 npm run frznforge -- init --provider=forgejo --host=https://codeberg.org \
   --account=me --select=1-3 --releases=tags --yes
 ```
@@ -176,6 +247,118 @@ npm run frznforge -- init --provider=forgejo --host=https://codeberg.org \
 `init` is interactive by design. If stdin is not a terminal **and** the flags do not describe
 the whole run, it prints how to do it non-interactively and exits `1` — it never hangs
 waiting for input that cannot arrive.
+
+### Picking in a browser: `--web`
+
+```
+npm run frznforge -- init --web
+```
+
+`--web` replaces the numbered prompt with a small local web UI for choosing repositories:
+same providers, same tokens (still environment-only), same config write. It is interactive —
+it needs a browser on the machine you run it on, so it is not a CI form, and it cannot be
+combined with `--print`.
+
+`--provider`, `--host`, `--account` and `--releases` pre-seed the form (an account given on
+the command line is listed as soon as the page opens), `--config` fixes the file that gets
+written, and `--port` / `--no-open` control the server. `--select` and `--yes` have no effect:
+under `--web` the picking and the confirming both happen in the page.
+
+#### What you see
+
+The wizard opens one page with three steps, and it does not move on until you tell it to:
+
+1. **Source** — provider, account, and (for Gitea/Forgejo, or behind *Custom API host* for the
+   others) the instance URL. Under the fields it says which environment variable it consulted
+   for a token and whether one was found — the **name only**, never a value.
+2. **Repositories** — everything the account exposes, in a table with a checkbox per row, the
+   description, and `fork` / `archived` / `private` badges. There is a text filter, quick
+   toggles for **Hide forks / Hide archived / Hide private** (the same cuts the terminal's
+   `all-nfna` specifiers make, and struck through and disabled when the provider's listing
+   cannot answer for that flag — see [selection specifiers](#selection-specifiers)),
+   **Select all / visible / none**, a click-to-sort *Repository* column, and a live
+   "12 of 20 selected" count. Forks and archived repositories start unticked; everything else
+   starts ticked.
+3. **Write the config** — the release mode, then a live preview of the *exact* snippet that
+   will be spliced in, the full path it goes to, and **Write to config** / **Cancel**.
+
+Writing is the same operation the terminal flow performs: a timestamped
+`frznforge.config.ts.<stamp>.bak` is written first, the entries are spliced into the existing
+`repos: [ … ]` array, and everything else in the file — comments, formatting — is untouched.
+Entries already present are skipped, so running it twice adds nothing the second time. The
+server prints the same summary to the terminal and exits `0` as soon as the write (or
+**Cancel**) is answered; a tab left open with nothing happening shuts the server down after
+15 minutes.
+
+#### Why it is safe to have a web page that can write your config
+
+`--web` is a page that can edit a file, so it is locked down on purpose:
+
+- **It listens on `127.0.0.1` only** — never `0.0.0.0`. Nothing on your network can reach it.
+- **Every request needs a one-time session key.** The key is minted per run and lives in the
+  URL that gets printed and opened (`http://127.0.0.1:<port>/?s=…`). Any request without it —
+  page or API — gets a `403`. That is what stops another program on your machine, or a random
+  site open in another tab, from driving the wizard: `127.0.0.1` is reachable from any page in
+  your browser, the session key is not guessable.
+- **The `Host` and `Origin` headers are pinned** to the loopback address and port it is
+  actually listening on, which is what defeats DNS rebinding.
+- **The browser never names the file.** Writes go to the path resolved by the process —
+  `--config`, or the nearest `frznforge.config.ts` — and to nothing else.
+- **The page cannot phone home.** It is served with
+  `Content-Security-Policy: default-src 'none'; connect-src 'self'`, so the browser itself
+  refuses any request to anywhere but the local server. No CDN, no fonts, no analytics.
+
+**The provider token never reaches the browser.** The page asks the local process for a
+listing; the process reads `$GITHUB_TOKEN` (or whichever variable applies) and calls the
+provider itself. All the page is ever told is the *name* of the variable a token came from.
+Error messages are scrubbed before they are sent, and there is a test that drives every
+endpoint with a sentinel token in the environment and asserts it appears in no response body
+and no response header.
+
+**…and it is only ever sent to a host you named yourself.** The *Custom API host* field is a
+free-text box in a web page, so a host typed into it would otherwise get an
+`Authorization: Bearer <your PAT>` for a URL nobody vetted. Instead the token goes out only
+when the host is the provider's own API base (`https://api.github.com`, `https://gitlab.com`)
+or the exact `--host` you passed on the command line *for that same provider*. Any other host
+is listed **anonymously** — public repositories only — and the page says so:
+
+```
+codeberg.example is not Gitea's own API host, so $FRZNFORGE_GITEA_TOKEN was not sent to it —
+only public repositories are listed. Restart with --host=… if that host really is your instance.
+```
+
+So a self-hosted instance you want listed *with* a token is started as
+`npm run frznforge -- init --web --provider=forgejo --host=https://codeberg.org`.
+
+#### `--port` and `--no-open`
+
+```bash
+npm run frznforge -- init --web --port=8765   # fixed port instead of a free one
+npm run frznforge -- init --web --no-open     # print the URL, do not launch a browser
+```
+
+`--no-open` is for headless machines and for when the automatic launch picks the wrong
+browser. The URL is printed either way.
+
+#### Over SSH
+
+The server is bound to loopback on the remote machine, so forward the port rather than
+exposing it:
+
+```bash
+# on the remote machine
+npm run frznforge -- init --web --port=8765 --no-open
+# → http://127.0.0.1:8765/?s=<key>
+
+# on your laptop, in another terminal
+ssh -N -L 8765:127.0.0.1:8765 you@remote
+```
+
+Then paste the printed URL — **including the `?s=…` key** — into your local browser. The port
+has to match on both sides: the server checks that the `Host` header names `127.0.0.1` or
+`localhost` on the port it is listening on, so `-L 9000:127.0.0.1:8765` would be refused.
+There is no option to bind anything but loopback, and a reverse proxy in front of it would
+fail the same `Host` check.
 
 ---
 

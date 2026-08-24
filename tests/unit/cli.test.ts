@@ -9,21 +9,30 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  EXCLUDE_FILTERS,
+  EXCLUDE_HELP,
   NON_TTY_MESSAGE,
   USAGE,
+  askForSelection,
   backupPathFor,
   entriesFor,
+  listRepos,
   entryKey,
+  excludedEverythingMessage,
   insertRepos,
   main,
+  parseAllSpec,
   parseArgs,
   parseSelection,
   renderEntry,
   renderSnippet,
+  resolveSelection,
   selectRepos,
+  selectionSummary,
   tokenMessage,
   tokenStatus,
   updateConfigFile,
+  type ExcludeFilter,
   type Io,
   type RemoteRepo,
 } from '../../scripts/cli';
@@ -66,6 +75,12 @@ export default defineConfig({
 function repo(fullName: string, extra: Partial<RemoteRepo> = {}): RemoteRepo {
   const [owner = '', name = ''] = fullName.split('/');
   return { name, fullName, owner, description: null, archived: false, private: false, fork: false, ...extra };
+}
+
+/** Unwrap a `Result`, failing the test (rather than the type checker) when it is an error. */
+function ok<T>(result: { ok: true; value: T } | { ok: false; error: string }): T {
+  if (!result.ok) throw new Error(`expected ok, got: ${result.error}`);
+  return result.value;
 }
 
 /** An `Io` that records everything written instead of printing it. */
@@ -137,6 +152,35 @@ describe('parseArgs', () => {
     expect(parseArgs(['init', '--account']).errors).toEqual(['--account needs a value']);
     expect(parseArgs(['init', 'extra']).errors).toEqual(['unexpected argument: extra']);
   });
+
+  it('reads the browser-UI flags', () => {
+    const { flags, errors } = parseArgs(['init', '--web', '--port=4173', '--no-open']);
+    expect(errors).toEqual([]);
+    expect(flags.web).toBe(true);
+    expect(flags.port).toBe(4173);
+    expect(flags.noOpen).toBe(true);
+
+    const bare = parseArgs(['init']).flags;
+    expect(bare.web).toBe(false);
+    expect(bare.noOpen).toBe(false);
+    expect(bare.port).toBeUndefined();
+    // 0 is meaningful: "pick a free ephemeral port".
+    expect(parseArgs(['init', '--web', '--port', '0']).flags.port).toBe(0);
+  });
+
+  it('rejects a port that is not a port', () => {
+    expect(parseArgs(['init', '--port=x']).errors[0]).toMatch(/--port must be a whole number/);
+    expect(parseArgs(['init', '--port=70000']).errors[0]).toMatch(/--port must be a whole number/);
+    expect(parseArgs(['init', '--port=80.5']).errors[0]).toMatch(/--port must be a whole number/);
+  });
+
+  it('rejects --web together with --print', () => {
+    const { errors } = parseArgs(['init', '--web', '--print']);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('--web and --print cannot be combined');
+    expect(parseArgs(['init', '--web']).errors).toEqual([]);
+    expect(parseArgs(['init', '--print']).errors).toEqual([]);
+  });
 });
 
 /* ------------------------------------------------------------------ selection */
@@ -178,6 +222,172 @@ describe('selectRepos', () => {
   it('reports unknown names and out-of-range indexes', () => {
     expect(selectRepos(repos, 'delta')).toEqual({ ok: false, error: 'no repository named delta' });
     expect(selectRepos(repos, '9')).toEqual({ ok: false, error: '9 is out of range (1-3)' });
+  });
+});
+
+/* ------------------------------------------------------------------ all-<flags> */
+
+describe('parseAllSpec', () => {
+  const codes = EXCLUDE_FILTERS.map((f) => f.code);
+
+  it('reads plain all, and nothing else', () => {
+    expect(parseAllSpec('all')).toEqual({ ok: true, value: new Set() });
+    expect(parseAllSpec('  ALL  ')).toEqual({ ok: true, value: new Set() });
+    expect(parseAllSpec('*')).toEqual({ ok: true, value: new Set() });
+    // not an `all` form at all → null, so the caller falls back to indexes and names
+    expect(parseAllSpec('')).toBeNull();
+    expect(parseAllSpec('none')).toBeNull();
+    expect(parseAllSpec('1,3,5-8')).toBeNull();
+    expect(parseAllSpec('ezcv,sdu')).toBeNull();
+    expect(parseAllSpec('allsorts')).toBeNull();
+  });
+
+  it('reads every code in the table on its own', () => {
+    for (const filter of EXCLUDE_FILTERS) {
+      expect(parseAllSpec(`all-${filter.code}`)).toEqual({ ok: true, value: new Set([filter.code]) });
+    }
+  });
+
+  it('reads codes concatenated, dash separated, repeated and in any case', () => {
+    const [first = '', second = ''] = codes;
+    const both = new Set([first, second]);
+    expect(parseAllSpec(`all-${first}${second}`)).toEqual({ ok: true, value: both });
+    expect(parseAllSpec(`all-${first}-${second}`)).toEqual({ ok: true, value: both });
+    expect(parseAllSpec(`all-${second}-${first}`)).toEqual({ ok: true, value: both });
+    expect(parseAllSpec(`ALL-${first.toUpperCase()}${second}`)).toEqual({ ok: true, value: both });
+    expect(parseAllSpec(`all-${first}-${first}`)).toEqual({ ok: true, value: new Set([first]) });
+    expect(parseAllSpec(`all-${codes.join('')}`)).toEqual({ ok: true, value: new Set(codes) });
+  });
+
+  it('names the offending flag and explains the known ones', () => {
+    expect(parseAllSpec('all-nx')).toEqual({
+      ok: false,
+      error: `unknown filter 'nx' in 'all-nx'; known: ${EXCLUDE_HELP}`,
+    });
+    // a good flag followed by a bad one points at the bad one, not at the whole spec
+    expect(parseAllSpec('all-nfnx')).toEqual({
+      ok: false,
+      error: `unknown filter 'nx' in 'all-nfnx'; known: ${EXCLUDE_HELP}`,
+    });
+    expect(parseAllSpec('all-')).toEqual({ ok: false, error: `'all-' names no filter; known: ${EXCLUDE_HELP}` });
+  });
+
+  it('spells the known filters out of the table, once', () => {
+    expect(EXCLUDE_HELP).toBe('nf = forks, na = archived, np = private');
+    expect(EXCLUDE_HELP).toBe(EXCLUDE_FILTERS.map((f) => `${f.code} = ${f.label}`).join(', '));
+  });
+});
+
+describe('resolveSelection', () => {
+  /** The listing flags a filter can key off; used to build a repo that trips exactly one. */
+  const FLAG_KEYS = ['fork', 'archived', 'private'] as const;
+
+  /** A repo that matches `filter` and nothing else — derived from the predicate, not restated. */
+  function repoMatching(filter: ExcludeFilter): RemoteRepo {
+    const key = FLAG_KEYS.find((k) => filter.matches({ [k]: true }));
+    expect(key, `no listing flag makes ${filter.code} match`).toBeDefined();
+    return repo(`me/${filter.code}`, { [key!]: true });
+  }
+
+  const plain = repo('me/plain');
+  const forked = repo('me/forked', { fork: true });
+  const old = repo('me/old', { archived: true });
+  const hidden = repo('me/hidden', { private: true });
+  const listing = [forked, hidden, old, plain];
+
+  it('drops exactly what each code names', () => {
+    for (const filter of EXCLUDE_FILTERS) {
+      const flagged = repoMatching(filter);
+      const result = resolveSelection([plain, flagged], `all-${filter.code}`);
+      expect(result).toEqual({
+        ok: true,
+        value: {
+          repos: [plain],
+          total: 2,
+          filtered: true,
+          excluded: [{ code: filter.code, label: filter.label, one: filter.one, count: 1 }],
+        },
+      });
+    }
+  });
+
+  it('combines codes', () => {
+    expect(ok(resolveSelection(listing, 'all-nfna'))).toMatchObject({ repos: [hidden, plain] });
+    expect(ok(resolveSelection(listing, 'all-nf-na-np'))).toMatchObject({ repos: [plain] });
+    expect(ok(resolveSelection(listing, 'all'))).toMatchObject({ repos: listing, filtered: false, excluded: [] });
+  });
+
+  it('is a no-op when nothing matches', () => {
+    const clean = [plain, repo('me/other')];
+    const result = resolveSelection(clean, 'all-nf');
+    expect(ok(result)).toEqual({ repos: clean, total: 2, filtered: true, excluded: [] });
+    expect(selectionSummary(ok(result))).toBeNull();
+  });
+
+  it('counts a repo once, under the first reason that dropped it', () => {
+    const both = repo('me/both', { fork: true, archived: true });
+    const result = resolveSelection([plain, both, old], 'all-nfna');
+    expect(ok(result).repos).toEqual([plain]);
+    expect(ok(result).excluded).toEqual([
+      { code: 'nf', label: 'forks', one: 'fork', count: 1 },
+      { code: 'na', label: 'archived', one: 'archived', count: 1 },
+    ]);
+  });
+
+  it('leaves explicit index and name selections alone', () => {
+    // `1,3` and `ezcv,sdu` name repositories outright: being a fork or archived is irrelevant.
+    const named = [repo('me/ezcv', { fork: true }), plain, repo('me/sdu', { archived: true, private: true })];
+    expect(ok(resolveSelection(named, '1,3'))).toMatchObject({ repos: [named[0], named[2]], filtered: false });
+    expect(ok(resolveSelection(named, 'ezcv,sdu'))).toMatchObject({ repos: [named[0], named[2]], filtered: false });
+    expect(selectRepos(named, 'ezcv,sdu')).toEqual({ ok: true, value: [named[0], named[2]] });
+  });
+
+  it('passes the parse error through', () => {
+    expect(resolveSelection(listing, 'all-nx').ok).toBe(false);
+    expect(selectRepos(listing, 'all-nx')).toEqual({
+      ok: false,
+      // Both halves: `all-nx` is neither a known filter nor a repository in this listing.
+      error: `unknown filter 'nx' in 'all-nx'; known: ${EXCLUDE_HELP}, and no listed repository is named 'all-nx'`,
+    });
+  });
+});
+
+describe('selection reporting', () => {
+  const outcome = (repos: number, total: number, excluded: Array<[string, number]>) => ({
+    repos: Array.from({ length: repos }, (_, i) => i),
+    total,
+    filtered: true,
+    excluded: excluded.map(([code, count]) => {
+      const filter = EXCLUDE_FILTERS.find((f) => f.code === code)!;
+      return { code: filter.code, label: filter.label, one: filter.one, count };
+    }),
+  });
+
+  it('says how many survived and why the rest did not', () => {
+    expect(selectionSummary(outcome(12, 20, [['nf', 5], ['na', 3]]))).toBe(
+      'selected 12 of 20 (excluded 5 forks, 3 archived)',
+    );
+  });
+
+  it('uses the singular for a count of one', () => {
+    expect(selectionSummary(outcome(2, 3, [['nf', 1]]))).toBe('selected 2 of 3 (excluded 1 fork)');
+    expect(selectionSummary(outcome(1, 3, [['nf', 1], ['np', 1]]))).toBe(
+      'selected 1 of 3 (excluded 1 fork, 1 private)',
+    );
+  });
+
+  it('omits reasons that dropped nothing', () => {
+    expect(selectionSummary(outcome(4, 5, [['na', 1]]))).toBe('selected 4 of 5 (excluded 1 archived)');
+    expect(selectionSummary(outcome(5, 5, []))).toBeNull();
+  });
+
+  it('spells out a filter that left nothing', () => {
+    expect(excludedEverythingMessage('all-nf', outcome(0, 4, [['nf', 4]]))).toBe(
+      'all-nf excluded all 4 repositories (4 forks) — nothing to add.',
+    );
+    expect(excludedEverythingMessage(' all-np ', outcome(0, 1, [['np', 1]]))).toBe(
+      'all-np excluded all 1 repository (1 private) — nothing to add.',
+    );
   });
 });
 
@@ -466,6 +676,76 @@ describe('main', () => {
     expect(io.out.join('\n')).toContain('--yes');
   });
 
+  it('adds an account minus its forks and archives, and says what it dropped', async () => {
+    const io = testIo({
+      fetchImpl: fakeFetch({
+        '/users/me/repos': [
+          { name: 'alpha', full_name: 'me/alpha', owner: { login: 'me' } },
+          { name: 'beta', full_name: 'me/beta', owner: { login: 'me' }, fork: true },
+          { name: 'delta', full_name: 'me/delta', owner: { login: 'me' }, archived: true },
+          { name: 'gamma', full_name: 'me/gamma', owner: { login: 'me' }, fork: true },
+        ],
+      }),
+    });
+    expect(await main(['init', '--provider=github', '--account=me', '--select=all-nfna', '--print'], io)).toBe(0);
+    const printed = io.out.join('\n');
+    expect(printed).toContain('selected 1 of 4 (excluded 2 forks, 1 archived)');
+    expect(printed).toContain("{ type: 'github', owner: 'me', repo: 'alpha', releases: 'provider' },");
+    expect(printed).not.toContain("repo: 'beta'");
+    expect(printed).not.toContain("repo: 'delta'");
+  });
+
+  it('rejects an unknown filter with the list of known ones', async () => {
+    const io = testIo({
+      fetchImpl: fakeFetch({ '/users/me/repos': [{ name: 'alpha', full_name: 'me/alpha', owner: { login: 'me' } }] }),
+    });
+    expect(await main(['init', '--provider=github', '--account=me', '--select=all-nx', '--print'], io)).toBe(1);
+    expect(io.err.join('\n')).toBe(
+      `--select: unknown filter 'nx' in 'all-nx'; known: ${EXCLUDE_HELP}, and no listed repository is named 'all-nx'`,
+    );
+  });
+
+  it('refuses to write an empty selection when a filter excluded everything', async () => {
+    const file = path.join(tmp, 'frznforge.config.ts');
+    await fs.writeFile(file, FIXTURE_CONFIG, 'utf8');
+    const io = testIo({
+      fetchImpl: fakeFetch({
+        '/users/me/repos': [
+          { name: 'alpha', full_name: 'me/alpha', owner: { login: 'me' }, fork: true },
+          { name: 'beta', full_name: 'me/beta', owner: { login: 'me' }, fork: true },
+        ],
+      }),
+    });
+    expect(await main(['init', '--provider=github', '--account=me', '--select=all-nf', '--yes'], io)).toBe(1);
+    expect(io.err.join('\n')).toContain('all-nf excluded all 2 repositories (2 forks) — nothing to add.');
+    expect(await fs.readFile(file, 'utf8')).toBe(FIXTURE_CONFIG);
+  });
+
+  it('leaves an unfiltered run silent about exclusions', async () => {
+    const io = testIo({
+      fetchImpl: fakeFetch({
+        '/users/me/repos': [{ name: 'alpha', full_name: 'me/alpha', owner: { login: 'me' }, fork: true }],
+      }),
+    });
+    expect(await main(['init', '--provider=github', '--account=me', '--select=all', '--print'], io)).toBe(0);
+    expect(io.out.join('\n')).not.toContain('excluded');
+    expect(io.out.join('\n')).toContain("repo: 'alpha'");
+  });
+
+  it('rejects --web with --print before opening anything', async () => {
+    const io = testIo();
+    expect(await main(['init', '--web', '--print'], io)).toBe(1);
+    expect(io.err.join('\n')).toContain('--web and --print cannot be combined');
+  });
+
+  it('documents the selection syntax in the usage text', () => {
+    expect(USAGE).toContain(EXCLUDE_HELP);
+    expect(USAGE).toContain('all-nf');
+    expect(USAGE).toContain('--web');
+    expect(USAGE).toContain('--port=<n>');
+    expect(USAGE).toContain('--no-open');
+  });
+
   it('reports a bad --select without touching the config', async () => {
     const io = testIo({
       fetchImpl: fakeFetch({ '/users/me/repos': [{ name: 'alpha', full_name: 'me/alpha', owner: { login: 'me' } }] }),
@@ -523,5 +803,252 @@ describe('main', () => {
     expect(await main(['init', '--provider=github', '--account=me', '--select=all'], io)).toBe(1);
     expect(io.err.join('\n')).toContain('rate limited by api.github.com');
     expect(io.err.join('\n')).toContain('$GITHUB_TOKEN');
+  });
+});
+
+/* ------------------------------------------------------------------ config safety */
+
+describe('what can and cannot reach a config file', () => {
+  const LS = String.fromCharCode(8232); // U+2028, a line terminator to older JS parsers
+  const PS = String.fromCharCode(8233); // U+2029
+
+  it('escapes line terminators, not just quotes', () => {
+    // A raw newline inside '…' is a syntax error, so an unescaped one leaves the user's config
+    // unparseable — the only copy of the original being the .bak.
+    expect(renderEntry({ type: 'github', owner: 'o', repo: 'a\nb' })).toBe(
+      "{ type: 'github', owner: 'o', repo: 'a\\nb' }",
+    );
+    expect(renderEntry({ type: 'github', owner: 'o', repo: 'a\rb' })).toContain('a\\rb');
+    expect(renderEntry({ type: 'github', owner: 'o', repo: `a${LS}b` })).toContain('a\\u2028b');
+    expect(renderEntry({ type: 'github', owner: 'o', repo: `a${PS}b` })).toContain('a\\u2029b');
+    for (const rendered of [
+      renderEntry({ type: 'github', owner: 'o', repo: 'a\nb' }),
+      renderEntry({ type: 'github', owner: 'o', repo: `a${LS}b` }),
+    ]) {
+      expect(rendered).not.toMatch(/[\n\r]/);
+      expect(rendered.includes(LS) || rendered.includes(PS)).toBe(false);
+    }
+  });
+
+  it('refuses a listing-supplied name that has no business in a config file', () => {
+    // The listing is remote input; `entriesFor` is the one place it becomes config text.
+    const hostile: RemoteRepo = {
+      name: "evil\n    path: '/etc/passwd', slug: 'pwned",
+      fullName: 'me/evil',
+      owner: 'me',
+      description: null,
+      private: false,
+    };
+    expect(() => entriesFor('github', 'https://api.github.com', [hostile], 'provider')).toThrow(
+      /repository name that cannot go in a config file/,
+    );
+    expect(() =>
+      entriesFor('gitlab', 'https://gitlab.com', [{ ...hostile, name: 'p', project: "g/p',\n  evil: '" }], 'provider'),
+    ).toThrow(/project path that cannot go in a config file/);
+  });
+
+  it('refuses a host that could break out of a string literal', () => {
+    const plain = repo('me/alpha');
+    expect(() => entriesFor('gitea', "https://x.dev/a\nb", [plain], 'provider')).toThrow(/not a usable host/);
+    expect(() => entriesFor('gitea', "https://x.dev/'", [plain], 'provider')).toThrow(/not a usable host/);
+    expect(() => entriesFor('gitea', 'ftp://x.dev', [plain], 'provider')).toThrow(/http or https/);
+    expect(() => entriesFor('gitea', 'https://user:pw@x.dev', [plain], 'provider')).toThrow(/credentials/);
+  });
+
+  it('stops a hostile listing before it touches the file', async () => {
+    const file = path.join(tmp, 'frznforge.config.ts');
+    await fs.writeFile(file, FIXTURE_CONFIG, 'utf8');
+    const io = testIo({
+      fetchImpl: fakeFetch({
+        '/users/me/repos': [{ name: "ok\n    path: '/etc/passwd", full_name: 'me/ok', owner: { login: 'me' } }],
+      }),
+    });
+    expect(await main(['init', '--provider=github', '--account=me', '--select=all', '--yes', `--config=${file}`], io)).toBe(1);
+    expect(io.err.join('\n')).toContain('cannot go in a config file');
+    expect(await fs.readFile(file, 'utf8')).toBe(FIXTURE_CONFIG);
+  });
+
+  it('never lets two backups in the same second overwrite each other', async () => {
+    const file = path.join(tmp, 'frznforge.config.ts');
+    await fs.writeFile(file, FIXTURE_CONFIG, 'utf8');
+    const now = new Date('2026-08-24T05:03:00.000Z');
+    const first = await updateConfigFile(file, [{ type: 'github', owner: 'me', repo: 'one' }], { now });
+    const second = await updateConfigFile(file, [{ type: 'github', owner: 'me', repo: 'two' }], { now });
+    expect(first!.backup).toBe(backupPathFor(file, now));
+    expect(second!.backup).not.toBe(first!.backup);
+    // The first backup still holds the original: it was not clobbered by the second write.
+    expect(await fs.readFile(first!.backup!, 'utf8')).toBe(FIXTURE_CONFIG);
+    expect(await fs.readFile(second!.backup!, 'utf8')).toContain("repo: 'one'");
+  });
+});
+
+/* ------------------------------------------------------------------ flags a listing cannot answer */
+
+describe('listings that do not report every flag', () => {
+  /** A GitLab *user* project listing: the simple representation, verified against gitlab.com. */
+  const GITLAB_USER_PAGE = [
+    { path_with_namespace: 'me/plain', description: null, visibility: 'public' },
+    { path_with_namespace: 'me/mirror', description: 'a fork, but the listing does not say so', visibility: 'public' },
+  ];
+
+  it('reports fork and archived as unknown for a GitLab user listing', async () => {
+    const repos = await listRepos('gitlab', {
+      host: 'https://gitlab.com',
+      account: 'me',
+      fetchImpl: fakeFetch({ '/api/v4/users/me/projects': GITLAB_USER_PAGE }),
+    });
+    // `false` would mean "not a fork"; these listings simply never say.
+    expect(repos.map((r) => r.fork)).toEqual([undefined, undefined]);
+    expect(repos.map((r) => r.archived)).toEqual([undefined, undefined]);
+    expect(repos.map((r) => r.private)).toEqual([false, false]);
+  });
+
+  it('reads archived from a GitLab group listing, which does carry it', async () => {
+    const repos = await listRepos('gitlab', {
+      host: 'https://gitlab.com',
+      account: 'g',
+      fetchImpl: fakeFetch({
+        '/api/v4/groups/g/projects': [
+          { path_with_namespace: 'g/live', visibility: 'public', archived: false },
+          { path_with_namespace: 'g/old', visibility: 'public', archived: true },
+        ],
+      }),
+    });
+    expect(repos.map((r) => r.archived)).toEqual([false, true]);
+    expect(repos.every((r) => r.fork === undefined)).toBe(true);
+  });
+
+  it('refuses a filter the listing cannot answer instead of quietly keeping everything', async () => {
+    const io = testIo({ fetchImpl: fakeFetch({ '/api/v4/users/me/projects': GITLAB_USER_PAGE }) });
+    expect(await main(['init', '--provider=gitlab', '--account=me', '--select=all-nf', '--print'], io)).toBe(1);
+    expect(io.err.join('\n')).toContain("'nf' cannot be applied here");
+    expect(io.err.join('\n')).toContain('which repositories are forks');
+    expect(io.err.join('\n')).toContain('name,name');
+  });
+
+  it('still honours the flags the same listing does report', async () => {
+    const io = testIo({ fetchImpl: fakeFetch({ '/api/v4/users/me/projects': GITLAB_USER_PAGE }) });
+    expect(await main(['init', '--provider=gitlab', '--account=me', '--select=all-np', '--print'], io)).toBe(0);
+    expect(io.out.join('\n')).toContain("project: 'me/plain'");
+  });
+
+  it('leaves GitHub alone — its listing answers all three', async () => {
+    const repos = await listRepos('github', {
+      host: 'https://api.github.com',
+      account: 'me',
+      fetchImpl: fakeFetch({
+        '/users/me/repos': [
+          { name: 'a', full_name: 'me/a', owner: { login: 'me' } },
+          { name: 'b', full_name: 'me/b', owner: { login: 'me' }, fork: true, archived: true, private: true },
+        ],
+      }),
+    });
+    expect(repos.map((r) => [r.fork, r.archived, r.private])).toEqual([
+      [false, false, false],
+      [true, true, true],
+    ]);
+    expect(ok(resolveSelection(repos, 'all-nfna')).repos.map((r) => r.name)).toEqual(['a']);
+  });
+});
+
+/* ------------------------------------------------------------------ names that look like filters */
+
+describe('repositories whose name starts with all-', () => {
+  const contributors = repo('me/all-contributors');
+  const filterish = repo('me/all-nf');
+  const plain = repo('me/plain');
+  const forked = repo('me/forked', { fork: true });
+  const listing = [contributors, filterish, forked, plain];
+
+  it('selects a real repository by name before reading it as a filter', () => {
+    expect(ok(resolveSelection(listing, 'all-contributors')).repos).toEqual([contributors]);
+    expect(ok(resolveSelection(listing, 'ALL-Contributors')).repos).toEqual([contributors]);
+    expect(ok(resolveSelection(listing, 'me/all-contributors')).repos).toEqual([contributors]);
+  });
+
+  it('lets a repository literally named all-nf win over the filter grammar', () => {
+    const outcome = ok(resolveSelection(listing, 'all-nf'));
+    expect(outcome.repos).toEqual([filterish]);
+    expect(outcome.filtered).toBe(false);
+  });
+
+  it('still reads all-nf as a filter when no repository claims the name', () => {
+    const outcome = ok(resolveSelection([plain, forked], 'all-nf'));
+    expect(outcome.repos).toEqual([plain]);
+    expect(outcome.filtered).toBe(true);
+  });
+
+  it('never lets a repo called plain "all" shadow the all keyword', () => {
+    const everything = repo('me/all');
+    expect(ok(resolveSelection([everything, plain], 'all')).repos).toEqual([everything, plain]);
+  });
+
+  it('points at the filter grammar when all is written with a space', () => {
+    const result = resolveSelection([plain, forked], 'all -nf');
+    expect(result.ok).toBe(false);
+    expect(result.ok ? '' : result.error).toContain('did you mean all-nf');
+    expect(result.ok ? '' : result.error).toContain('no spaces');
+  });
+
+  it('says what is wrong when a filter is mixed into a list', () => {
+    const result = resolveSelection([plain, forked], 'all-nf,plain');
+    expect(result.ok).toBe(false);
+    expect(result.ok ? '' : result.error).toContain('mixes an all-… filter with a list');
+  });
+});
+
+/* ------------------------------------------------------------------ the interactive loop */
+
+describe('askForSelection', () => {
+  const plain = repo('me/plain');
+  const forked = repo('me/forked', { fork: true });
+
+  /** Answers the prompt from a script, recording what was asked and printed. */
+  function scripted(answers: string[]): {
+    ask: (q: string, fallback: string) => Promise<string>;
+    write: (line: string) => void;
+    asked: number;
+    lines: string[];
+  } {
+    const state = {
+      asked: 0,
+      lines: [] as string[],
+      ask: async (_q: string, fallback: string) => {
+        const next = answers[state.asked];
+        state.asked += 1;
+        if (next === undefined) throw new Error('the loop asked more times than the script answers');
+        return next === '' ? fallback : next;
+      },
+      write: (line: string) => state.lines.push(line),
+    };
+    return state;
+  }
+
+  it('accepts "none" and stops asking', async () => {
+    // The prompt advertises `none` in its own syntax line; re-asking made it unanswerable and
+    // the only way out of the wizard was Ctrl-C.
+    const s = scripted(['none']);
+    expect(await askForSelection([plain, forked], s.ask, s.write)).toEqual([]);
+    expect(s.asked).toBe(1);
+  });
+
+  it('takes the shown [all] default for an empty answer', async () => {
+    const s = scripted(['']);
+    expect(await askForSelection([plain, forked], s.ask, s.write)).toEqual([plain, forked]);
+    expect(s.asked).toBe(1);
+  });
+
+  it('re-asks after a spec that could not be parsed', async () => {
+    const s = scripted(['all-nx', 'plain']);
+    expect(await askForSelection([plain, forked], s.ask, s.write)).toEqual([plain]);
+    expect(s.asked).toBe(2);
+    expect(s.lines.join('\n')).toContain("unknown filter 'nx'");
+  });
+
+  it('re-asks when a filter excluded every repository', async () => {
+    const s = scripted(['all-nf', 'none']);
+    expect(await askForSelection([forked], s.ask, s.write)).toEqual([]);
+    expect(s.asked).toBe(2);
+    expect(s.lines.join('\n')).toContain('nothing to add');
   });
 });

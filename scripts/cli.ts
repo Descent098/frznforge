@@ -94,134 +94,247 @@ export class CliError extends Error {
   }
 }
 
-/* ------------------------------------------------------------------ arguments */
-
-export interface CliFlags {
-  provider?: ProviderName;
-  host?: string;
-  account?: string;
-  select?: string;
-  releases?: 'provider' | 'tags';
-  /** Config file to edit; defaults to `frznforge.config.ts` next to package.json. */
-  config?: string;
-  /** Print the snippet and exit without touching any file. */
-  print: boolean;
-  /** Skip the write confirmation (scripting). */
-  yes: boolean;
-  help: boolean;
-}
-
-export interface ParsedArgs {
-  command: string | null;
-  flags: CliFlags;
-  errors: string[];
-}
-
-const VALUE_FLAGS = ['provider', 'host', 'account', 'select', 'releases', 'config'] as const;
-const BOOL_FLAGS = ['print', 'yes', 'help'] as const;
-
-export const USAGE = `frznforge — static read-only forge site generator
-
-Usage
-  npm run frznforge -- init [options]
-  npm run frznforge -- --help
-
-Commands
-  init        Discover repositories on a provider and add them to frznforge.config.ts.
-
-Options (init)
-  --provider=<github|gitlab|gitea|forgejo>   Provider to query.
-  --host=<url>                               API/instance base URL (required for gitea/forgejo).
-  --account=<name>                           User, organisation or GitLab group path.
-  --select=<all|1,3,5-8|name,name>           Which of the listed repos to add.
-  --releases=<provider|tags>                 Where releases come from (default: provider).
-  --config=<path>                            Config file to edit (default: the nearest
-                                             frznforge.config.ts at or above the cwd).
-  --print                                    Print the snippet only; never write a file.
-  --yes                                      Write without the confirmation prompt.
-  --help, -h                                 Show this message.
-
-Tokens are read from the environment only and are never written to the config:
-  GitHub   FRZNFORGE_GITHUB_TOKEN  or GITHUB_TOKEN    scope: public_repo (repo for private)
-  GitLab   FRZNFORGE_GITLAB_TOKEN  or GITLAB_TOKEN    scope: read_api
-  Gitea    FRZNFORGE_GITEA_TOKEN   or GITEA_TOKEN     scope: read:repository
-  Forgejo  FRZNFORGE_FORGEJO_TOKEN or FORGEJO_TOKEN   scope: read:repository
-
-Without a token only public repositories are listed. See docs/user/importing.md.`;
-
-/**
- * Parse `--key=value`, `--key value` and boolean flags. Unknown flags and bad enum values
- * are collected into `errors` rather than thrown, so the caller can print usage once.
- */
-export function parseArgs(argv: string[]): ParsedArgs {
-  const flags: CliFlags = { print: false, yes: false, help: false };
-  const errors: string[] = [];
-  let command: string | null = null;
-  const raw: Record<string, string> = {};
-
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i]!;
-    if (arg === '-h') {
-      flags.help = true;
-      continue;
-    }
-    if (!arg.startsWith('--')) {
-      if (command === null) command = arg;
-      else errors.push(`unexpected argument: ${arg}`);
-      continue;
-    }
-    const body = arg.slice(2);
-    const eq = body.indexOf('=');
-    const key = eq === -1 ? body : body.slice(0, eq);
-    let value = eq === -1 ? undefined : body.slice(eq + 1);
-
-    if ((BOOL_FLAGS as readonly string[]).includes(key)) {
-      if (value !== undefined && value !== 'true' && value !== 'false') {
-        errors.push(`--${key} does not take a value`);
-        continue;
-      }
-      flags[key as (typeof BOOL_FLAGS)[number]] = value !== 'false';
-      continue;
-    }
-    if (!(VALUE_FLAGS as readonly string[]).includes(key)) {
-      errors.push(`unknown option: --${key}`);
-      continue;
-    }
-    if (value === undefined) {
-      const next = argv[i + 1];
-      if (next === undefined || next.startsWith('--')) {
-        errors.push(`--${key} needs a value`);
-        continue;
-      }
-      value = next;
-      i += 1;
-    }
-    raw[key] = value;
-  }
-
-  if (raw.provider !== undefined) {
-    if ((PROVIDER_NAMES as string[]).includes(raw.provider)) flags.provider = raw.provider as ProviderName;
-    else errors.push(`--provider must be one of ${PROVIDER_NAMES.join(', ')} (got ${JSON.stringify(raw.provider)})`);
-  }
-  if (raw.releases !== undefined) {
-    if (raw.releases === 'provider' || raw.releases === 'tags') flags.releases = raw.releases;
-    else errors.push(`--releases must be 'provider' or 'tags' (got ${JSON.stringify(raw.releases)})`);
-  }
-  if (raw.host !== undefined) flags.host = raw.host.replace(/\/+$/, '');
-  if (raw.account !== undefined) flags.account = raw.account.trim();
-  if (raw.select !== undefined) flags.select = raw.select;
-  if (raw.config !== undefined) flags.config = raw.config;
-
-  return { command, flags, errors };
-}
-
 /* ------------------------------------------------------------------ selection */
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 /**
+ * The repo properties an exclusion filter looks at (everything a listing can flag).
+ *
+ * Every flag is *tri-state* on purpose: `undefined` means "this listing does not say", which is
+ * not the same as `false`. GitLab's project listings, for instance, never carry
+ * `forked_from_project` and only carry `archived` for groups — mapping either to `false` would
+ * make `all-nf` quietly keep every fork.
+ */
+export interface RepoFlags {
+  archived?: boolean;
+  private?: boolean;
+  fork?: boolean;
+}
+
+export interface ExcludeFilter {
+  /** The `n<initial>` code written after `all-`, e.g. `nf`. */
+  code: string;
+  /** Plural noun for messages: "excluded 5 forks". */
+  label: string;
+  /** Singular noun for messages: "excluded 1 fork". */
+  one: string;
+  /** True when this repo should be dropped from an `all-…` selection. */
+  matches: (repo: RepoFlags) => boolean;
+  /** False when the listing did not report the flag this filter keys off. */
+  known: (repo: RepoFlags) => boolean;
+  /** How the flag is described when a listing cannot answer for it. */
+  question: string;
+}
+
+/**
+ * The exclusion filters `all-…` understands, and the single place they are described.
+ *
+ * The help text, the interactive hint and the error messages are all generated from this
+ * table, so adding a fourth exclusion is one row here and nothing else.
+ */
+export const EXCLUDE_FILTERS = [
+  {
+    code: 'nf',
+    label: 'forks',
+    one: 'fork',
+    matches: (r: RepoFlags) => r.fork === true,
+    known: (r: RepoFlags) => r.fork !== undefined,
+    question: 'which repositories are forks',
+  },
+  {
+    code: 'na',
+    label: 'archived',
+    one: 'archived',
+    matches: (r: RepoFlags) => r.archived === true,
+    known: (r: RepoFlags) => r.archived !== undefined,
+    question: 'which repositories are archived',
+  },
+  {
+    code: 'np',
+    label: 'private',
+    one: 'private',
+    matches: (r: RepoFlags) => r.private === true,
+    known: (r: RepoFlags) => r.private !== undefined,
+    question: 'which repositories are private',
+  },
+] as const satisfies readonly ExcludeFilter[];
+
+export type ExcludeCode = (typeof EXCLUDE_FILTERS)[number]['code'];
+
+/** `nf/na/np` — the codes alone, for a one-line hint. */
+export const EXCLUDE_CODES = EXCLUDE_FILTERS.map((f) => f.code).join('/');
+
+/** `nf = forks, na = archived, np = private` — the canonical explanation of the codes. */
+export const EXCLUDE_HELP = EXCLUDE_FILTERS.map((f) => `${f.code} = ${f.label}`).join(', ');
+
+/** A concatenation example built from the table, e.g. `all-nfna`. */
+export const EXCLUDE_COMBINED_EXAMPLE = `all-${EXCLUDE_FILTERS.slice(0, 2)
+  .map((f) => f.code)
+  .join('')}`;
+
+/** The whole `--select` grammar on one line, for `--help` and the prompt. */
+export const SELECT_SYNTAX = `all | none | 1,3,5-8 | name,name | all-${EXCLUDE_CODES}`;
+
+// Longest code first so a future three-letter code that starts with an existing two-letter
+// one still parses; with today's table the order is irrelevant.
+const FILTERS_BY_LENGTH = [...EXCLUDE_FILTERS].sort((a, b) => b.code.length - a.code.length);
+const MAX_CODE_LENGTH = Math.max(...EXCLUDE_FILTERS.map((f) => f.code.length));
+
+/**
+ * Read an `all` selection and its exclusion flags.
+ *
+ * `all`, `all-nf`, `all-nfna`, `all-nf-na` (order irrelevant, case-insensitive) → the set of
+ * codes to exclude. Returns `null` — not an error — when the spec is not an `all` form at
+ * all, which is the caller's cue to treat it as indexes or names.
+ */
+export function parseAllSpec(spec: string): Result<Set<ExcludeCode>> | null {
+  const text = spec.trim();
+  const lower = text.toLowerCase();
+  if (lower === 'all' || lower === '*') return { ok: true, value: new Set() };
+
+  const match = /^(?:all|\*)-(.*)$/.exec(lower);
+  if (!match) return null;
+
+  // A comma or a space after `all-` is someone trying to mix a filter with a list. Saying
+  // "unknown filter ',a'" for `all-nf,alpha` names two characters of their own input back at
+  // them and explains nothing.
+  if (/[,\s]/.test(match[1]!)) {
+    return {
+      ok: false,
+      error: `'${text}' mixes an all-… filter with a list; select either all-<flags> (${EXCLUDE_COMBINED_EXAMPLE}) or names/indexes, not both`,
+    };
+  }
+
+  const codes = new Set<ExcludeCode>();
+  for (const group of match[1]!.split('-')) {
+    let rest = group;
+    while (rest.length > 0) {
+      const hit = FILTERS_BY_LENGTH.find((f) => rest.startsWith(f.code));
+      if (!hit) {
+        const offender = rest.slice(0, MAX_CODE_LENGTH);
+        return { ok: false, error: `unknown filter '${offender}' in '${text}'; known: ${EXCLUDE_HELP}` };
+      }
+      codes.add(hit.code);
+      rest = rest.slice(hit.code.length);
+    }
+  }
+  if (codes.size === 0) return { ok: false, error: `'${text}' names no filter; known: ${EXCLUDE_HELP}` };
+  return { ok: true, value: codes };
+}
+
+/** One reason repos were dropped, and how many it accounted for. */
+export interface ExclusionCount {
+  code: ExcludeCode;
+  label: string;
+  one: string;
+  count: number;
+}
+
+export interface SelectionOutcome<T> {
+  /** The repos to add, in the order the spec asked for them. */
+  repos: T[];
+  /** How many repos the listing offered. */
+  total: number;
+  /** True when an `all-…` form ran, even if it happened to drop nothing. */
+  filtered: boolean;
+  /** Reasons that actually dropped something, in table order. */
+  excluded: ExclusionCount[];
+}
+
+/** What `selectRepos` and the two call sites in `init` can select against. */
+export type Selectable = { name: string; fullName: string } & RepoFlags;
+
+/**
+ * Resolve a selection against a listing, reporting what an `all-…` filter removed.
+ *
+ * Three forms, in order: `all`/`all-<flags>`, then a numeric list, then names. Exclusions are
+ * deliberately confined to the `all` form — `1,3` and `ezcv,sdu` name repositories outright
+ * and must be honoured whatever they are flagged as.
+ */
+export function resolveSelection<T extends Selectable>(repos: T[], spec: string): Result<SelectionOutcome<T>> {
+  // A repository really named `all-contributors` beats the filter grammar. Without this the
+  // `all-` prefix claims the string first and the user is told `unknown filter 'co'` about a
+  // repository that is sitting right there in the listing. Scoped to `all-…`/`*-…` so a repo
+  // called plain `all` cannot shadow the `all` keyword.
+  const trimmed = spec.trim();
+  if (/^(?:all|\*)-/i.test(trimmed)) {
+    const needle = trimmed.toLowerCase();
+    const named = repos.find((r) => r.name.toLowerCase() === needle || r.fullName.toLowerCase() === needle);
+    if (named) return { ok: true, value: { repos: [named], total: repos.length, filtered: false, excluded: [] } };
+  }
+
+  const all = parseAllSpec(spec);
+  if (all) {
+    // The name pre-check above already ran, so an `all-…` that failed to parse is neither a
+    // filter nor a repository. Say both halves — "unknown filter 'co'" alone reads like a
+    // typo in a filter when it is usually a repository that is not in the listing.
+    if (!all.ok) {
+      const extra = /^(?:all|\*)-/i.test(trimmed) ? `, and no listed repository is named '${trimmed}'` : '';
+      return { ok: false, error: `${all.error}${extra}` };
+    }
+    const active = EXCLUDE_FILTERS.filter((f) => all.value.has(f.code));
+    // Refuse rather than under-filter. A listing that does not report a flag would otherwise
+    // make `all-nf` look like it ran and keep every fork — the failure nobody notices.
+    for (const filter of active) {
+      if (repos.every((r) => filter.known(r))) continue;
+      return {
+        ok: false,
+        error:
+          `'${filter.code}' cannot be applied here: this provider's repository listing does not say ` +
+          `${filter.question}. Select by name or index instead (e.g. name,name or 1,3,5-8).`,
+      };
+    }
+    const counts = new Map<string, number>();
+    const kept: T[] = [];
+    for (const repo of repos) {
+      // First matching reason only: a repo that is both a fork and archived is counted once,
+      // so the reasons in the summary add up to the number of repos actually dropped.
+      const reason = active.find((f) => f.matches(repo));
+      if (reason) counts.set(reason.code, (counts.get(reason.code) ?? 0) + 1);
+      else kept.push(repo);
+    }
+    return {
+      ok: true,
+      value: {
+        repos: kept,
+        total: repos.length,
+        filtered: active.length > 0,
+        excluded: active
+          .filter((f) => (counts.get(f.code) ?? 0) > 0)
+          .map((f) => ({ code: f.code, label: f.label, one: f.one, count: counts.get(f.code)! })),
+      },
+    };
+  }
+
+  const picked = selectExplicit(repos, spec);
+  if (!picked.ok) return picked;
+  return { ok: true, value: { repos: picked.value, total: repos.length, filtered: false, excluded: [] } };
+}
+
+/** `selected 12 of 20 (excluded 5 forks, 3 archived)`, or null when nothing was dropped. */
+export function selectionSummary(outcome: SelectionOutcome<unknown>): string | null {
+  if (outcome.excluded.length === 0) return null;
+  const reasons = outcome.excluded.map((e) => `${e.count} ${e.count === 1 ? e.one : e.label}`).join(', ');
+  return `selected ${outcome.repos.length} of ${outcome.total} (excluded ${reasons})`;
+}
+
+/**
+ * The line printed when a filter leaves nothing behind. Without it an `all-np` against an
+ * account of only private repos would look like a successful run that added no entries.
+ */
+export function excludedEverythingMessage(spec: string, outcome: SelectionOutcome<unknown>): string {
+  const reasons = outcome.excluded.map((e) => `${e.count} ${e.count === 1 ? e.one : e.label}`).join(', ');
+  const noun = outcome.total === 1 ? 'repository' : 'repositories';
+  return `${spec.trim()} excluded all ${outcome.total} ${noun} (${reasons}) — nothing to add.`;
+}
+
+/**
  * Parse a numbered multi-select: `all`, `none`/empty, or a comma/space separated list of
  * 1-based indexes and `a-b` ranges. Returns sorted, de-duplicated 0-based indexes.
+ *
+ * Index-based and exclusion-free on purpose: `all-nf` and friends are resolved against the
+ * listing itself by `resolveSelection`, which knows what each repo is.
  */
 export function parseSelection(spec: string, count: number): Result<number[]> {
   const text = spec.trim().toLowerCase();
@@ -249,14 +362,10 @@ export function parseSelection(spec: string, count: number): Result<number[]> {
   return { ok: true, value: [...picked].sort((a, b) => a - b) };
 }
 
-/**
- * Resolve a selection against a listing. Numeric tokens go through `parseSelection`; every
- * other token is matched against a repo's name or `owner/name` (case-insensitive), so
- * scripts can say `--select=ezcv,sdu` without depending on the API's ordering.
- */
-export function selectRepos<T extends { name: string; fullName: string }>(repos: T[], spec: string): Result<T[]> {
+/** Indexes and names — everything that is not an `all` form. */
+function selectExplicit<T extends Selectable>(repos: T[], spec: string): Result<T[]> {
   const text = spec.trim();
-  const looksNumeric = text === '' || /^(all|none|\*)$/i.test(text) || /^[\d,\s-]+$/.test(text);
+  const looksNumeric = text === '' || /^none$/i.test(text) || /^[\d,\s-]+$/.test(text);
   if (looksNumeric) {
     const parsed = parseSelection(text, repos.length);
     return parsed.ok ? { ok: true, value: parsed.value.map((i) => repos[i]!) } : parsed;
@@ -277,13 +386,191 @@ export function selectRepos<T extends { name: string; fullName: string }>(repos:
     }
     const needle = token.toLowerCase();
     const match = repos.find((r) => r.name.toLowerCase() === needle || r.fullName.toLowerCase() === needle);
-    if (!match) return { ok: false, error: `no repository named ${token}` };
+    if (!match) {
+      // `all -nf` / `allnf` fall through to here, and "no repository named all" points at the
+      // wrong thing entirely: the filters attach to `all` with a dash and no spaces.
+      const hint = /^all/i.test(text)
+        ? ` — did you mean all-${EXCLUDE_FILTERS[0].code}? Filters attach with a dash and no spaces: ${EXCLUDE_COMBINED_EXAMPLE}`
+        : '';
+      return { ok: false, error: `no repository named ${token}${hint}` };
+    }
     if (!seen.has(match)) {
       seen.add(match);
       picked.push(match);
     }
   }
   return { ok: true, value: picked };
+}
+
+/**
+ * Resolve a selection against a listing. `all`/`all-<flags>` go through `parseAllSpec`,
+ * numeric tokens through `parseSelection`; every other token is matched against a repo's name
+ * or `owner/name` (case-insensitive), so scripts can say `--select=ezcv,sdu` without
+ * depending on the API's ordering.
+ *
+ * Callers that want to report what a filter removed use `resolveSelection` instead.
+ */
+export function selectRepos<T extends Selectable>(repos: T[], spec: string): Result<T[]> {
+  const outcome = resolveSelection(repos, spec);
+  return outcome.ok ? { ok: true, value: outcome.value.repos } : outcome;
+}
+
+/* ------------------------------------------------------------------ arguments */
+
+export interface CliFlags {
+  provider?: ProviderName;
+  host?: string;
+  account?: string;
+  select?: string;
+  releases?: 'provider' | 'tags';
+  /** Config file to edit; defaults to `frznforge.config.ts` next to package.json. */
+  config?: string;
+  /** Print the snippet and exit without touching any file. */
+  print: boolean;
+  /** Skip the write confirmation (scripting). */
+  yes: boolean;
+  help: boolean;
+  /** Pick repositories in a local browser UI instead of at the prompt. */
+  web: boolean;
+  /** Port for `--web`; 0/undefined means "any free one". */
+  port?: number;
+  /** Do not launch a browser for `--web`. */
+  noOpen: boolean;
+}
+
+export interface ParsedArgs {
+  command: string | null;
+  flags: CliFlags;
+  errors: string[];
+}
+
+const VALUE_FLAGS = ['provider', 'host', 'account', 'select', 'releases', 'config', 'port'] as const;
+
+/** Boolean flag spelling → the `CliFlags` key it sets (they differ for kebab-cased names). */
+const BOOL_FLAGS = {
+  print: 'print',
+  yes: 'yes',
+  help: 'help',
+  web: 'web',
+  'no-open': 'noOpen',
+} as const satisfies Record<string, keyof CliFlags>;
+
+export const USAGE = `frznforge — static read-only forge site generator
+
+Usage
+  npm run frznforge -- init [options]
+  npm run frznforge -- --help
+
+Commands
+  init        Discover repositories on a provider and add them to frznforge.config.ts.
+
+Options (init)
+  --provider=<github|gitlab|gitea|forgejo>   Provider to query.
+  --host=<url>                               API/instance base URL (required for gitea/forgejo).
+  --account=<name>                           User, organisation or GitLab group path.
+  --select=<spec>                            Which of the listed repos to add:
+                                             ${SELECT_SYNTAX}
+                                             all-<flags> is everything except the matches
+                                             (${EXCLUDE_HELP}); combine them: ${EXCLUDE_COMBINED_EXAMPLE}.
+  --releases=<provider|tags>                 Where releases come from (default: provider).
+  --config=<path>                            Config file to edit (default: the nearest
+                                             frznforge.config.ts at or above the cwd).
+  --print                                    Print the snippet only; never write a file.
+  --yes                                      Write without the confirmation prompt.
+  --web                                      Pick the repos in a local browser UI. Interactive:
+                                             it needs a browser, so it is not for CI (and it
+                                             cannot be combined with --print).
+  --port=<n>                                 Port for --web (default: a free one).
+  --no-open                                  Do not launch a browser for --web; print the URL.
+  --help, -h                                 Show this message.
+
+Tokens are read from the environment only and are never written to the config:
+  GitHub   FRZNFORGE_GITHUB_TOKEN  or GITHUB_TOKEN    scope: public_repo (repo for private)
+  GitLab   FRZNFORGE_GITLAB_TOKEN  or GITLAB_TOKEN    scope: read_api
+  Gitea    FRZNFORGE_GITEA_TOKEN   or GITEA_TOKEN     scope: read:repository
+  Forgejo  FRZNFORGE_FORGEJO_TOKEN or FORGEJO_TOKEN   scope: read:repository
+
+Without a token only public repositories are listed. See docs/user/importing.md.`;
+
+/**
+ * Parse `--key=value`, `--key value` and boolean flags. Unknown flags and bad enum values
+ * are collected into `errors` rather than thrown, so the caller can print usage once.
+ */
+export function parseArgs(argv: string[]): ParsedArgs {
+  const flags: CliFlags = { print: false, yes: false, help: false, web: false, noOpen: false };
+  const errors: string[] = [];
+  let command: string | null = null;
+  const raw: Record<string, string> = {};
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]!;
+    if (arg === '-h') {
+      flags.help = true;
+      continue;
+    }
+    if (!arg.startsWith('--')) {
+      if (command === null) command = arg;
+      else errors.push(`unexpected argument: ${arg}`);
+      continue;
+    }
+    const body = arg.slice(2);
+    const eq = body.indexOf('=');
+    const key = eq === -1 ? body : body.slice(0, eq);
+    let value = eq === -1 ? undefined : body.slice(eq + 1);
+
+    const boolKey = (BOOL_FLAGS as Record<string, keyof CliFlags | undefined>)[key];
+    if (boolKey !== undefined) {
+      if (value !== undefined && value !== 'true' && value !== 'false') {
+        errors.push(`--${key} does not take a value`);
+        continue;
+      }
+      flags[boolKey as (typeof BOOL_FLAGS)[keyof typeof BOOL_FLAGS]] = value !== 'false';
+      continue;
+    }
+    if (!(VALUE_FLAGS as readonly string[]).includes(key)) {
+      errors.push(`unknown option: --${key}`);
+      continue;
+    }
+    if (value === undefined) {
+      const next = argv[i + 1];
+      if (next === undefined || next.startsWith('--')) {
+        errors.push(`--${key} needs a value`);
+        continue;
+      }
+      value = next;
+      i += 1;
+    }
+    raw[key] = value;
+  }
+
+  if (raw.provider !== undefined) {
+    if ((PROVIDER_NAMES as string[]).includes(raw.provider)) flags.provider = raw.provider as ProviderName;
+    else errors.push(`--provider must be one of ${PROVIDER_NAMES.join(', ')} (got ${JSON.stringify(raw.provider)})`);
+  }
+  if (raw.releases !== undefined) {
+    if (raw.releases === 'provider' || raw.releases === 'tags') flags.releases = raw.releases;
+    else errors.push(`--releases must be 'provider' or 'tags' (got ${JSON.stringify(raw.releases)})`);
+  }
+  if (raw.port !== undefined) {
+    const port = Number(raw.port);
+    if (Number.isInteger(port) && port >= 0 && port <= 65535) flags.port = port;
+    else errors.push(`--port must be a whole number between 0 and 65535 (got ${JSON.stringify(raw.port)})`);
+  }
+  if (raw.host !== undefined) flags.host = raw.host.replace(/\/+$/, '');
+  if (raw.account !== undefined) flags.account = raw.account.trim();
+  if (raw.select !== undefined) flags.select = raw.select;
+  if (raw.config !== undefined) flags.config = raw.config;
+
+  // --print is the "never touch anything, just show me" form and --web is a browser session
+  // that exists to write the config: honouring both would mean picking one silently.
+  if (flags.web && flags.print) {
+    errors.push(
+      '--web and --print cannot be combined: --web opens a browser UI that writes the config, ' +
+        '--print only prints a snippet. Drop one of them.',
+    );
+  }
+
+  return { command, flags, errors };
 }
 
 /* ------------------------------------------------------------------ config entries */
@@ -301,9 +588,64 @@ export interface RepoEntry {
 
 const ENTRY_KEY_ORDER = ['type', 'host', 'owner', 'repo', 'project', 'slug', 'releases'] as const;
 
-/** Single-quoted JS string literal, matching the style of frznforge.config.ts. */
+/**
+ * Single-quoted JS string literal, matching the style of frznforge.config.ts.
+ *
+ * Line terminators matter as much as quotes here: a raw `\n` inside `'…'` is a syntax error in
+ * JS/TS, so a repo name with a newline in it would leave the user's config unparseable — the
+ * damage is not injection (the quote escaping holds) but a config that no longer builds.
+ * U+2028/U+2029 terminate a line for older parsers, so they go too.
+ */
 function quote(value: string): string {
-  return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  const escaped = value
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+  return `'${escaped}'`;
+}
+
+/**
+ * The characters a name, owner, project or slug may contain before it is written into the
+ * config. A superset of what GitHub, GitLab, Gitea and Forgejo actually allow in a path, so a
+ * value that fails this came from a hostile or broken API response rather than a real repo.
+ */
+export const SAFE_FIELD = /^[A-Za-z0-9._\-/~+]{1,200}$/;
+
+/** Throw rather than write a listing-supplied value that has no business in a config file. */
+function assertSafeField(value: string, key: string): string {
+  if (!SAFE_FIELD.test(value)) {
+    throw new CliError(`the provider returned a ${key} that cannot go in a config file: ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+/**
+ * Anything that has no business in a URL and every business in an injection attempt: control
+ * and format characters (`\p{C}`), every kind of whitespace including U+2028/U+2029, quotes,
+ * backslashes and angle brackets.
+ */
+const UNSAFE_HOST_CHAR = /[\p{C}\s'"`<>]|\\/u;
+
+/**
+ * A host is a URL, so `SAFE_FIELD` cannot judge it — but it still ends up inside a quoted
+ * string literal, so control characters and quotes are refused the same way.
+ */
+export function assertSafeHost(value: string): string {
+  if (value.length > 300 || UNSAFE_HOST_CHAR.test(value)) {
+    throw new CliError(`not a usable host: ${JSON.stringify(value)}`);
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new CliError(`not a URL: ${value}`);
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new CliError('host must be http or https');
+  if (url.username || url.password) throw new CliError('host must not carry credentials');
+  return value;
 }
 
 /** Repo directory basename → slug: lowercase, non-[a-z0-9] runs → '-', trimmed. */
@@ -348,13 +690,16 @@ export function entryFor(
 ): RepoEntry {
   const entry: RepoEntry = { type: provider };
   const normalisedHost = host.replace(/\/+$/, '');
-  if (normalisedHost && normalisedHost !== PROVIDERS[provider].defaultHost) entry.host = normalisedHost;
-  if (provider === 'gitlab') entry.project = repo.project ?? repo.fullName;
+  if (normalisedHost && normalisedHost !== PROVIDERS[provider].defaultHost) entry.host = assertSafeHost(normalisedHost);
+  // A listing is remote input. Validating here — the one place listing-derived entries are
+  // built — means a hostile or broken API response cannot put a line break, a quote or a stray
+  // `path:` into a config file the user will read for years.
+  if (provider === 'gitlab') entry.project = assertSafeField(repo.project ?? repo.fullName, 'project path');
   else {
-    entry.owner = repo.owner;
-    entry.repo = repo.name;
+    entry.owner = assertSafeField(repo.owner, 'owner');
+    entry.repo = assertSafeField(repo.name, 'repository name');
   }
-  if (slug) entry.slug = slug;
+  if (slug) entry.slug = assertSafeField(slug, 'slug');
   entry.releases = releases;
   return entry;
 }
@@ -646,6 +991,26 @@ export interface WriteResult extends InsertResult {
 }
 
 /**
+ * Write `source` to a backup beside `file`, never over an existing one.
+ *
+ * `backupPathFor` has one-second resolution, so two writes in the same second would otherwise
+ * name the same file and the second would overwrite the first — losing the only copy of the
+ * pre-write state. `wx` makes the collision visible and a counter steps around it.
+ */
+async function writeBackup(file: string, source: string, now: Date): Promise<string> {
+  const base = backupPathFor(file, now);
+  for (let n = 0; ; n += 1) {
+    const candidate = n === 0 ? base : `${base}.${n}`;
+    try {
+      await fs.writeFile(candidate, source, { encoding: 'utf8', flag: 'wx' });
+      return candidate;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST' || n > 100) throw error;
+    }
+  }
+}
+
+/**
  * Apply `insertRepos` to a file on disk, taking a timestamped `.bak` copy first. Writing is
  * skipped (and no backup is made) when nothing would change.
  */
@@ -658,8 +1023,7 @@ export async function updateConfigFile(
   const result = insertRepos(source, entries);
   if (!result) return null;
   if (!result.changed) return { ...result, backup: null };
-  const backup = backupPathFor(file, options.now ?? new Date());
-  await fs.writeFile(backup, source, 'utf8');
+  const backup = await writeBackup(file, source, options.now ?? new Date());
   await fs.writeFile(file, result.text, 'utf8');
   return { ...result, backup };
 }
@@ -741,9 +1105,11 @@ export interface RemoteRepo {
   /** GitLab only: full namespaced project path. */
   project?: string;
   description: string | null;
-  archived: boolean;
+  /** `undefined` when the listing endpoint does not report it — see `RepoFlags`. */
+  archived?: boolean;
   private: boolean;
-  fork: boolean;
+  /** `undefined` when the listing endpoint does not report it — see `RepoFlags`. */
+  fork?: boolean;
 }
 
 export interface ListOptions {
@@ -920,12 +1286,20 @@ export async function listRepos(provider: ProviderName, opts: ListOptions): Prom
         owner: segments.slice(0, -1).join('/'),
         project: full,
         description: str(r.description),
-        archived: bool(r.archived),
+        // GitLab's *list* representations answer neither question the way the single-project
+        // endpoint does: `forked_from_project` is never present on a list item (verified on
+        // both /users/:id/projects and /groups/:id/projects), and `archived` is present for
+        // groups but absent from the simple representation a user listing returns. Reporting
+        // `false` would make `all-nf`/`all-na` look like they ran; `undefined` makes
+        // `resolveSelection` say out loud that it cannot answer.
+        archived: typeof r.archived === 'boolean' ? r.archived : undefined,
         private: str(r.visibility) !== null && r.visibility !== 'public',
-        fork: r.forked_from_project !== undefined && r.forked_from_project !== null,
+        fork: 'forked_from_project' in r ? r.forked_from_project !== null : undefined,
       });
       continue;
     }
+    // GitHub, Gitea and Forgejo all carry `fork` and `archived` on every list item, so here a
+    // missing key really does mean false rather than "not reported".
     const name = str(r.name);
     if (!name) continue;
     const owner = typeof r.owner === 'object' && r.owner !== null ? str((r.owner as Record<string, unknown>).login) : null;
@@ -1015,7 +1389,43 @@ function describeRepo(repo: RemoteRepo): string {
   return `${repo.fullName}${suffix}${desc}`;
 }
 
+/**
+ * The interactive "which of these?" loop, split out so it can be driven without a terminal.
+ *
+ * It re-asks only when the answer could not be honoured — a spec that failed to parse, or a
+ * filter that excluded every repository. A spec that *parsed* and deliberately chose nothing
+ * (`none`) has to end the loop: it is in the grammar the prompt advertises, and re-asking made
+ * it unanswerable, with Ctrl-C the only way out.
+ */
+export async function askForSelection<T extends Selectable>(
+  repos: T[],
+  ask: (question: string, fallback: string) => Promise<string>,
+  write: (line: string) => void,
+): Promise<T[]> {
+  for (;;) {
+    const spec = await ask(`Select repositories (${SELECT_SYNTAX})`, 'all');
+    const selection = resolveSelection(repos, spec);
+    if (selection.ok && !(selection.value.repos.length === 0 && selection.value.filtered)) {
+      const summary = selectionSummary(selection.value);
+      if (summary) write(`  ${summary}`);
+      return selection.value.repos;
+    }
+    if (selection.ok) write(`  ${excludedEverythingMessage(spec, selection.value)}`);
+    else write(`  ${selection.error}.`);
+  }
+}
+
 async function runInit(flags: CliFlags, io: Io): Promise<number> {
+  // The browser UI is a whole other front end for the same steps; it is loaded lazily so a
+  // plain terminal run never pays for the HTTP server module.
+  if (flags.web) {
+    const { provider, host, account, releases, port, noOpen } = flags;
+    const configPath = flags.config ? path.resolve(io.cwd, flags.config) : undefined;
+    const fetchImpl = io.fetchImpl;
+    const { runWebInit } = await import('./lib/web-init');
+    return runWebInit({ provider, host, account, releases, configPath, port, noOpen, io, fetchImpl });
+  }
+
   const planned = planFromFlags(flags);
   // Everything the run needs is on the command line → no prompts, no terminal required.
   if (!planned.ok && !io.isTty) {
@@ -1066,26 +1476,29 @@ async function runInit(flags: CliFlags, io: Io): Promise<number> {
 
     let picked: RemoteRepo[] = [];
     if (flags.select !== undefined) {
-      const selection = selectRepos(repos, flags.select);
+      const selection = resolveSelection(repos, flags.select);
       if (!selection.ok) {
         io.error(`--select: ${selection.error}`);
         return 1;
       }
-      picked = selection.value;
+      const summary = selectionSummary(selection.value);
+      if (summary) io.log(summary);
+      if (selection.value.repos.length === 0 && selection.value.filtered) {
+        io.error(excludedEverythingMessage(flags.select, selection.value));
+        return 1;
+      }
+      picked = selection.value.repos;
     } else {
       const p = prompter!;
       p.write('');
       repos.forEach((r, i) => p.write(`  ${String(i + 1).padStart(3)}. ${describeRepo(r)}`));
       p.write('');
-      for (;;) {
-        const spec = await p.ask('Select repositories (e.g. 1,3,5-8 or "all")', 'all');
-        const selection = selectRepos(repos, spec);
-        if (selection.ok && selection.value.length > 0) {
-          picked = selection.value;
-          break;
-        }
-        p.write(`  ${selection.ok ? 'nothing selected' : selection.error}.`);
-      }
+      p.write(`  all-<flags> keeps everything except the matches — ${EXCLUDE_HELP}; combine: ${EXCLUDE_COMBINED_EXAMPLE}`);
+      picked = await askForSelection(
+        repos,
+        (question, fallback) => p.ask(question, fallback),
+        (line) => p.write(line),
+      );
     }
     // Only ask when the run was not already fully described by flags, and never when --print
     // was asked for: both of those are the scriptable forms, and blocking on a prompt there
@@ -1209,5 +1622,12 @@ export async function main(argv: string[], io: Io = defaultIo()): Promise<number
 const invokedDirectly =
   typeof process.argv[1] === 'string' && pathToFileURL(process.argv[1]).href === import.meta.url;
 if (invokedDirectly) {
-  process.exitCode = await main(process.argv.slice(2));
+  // Deliberately not a top-level `await`: this file is also a library. `--web` does
+  // `await import('./lib/web-init')`, and that module imports this one — with a top-level await
+  // here, cli.ts's own evaluation would still be in progress when web-init.ts asked for it, and
+  // Node would abandon the process with "unsettled top-level await" (exit 13). Kicking `main`
+  // off and letting the module finish evaluating breaks the knot.
+  void main(process.argv.slice(2)).then((code) => {
+    process.exitCode = code;
+  });
 }
