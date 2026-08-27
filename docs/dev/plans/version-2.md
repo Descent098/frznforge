@@ -1,3 +1,18 @@
+- [ ] Performance
+    - [ ] Build time
+        - [ ] See if there's a good way to improve the initial cold-cache build time
+            - [ ] If there was a successful content cache run less than 2 mins ago, reuse that
+                - [ ] Allow this to be configurable
+            - [ ] See if you can concurrenly build "island-pages" like having a lightweight thread handle one repo version (e.g. `v0.3.0`), or one thread per repo
+        - [ ] The rebuild time with a constructed cache is as slow as a build without one
 - [ ] Static sites
     - [ ] For repos that are static sites, allow the site to be built alongside the normal repo content
         - [ ] For example I have a site I'm building, and the repo has an `index.html` I should be able to set `hostable: true`, and I should get the `index.html` when I go to `/<reponame>`, and the normal repo view when I go to `source/<reponame>`
+    - [ ] Should support specifying a branch, or default if hostable is set to true to look for (in order):
+        - `main`
+        - `master`
+        - `gh-pages`
+- [ ] Add base path support
+- [ ] Logo
+    - [ ] Take the existing logo in public/logo.png and improve it to make it simpler, then integrate it into the current ui
+- [ ] Configurable timeframes
