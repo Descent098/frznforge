@@ -1,18 +1,37 @@
+- [ ] update `npm run frznforge -- --web` to also allow people to configure everything from `frznforge.config.ts` like 
+    - [ ] Their profile
+        - [ ] owner
+        - [ ] Edit profile.md (include a markdown WYSIWYG from retoken)
+    - [ ] Orgs
+    - [ ] ingest settings (can be wrapped in an accoridion using `<details>`)
+    - [ ] Any new settings added in this version
+- [ ] Add support to markdown rendering for mermaid diagram rendering
 - [ ] Performance
     - [ ] Build time
         - [ ] See if there's a good way to improve the initial cold-cache build time
             - [ ] If there was a successful content cache run less than 2 mins ago, reuse that
                 - [ ] Allow this to be configurable
+                - [ ] Should also account for if an entry failed to fetch, since on large refreshes often they will fail to fetch metadata due to rate limiting
             - [ ] See if you can concurrenly build "island-pages" like having a lightweight thread handle one repo version (e.g. `v0.3.0`), or one thread per repo
-        - [ ] The rebuild time with a constructed cache is as slow as a build without one
+        - [ ] The rebuild time with a constructed cache is as slow as a build without one, make sure this cache is actually being used for something
+        - [ ] On each visible branch check if the most recent commit hash matches the one on the page, and if so skip rebuilding it in the dist
+        - [ ] Add a CLI option to force refreshing everything ignoring the caching entirely `--no-cache`
+    - [ ] db-backed
+        - [ ] Investigate if using sqlite to store the blobs and cache information all in one place can help make things faster instead of storing it all as files and having to eat the cost of reading+writing them all the time
 - [ ] Static sites
     - [ ] For repos that are static sites, allow the site to be built alongside the normal repo content
-        - [ ] For example I have a site I'm building, and the repo has an `index.html` I should be able to set `hostable: true`, and I should get the `index.html` when I go to `/<reponame>`, and the normal repo view when I go to `source/<reponame>`
-    - [ ] Should support specifying a branch, or default if hostable is set to true to look for (in order):
-        - `main`
-        - `master`
-        - `gh-pages`
-- [ ] Add base path support
-- [ ] Logo
-    - [ ] Take the existing logo in public/logo.png and improve it to make it simpler, then integrate it into the current ui
-- [ ] Configurable timeframes
+        - [ ] For example I have a site I'm building, and the repo has an `index.html` I should have a section in the config called `hosting`. This object should allow me to specify sub-objects in an array that specify which repo's should be hosted.
+            - [ ] Imagine I have a repo called `my-site` with a static site on it's `gh-pages` branch. In my config if I have `hosting: {'repos':{'my-site':{host:true, slug:mysite, branch:gh-pages}}}`, and I should get the `index.html` when I go to `/mysite` (default to repo name normally if not explicitly set), and the normal repo view when I go to `repos/my-site`
+            - [ ] Need to reserve `/repos`, `/orgs`, `/notes` prefixes as unusable paths and emit a hard error
+        - [ ] Should support specifying a branch, or default if hostable is set to true to look for (in order):
+            - `gh-pages`
+            - `main`
+            - `master`
+- [ ] UI
+    - [ ] Logo
+        - [ ] Take the existing logo in public/logo.png and improve it to make it simpler while keeping the same frozen anvil with flames aesthetic, then integrate it into the current ui
+- [ ] Configuration
+    - [ ] Add base path support (e.g. `/mysite` as the root)
+    - [ ] Currently the site shows orange when repos are recently modified, and blue when not. Make this value configurable
+    - [ ] Configurable timeframes
+        - [ ] Allow an ingest setting where you limit by number of days elapsed (e.g. `30` would be only include commits from the last 30 days)
