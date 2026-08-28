@@ -15,7 +15,7 @@ import type { Organization, Repo } from '../../../lib/data/schema';
 import { summarize } from '../../../lib/listing';
 import { renderMarkdown } from '../../../lib/markdown';
 import { getOrgRoutes, orgReposUrl } from '../../../lib/routes';
-import { getData } from '../../../lib/site';
+import { getConfig, getData } from '../../../lib/site';
 import '../../../styles/orgs.css';
 
 export async function getStaticPaths() {
@@ -26,6 +26,7 @@ export async function getStaticPaths() {
 interface Props { org: Organization; repos: Repo[] }
 const { org, repos } = Astro.props;
 const now = new Date();
+const heatDays = (await getConfig()).theme.heat;
 
 const entries = await getCollection('orgs');
 const entry = entries.find((e) => e.id === org.slug) ?? null;
@@ -88,7 +89,7 @@ const description = fm?.description ?? org.description;
       </div>
       {shown.length ? (
         <div class="hf-repo-grid">
-          {shown.map((repo) => <RepoCard repo={repo} now={now.getTime()} />)}
+          {shown.map((repo) => <RepoCard repo={repo} now={now.getTime()} heatDays={heatDays} />)}
         </div>
       ) : (
         <div class="hf-empty hf-card">

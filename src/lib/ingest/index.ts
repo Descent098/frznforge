@@ -19,12 +19,26 @@ import { slugFor, slugify } from './meta';
 import { collectNotes } from './notes';
 import { resolveOrganizations, type OrgRepoInput } from './orgs';
 import { prepareRemote, type MirrorAction, type PrepareRemoteDeps } from './remote';
+import {
+  configHashFor,
+  readRunLog,
+  readScanCache,
+  rehydrateScan,
+  scanCachePathFor,
+  scanInputDigest,
+  withinFreshWindow,
+  writeRunLog,
+  writeScanCache,
+  type RunLogEntry,
+} from './reuse';
 import { scanRepo, type ScanResult, type ScanSource } from './scan';
 
 export { scanRepo } from './scan';
 export type { ScanOptions, ScanResult, ScanSource } from './scan';
 export { ensureMirror, prepareRemote } from './remote';
-export type { EnsureMirrorOptions, EnsureMirrorResult, GitRunner, MirrorAction, PrepareRemoteDeps } from './remote';
+export type { EnsureMirrorOptions, EnsureMirrorResult, GitRunner, MirrorAction, PrepareRemoteDeps, PrepareRemoteOptions } from './remote';
+export { parseIngestArgs, readRunLog, runLogPathFor, scanCachePathFor, withinFreshWindow } from './reuse';
+export type { IngestArgs, RunLog, RunLogEntry } from './reuse';
 export { collectNotes } from './notes';
 export type { CollectNotesOptions, CollectNotesResult } from './notes';
 export { resolveOrganizations } from './orgs';
@@ -49,6 +63,12 @@ export interface IngestHooks {
 export interface IngestOptions {
   /** Injected dependencies for remote sources (importer factory, git runner, clock, env). */
   remote?: PrepareRemoteDeps;
+  /**
+   * `--no-cache`: read nothing from the cross-run caches — no provider `.meta.json`
+   * fallback, no freshness window, no scan-cache replay. Fresh results are still recorded,
+   * so the next ordinary run benefits from this one.
+   */
+  noCache?: boolean;
 }
 
 /** Run `fn` over `items` with at most `limit` in flight; results keep input order. */
@@ -89,11 +109,30 @@ export async function ingest(
   const opts = {
     maxBlobBytes: config.ingest.maxBlobBytes,
     maxCommits: config.ingest.maxCommits,
+    maxCommitAgeDays: config.ingest.maxCommitAgeDays,
     tagTrees: config.ingest.tagTrees,
     branchTrees: config.ingest.branchTrees,
     archives: config.ingest.archives,
     insights: config.ingest.insights,
   };
+
+  // Cross-run reuse (`ingest.reuse`): reads are disabled by `--no-cache`, writes are not —
+  // a `--no-cache` run is maximally fresh and the next ordinary run should benefit from it.
+  // The clock is the injectable one remote tests already use; nothing derived from it can
+  // reach the artifact (it only ever lands in the cacheDir run log).
+  const reuse = config.ingest.reuse;
+  const noCache = options.noCache ?? false;
+  const reuseReads = reuse.enabled && !noCache;
+  const now = () => options.remote?.now?.() ?? new Date();
+  // Hashed over the CALLER's config, before any --no-cache override — the run log this run
+  // writes must be readable by the next ordinary run of the same config, or "--no-cache
+  // still records its fresh results" would be a dead letter for the freshness window.
+  const cfgHash = configHashFor(config);
+  const prevLog = reuseReads ? await readRunLog(config.cacheDir) : null;
+  const prevRemotes = prevLog && prevLog.configHash === cfgHash ? prevLog.remotes : null;
+  // `--no-cache` forces a full fetch without leaking into the hashed config above.
+  const fetchMode = noCache ? ('always' as const) : config.ingest.fetch;
+  const remoteConfig = fetchMode === config.ingest.fetch ? config : { ...config, ingest: { ...config.ingest, fetch: fetchMode } };
 
   const results = await pool(config.repos, config.ingest.concurrency, async (src) => {
     // Must match what prepareRemote/scanRepo will settle on, or the warnings raised before
@@ -126,15 +165,24 @@ export async function ingest(
       },
       remoteWarnings,
       remote,
+      remoteAbsPath: src.absPath,
       org,
     });
 
     if (isRemoteSourceConfig(src)) {
+      // Freshness window: only for `'auto'` — `'always'` is an explicit ask to fetch, and
+      // `'never'` must keep emitting its stale-cache warnings (a window-skip suppressing
+      // them would make the same commits produce different bytes depending on timing).
+      const skipFetch =
+        fetchMode === 'auto' &&
+        prevRemotes !== null &&
+        withinFreshWindow(prevRemotes[src.absPath], now(), reuse.maxAgeMinutes);
+
       // One unreachable forge must never take the build down: prepareRemote turns every
       // failure into a warning, and anything unexpected is caught here as one too.
       let prepared;
       try {
-        prepared = await prepareRemote(src, config, options.remote ?? {});
+        prepared = await prepareRemote(src, remoteConfig, options.remote ?? {}, { skipFetch, noCacheReads: noCache });
       } catch (e) {
         remote = { slug, provider: src.type, action: 'missing', skipped: true };
         hooks.onRemote?.(remote);
@@ -147,9 +195,26 @@ export async function ingest(
       scanSource = prepared.scanSource;
     }
 
-    const r = await scanRepo(scanSource, opts);
+    // Scan cache: replay the recorded result when every input is unchanged. The digest is
+    // computed over the refs, HEAD, the scan source (provider metadata included) and the
+    // options; a hit rehydrates blob/archive bytes from `outDir` so `writeArtifact`'s
+    // mirror-and-prune pass sees the full maps. Anything missing → quiet fallback to a
+    // real scan. The cache entry is written before assembly mutates the repo (slug
+    // renames, remote-warning stamping), so what is stored is exactly a fresh scan.
+    let r: ScanResult | null = null;
+    const digest = reuse.enabled ? await scanInputDigest(scanSource, opts) : null;
+    const scanCacheFile = digest !== null ? scanCachePathFor(config.cacheDir, scanSource.absPath) : null;
+    if (digest !== null && scanCacheFile !== null && reuseReads) {
+      const entry = await readScanCache(scanCacheFile);
+      if (entry && entry.inputDigest === digest) r = await rehydrateScan(entry, config.outDir);
+    }
+    const fresh = r === null;
+    if (r === null) r = await scanRepo(scanSource, opts);
+    if (fresh && digest !== null && scanCacheFile !== null && !('skipped' in r)) {
+      await writeScanCache(scanCacheFile, digest, r);
+    }
     if (!('skipped' in r)) hooks.onRepoDone?.(r.repo);
-    return { result: r, remoteWarnings, remote, org };
+    return { result: r, remoteWarnings, remote, remoteAbsPath: isRemoteSourceConfig(src) ? src.absPath : null, org };
   });
 
   const scanned: Array<{
@@ -159,8 +224,12 @@ export async function ingest(
     org: string | null;
   }> = [];
   const remotes: RemoteStatus[] = [];
-  for (const { result, remoteWarnings, remote, org } of results) {
+  const remoteRuns: Array<{ absPath: string; action: MirrorAction; skipped: boolean; warnings: Warning[] }> = [];
+  for (const { result, remoteWarnings, remote, remoteAbsPath, org } of results) {
     if (remote) remotes.push(remote);
+    if (remote && remoteAbsPath) {
+      remoteRuns.push({ absPath: remoteAbsPath, action: remote.action, skipped: remote.skipped, warnings: remoteWarnings });
+    }
     const r: ScanResult = result;
     if ('skipped' in r) {
       siteWarnings.push(...remoteWarnings, r.warning);
@@ -229,6 +298,27 @@ export async function ingest(
     organizations: orgRes.organizations,
     warnings,
   };
+
+  // Record this run for the next one's freshness window. A window-skipped source keeps its
+  // previous stamp — the window must not extend itself, or a build every minute would never
+  // refresh anything. A degraded fetch records `fresh: false`, so it is always re-attempted.
+  if (reuse.enabled) {
+    const DEGRADED = new Set(['remote-fetch-failed', 'remote-rate-limited', 'remote-auth-missing', 'remote-cache-stale']);
+    const entries: Record<string, RunLogEntry> = {};
+    for (const run of remoteRuns) {
+      if (run.action === 'reused') {
+        const prev = prevRemotes?.[run.absPath];
+        if (prev) entries[run.absPath] = prev;
+        continue;
+      }
+      entries[run.absPath] = {
+        fetchedAt: now().toISOString(),
+        fresh: !run.skipped && !run.warnings.some((w) => DEGRADED.has(w.code)),
+      };
+    }
+    await writeRunLog(config.cacheDir, { configHash: cfgHash, remotes: entries });
+  }
+
   return { data, blobs, archives, remotes };
 }
 

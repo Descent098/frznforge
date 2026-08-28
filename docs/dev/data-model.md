@@ -54,6 +54,9 @@ git-ignored) and the ordinary local scanner then runs on that bare mirror:
 
 ```
 <ingest.cacheDir>/
+├── last-run.json                          run log for the freshness window (0.2.0)
+├── scan/
+│   └── <digest>.json                      per-repo scan cache (0.2.0)
 └── <provider>/                            github | gitlab | gitea | forgejo
     └── <host-slug>/                       api.github.com, gitea.example.com-3000, …
         ├── <owner>/<repo>-<digest>.git    bare mirror (GitLab: the namespace nests)
@@ -84,6 +87,37 @@ git-ignored) and the ordinary local scanner then runs on that bare mirror:
   None of the three can fail the build — see the warnings table.
 - The cache is disposable. Deleting it costs a re-clone, nothing else; it is never read by
   the site and never referenced from the artifact.
+
+### Cross-run reuse sidecars (`ingest.reuse`, 0.2.0)
+
+Two more cacheDir files exist so repeat builds can skip work **without changing a byte of
+output** — wall-clock timestamps are allowed here precisely because this directory never
+feeds the artifact:
+
+- `last-run.json` — the **run log**: per remote source (keyed by its mirror path), when the
+  last real fetch happened and whether it was fully fresh (mirror updated, no `remote-*`
+  warnings). The freshness window (`ingest.reuse.maxAgeMinutes`, default 2) reads it: under
+  `fetch: 'auto'`, a source fetched fresh within the window is not re-fetched — the cached
+  `.meta.json` and mirror are used as-is with **no warning**, because they are exactly what
+  a fetch would have returned (`MirrorAction: 'reused'`). A degraded source is always
+  re-attempted, so a rate-limited refresh heals run by run. A window-skip never updates the
+  stamp (the window cannot extend itself), and a config-hash mismatch invalidates the whole
+  log. `'never'` and `'always'` are unaffected — `'never'` must keep its stale-cache
+  warnings, and `'always'` is an explicit ask.
+- `scan/<digest>.json` — the **scan cache**: one repo's complete `scanRepo` output, keyed
+  by a digest over every input the scan reads — HEAD, every branch/tag ref with its object
+  id, the scan source (slug, overrides, **provider metadata layer and releases** — those
+  change with no ref change, and omitting them would replay stale releases) and the
+  `ScanOptions`. A hit skips the scan and replays the recorded `Repo`, reading blob and
+  archive bytes back from `<outDir>/blobs/` and `<outDir>/archives/` so `writeArtifact`'s
+  mirror-and-prune pass sees full maps; anything missing or invalid falls back to a real
+  scan, silently. The cached entry is validated against the `Repo` schema on read — a
+  corrupt cache degrades to a re-scan, never to a failed build.
+
+`npm run ingest -- --no-cache` reads none of this (nor the provider `.meta.json`) for one
+run, but still records its fresh results for the next one. Neither file is locked: two
+ingests racing on one cacheDir can lose a run-log update, which costs a redundant fetch,
+never correctness.
 
 ## Guarantees
 
@@ -180,7 +214,7 @@ Git-derived:
 | `defaultBranch` | HEAD's branch if it has commits; else `main`, then `master`, then the branch with the newest commit (warning `default-branch-fallback`). |
 | `branches`      | Local branches (`refs/heads/*` only — no remote-tracking refs), sorted by name.                        |
 | `gitTags`       | Git tags, sorted by name.                                                                            |
-| `commits`       | Every commit listed in any branch's `commits`, keyed by sha (sorted). With `ingest.maxCommits` set, only the kept commits are present. |
+| `commits`       | Every commit listed in any branch's `commits`, keyed by sha (sorted). With `ingest.maxCommits` and/or `ingest.maxCommitAgeDays` set, only the kept commits are present. |
 | `commitCount`   | `Object.keys(commits).length`.                                                                       |
 | `tree`          | Flat listing of the default-branch HEAD tree — every blob, tree, symlink and submodule at every depth, sorted by path. |
 | `files`         | `FileInfo` for every blob/symlink in `tree`, keyed by path (sorted).                                 |
@@ -200,7 +234,7 @@ Git-derived:
 | ---------------- | ----------------------------------------------------------------------- |
 | `name`           | Short name (`main`).                                                    |
 | `head`           | Sha of the tip commit.                                                  |
-| `commits`        | Shas reachable from `head`, newest first, topological order. Truncated to `ingest.maxCommits` when set (warning `commits-capped`, once per repo). |
+| `commits`        | Shas reachable from `head`, newest first, topological order. Truncated to `ingest.maxCommits` when set (warning `commits-capped`, once per repo). With `ingest.maxCommitAgeDays` set, limited to commits from the last N days — the cutoff anchored to the newest branch-head commit date across the repo, never the clock, so the list stays deterministic (warning `commits-aged-out`, once per repo); `head` is **always** in the list (even a clock-skewed head the filter would drop), so no branch goes empty or loses its tip. Note that `TreeEntry.lastCommit` is computed over full history, so with the window active a path's last-touching commit may be absent from `commits` — the file tables then show no per-file date/subject for it. |
 | `lastCommitDate` | Commit date of `head`.                                                  |
 
 ### `Tag`
@@ -437,6 +471,7 @@ annotated-tag derivation, newest first either way. `SiteRelease.source` (`'provi
 | `repo-meta-invalid`         | repo  | `.frznforge.json` exists in the tree but is not valid JSON / does not match `RepoMetaInput`; ignored. |
 | `description-truncated`     | repo  | In-repo description exceeded 300 characters and was truncated.                           |
 | `commits-capped`            | repo  | One or more branch commit lists were truncated to `ingest.maxCommits`.                   |
+| `commits-aged-out`          | repo  | Commits older than `ingest.maxCommitAgeDays` (measured from the repo's newest commit date, never the clock) were left out. Every branch keeps its head commit. Suppressed when `ingest.maxCommits` truncated first (`commits-capped` is reported instead). |
 | `tag-trees-capped`          | repo  | More tags than `ingest.tagTrees`; only the newest N have browsable trees / archives ("N of M tags have browsable trees"). |
 | `branch-trees-capped`       | repo  | More non-default branches than `ingest.branchTrees`; only the most recently updated N have browsable trees ("N of M branches have browsable trees" — N counts the default branch, which is always browsable). Skipped branches still list on the branches page. |
 | `insights-approximate`      | repo  | At least one code-size checkpoint exceeded `ingest.insights.maxBytesPerSample`, so it reports `lines: null` and `RepoInsights.approximate` is `true`. Byte counts are unaffected. |

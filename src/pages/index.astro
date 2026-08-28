@@ -43,13 +43,17 @@ const fm = profile?.data;
 const profileHtml = profile?.body?.trim() ? renderMarkdown(profile.body) : null;
 
 const repoCount = data.repos.length;
+// The "recent" window is the hot bucket of the recency accent (`theme.heat.hot`, default 7
+// days), so the KPI copy and the orange accent always agree on what counts as recent.
+const heatDays = cfg.theme.heat;
+const hotWindow = heatDays.hot === 7 ? 'this week' : `in the last ${heatDays.hot} days`;
 const commitsThisYear = commitsSince(data.repos, 365, now);
-const commitsThisWeek = commitsSince(data.repos, 7, now);
+const commitsRecent = commitsSince(data.repos, heatDays.hot, now);
 const firstCommit = earliestCommit(data.repos);
 const years = yearsSince(firstCommit, now);
 const languages = aggregateLanguages(data.repos, 5);
 const templates = data.repos.filter((r) => r.template).length;
-const touchedThisWeek = data.repos.filter((r) => r.updatedAt && now.getTime() - new Date(r.updatedAt).getTime() < 7 * 86_400_000).length;
+const touchedRecently = data.repos.filter((r) => heatFor(r.updatedAt, now, heatDays) === 'hot').length;
 
 const pinnedSlugs = fm?.pinned ?? [];
 const pinned = pinnedSlugs
@@ -62,7 +66,7 @@ for (const slug of pinnedSlugs) {
   if (!data.repos.some((r) => r.slug === slug)) console.warn(`[frznforge] profile.md pins unknown repo "${slug}"`);
 }
 
-const graph = buildContribGraph(data.repos, fm?.identities ?? [], now);
+const graph = buildContribGraph(data.repos, fm?.identities ?? [], now, heatDays);
 const activity = buildActivity(data.repos, 6);
 
 const forgeLabels: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab', codeberg: 'Codeberg', forgejo: 'Forgejo', gitea: 'Gitea' };
@@ -100,14 +104,14 @@ const forges = Object.entries(fm?.forges ?? {}).filter(([, url]) => Boolean(url)
           <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-repo" /></svg> Repositories</div>
           <div class="hf-kpi-value">{formatInt(repoCount)}</div>
           <div class="hf-kpi-sub">
-            {touchedThisWeek > 0 ? <><span class="t-hot">{touchedThisWeek} touched</span> this week</> : 'none touched this week'}
+            {touchedRecently > 0 ? <><span class="t-hot">{touchedRecently} touched</span> {hotWindow}</> : `none touched ${hotWindow}`}
             {templates > 0 && <> · {templates} template{templates === 1 ? '' : 's'}</>}
           </div>
         </div>
         <div class="hf-kpi hf-kpi--ember">
           <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-commit" /></svg> Commits this year</div>
           <div class="hf-kpi-value">{formatInt(commitsThisYear)}</div>
-          <div class="hf-kpi-sub">{commitsThisWeek > 0 ? <><span class="t-hot">+{formatInt(commitsThisWeek)}</span> in the last 7 days</> : 'none in the last 7 days'}</div>
+          <div class="hf-kpi-sub">{commitsRecent > 0 ? <><span class="t-hot">+{formatInt(commitsRecent)}</span> in the last {heatDays.hot} days</> : `none in the last ${heatDays.hot} days`}</div>
         </div>
         <div class="hf-kpi hf-kpi--ice">
           <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-history" /></svg> Years of history</div>
@@ -155,7 +159,7 @@ const forges = Object.entries(fm?.forges ?? {}).filter(([, url]) => Boolean(url)
           </div>
           <ul class="hf-activity-list">
             {activity.map((e) => {
-              const heat = heatFor(e.date, now);
+              const heat = heatFor(e.date, now, heatDays);
               return (
                 <li>
                   <span class={`hf-act-icon t-${heat}`}><svg class="hf-i"><use href={e.type === 'tag' ? '#i-tag' : '#i-commit'} /></svg></span>
@@ -181,11 +185,11 @@ const forges = Object.entries(fm?.forges ?? {}).filter(([, url]) => Boolean(url)
       </div>
       {pinned.length ? (
         <div class="hf-repo-grid">
-          {pinned.map((repo) => <RepoCard repo={repo} now={now.getTime()} />)}
+          {pinned.map((repo) => <RepoCard repo={repo} now={now.getTime()} heatDays={heatDays} />)}
         </div>
       ) : repoCount ? (
         <div class="hf-repo-grid">
-          {data.repos.slice(0, 6).map((r) => <RepoCard repo={summarize(r)} now={now.getTime()} />)}
+          {data.repos.slice(0, 6).map((r) => <RepoCard repo={summarize(r)} now={now.getTime()} heatDays={heatDays} />)}
         </div>
       ) : (
         <div class="hf-empty hf-card">

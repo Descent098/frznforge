@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { RepoSummary } from '../lib/listing';
-  import { heatFor, relativeTime } from '../lib/format';
+  import { DEFAULT_HEAT, type HeatThresholds, heatFor, relativeTime } from '../lib/format';
 
   interface Props {
     repo: RepoSummary;
@@ -8,11 +8,13 @@
     now: number;
     /** Base path for tag filter links. */
     tagHref?: (tag: string) => string;
+    /** Recency-accent day boundaries (`theme.heat`), passed down like `now`. */
+    heatDays?: HeatThresholds;
   }
-  let { repo, now, tagHref = (t) => `/repos/?tag=${encodeURIComponent(t)}` }: Props = $props();
+  let { repo, now, tagHref = (t) => `/repos/?tag=${encodeURIComponent(t)}`, heatDays = DEFAULT_HEAT }: Props = $props();
 
   const nowDate = $derived(new Date(now));
-  const heat = $derived(heatFor(repo.updatedAt, nowDate));
+  const heat = $derived(heatFor(repo.updatedAt, nowDate, heatDays));
   const langs = $derived(repo.languages.slice(0, 3));
 </script>
 

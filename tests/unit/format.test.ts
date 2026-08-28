@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateLanguages, commitsSince, heatFor, initials, prettyUrl, relativeTime, yearsSince } from '../../src/lib/format';
+import { DEFAULT_HEAT, aggregateLanguages, commitsSince, heatFor, initials, prettyUrl, relativeTime, yearsSince } from '../../src/lib/format';
 import type { Repo } from '../../src/lib/data/schema';
 
 const now = new Date('2026-08-23T12:00:00Z');
@@ -13,6 +13,19 @@ describe('heatFor', () => {
     expect(heatFor(ago(200), now)).toBe('cool');
     expect(heatFor(ago(400), now)).toBe('cold');
     expect(heatFor(null, now)).toBe('cold');
+  });
+
+  it('takes custom thresholds (theme.heat) and defaults to the stock boundaries', () => {
+    const t = { hot: 2, warm: 10, neutral: 50, cool: 100 };
+    expect(heatFor(ago(1), now, t)).toBe('hot');
+    expect(heatFor(ago(3), now, t)).toBe('warm');
+    expect(heatFor(ago(20), now, t)).toBe('neutral');
+    expect(heatFor(ago(60), now, t)).toBe('cool');
+    expect(heatFor(ago(150), now, t)).toBe('cold');
+    expect(heatFor(null, now, t)).toBe('cold');
+    // the exported default is what every call without the argument uses
+    expect(DEFAULT_HEAT).toEqual({ hot: 7, warm: 30, neutral: 180, cool: 365 });
+    expect(heatFor(ago(10), now, DEFAULT_HEAT)).toBe(heatFor(ago(10), now));
   });
 });
 

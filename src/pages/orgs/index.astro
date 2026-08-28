@@ -9,11 +9,12 @@
 import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import { getOrgRoutes, orgReposUrl, unmatchedOrgContent } from '../../lib/routes';
-import { aggregateLanguages, formatInt, getData, heatFor, initials, relativeTime } from '../../lib/site';
+import { aggregateLanguages, formatInt, getConfig, getData, heatFor, initials, relativeTime } from '../../lib/site';
 import '../../styles/orgs.css';
 
 const data = await getData();
 const now = new Date();
+const heatDays = (await getConfig()).theme.heat;
 
 // Frontmatter is the optional half of an organization; an org with no markdown file still
 // gets a card, built from config alone.
@@ -35,7 +36,7 @@ const orgs = getOrgRoutes(data).map(({ org, repos, url }) => {
     count: repos.length,
     languages: aggregateLanguages(repos, 3).filter((l) => l.name !== 'Other'),
     updatedAt,
-    heat: heatFor(updatedAt, now),
+    heat: heatFor(updatedAt, now, heatDays),
     description: frontmatter.get(org.slug)?.description ?? org.description,
   };
 });

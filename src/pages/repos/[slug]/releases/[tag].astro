@@ -10,7 +10,7 @@ import Base from '../../../../layouts/Base.astro';
 import RepoHeader from '../../../../components/RepoHeader.astro';
 import { archiveUrl, commitUrl, refSlug, releasesUrl, resolveReleases, treeUrl } from '../../../../lib/routes';
 import { isTrustedSource, renderMarkdown } from '../../../../lib/markdown';
-import { formatBytes, getData, heatFor, relativeTime } from '../../../../lib/site';
+import { formatBytes, getConfig, getData, heatFor, relativeTime } from '../../../../lib/site';
 import type { ReleaseAsset, Repo } from '../../../../lib/data/schema';
 
 export async function getStaticPaths() {
@@ -31,6 +31,7 @@ export async function getStaticPaths() {
 interface Props { repo: Repo; tag: string }
 const { repo, tag } = Astro.props;
 const now = new Date();
+const heatDays = (await getConfig()).theme.heat;
 
 const releases = resolveReleases(repo);
 const rel = releases.find((r) => r.tag === tag)!;
@@ -74,7 +75,7 @@ function assetIcon(asset: ReleaseAsset): string {
           {titled && <code class="hf-release-tag">{rel.tag}</code>}
           {isLatest && <span class="hf-tag hf-release-latest">Latest</span>}
           {rel.prerelease && <span class="hf-tag hf-release-pre">Pre-release</span>}
-          <span class={`hf-age t-${heatFor(rel.date, now)}`} title={rel.date}>{relativeTime(rel.date, now)}</span>
+          <span class={`hf-age t-${heatFor(rel.date, now, heatDays)}`} title={rel.date}>{relativeTime(rel.date, now)}</span>
         </header>
 
         <div class="hf-release-meta">

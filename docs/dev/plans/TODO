@@ -1,5 +1,5 @@
-- [ ] Review `version-2.md`
-  - [ ] Write a file called `version-2-phased.md` which phases out the delivery of the version
+- [x] Review `version-2.md`
+  - [x] Write a file called `version-2-phased.md` which phases out the delivery of the version
 
 Ensure for each change:
 

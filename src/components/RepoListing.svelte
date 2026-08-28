@@ -5,6 +5,7 @@
    */
   import { onMount } from 'svelte';
   import RepoCard from './RepoCard.svelte';
+  import { DEFAULT_HEAT, type HeatThresholds } from '../lib/format';
   import {
     applyListing,
     facets as computeFacets,
@@ -20,6 +21,8 @@
     repos: RepoSummary[];
     pageSize: number;
     now: number;
+    /** Recency-accent day boundaries (`theme.heat`), forwarded to every card. */
+    heatDays?: HeatThresholds;
     /** Initial query string (from the build: empty). */
     initialSearch?: string;
     /**
@@ -30,7 +33,7 @@
      */
     basePath?: string;
   }
-  let { repos, pageSize, now, initialSearch = '', basePath = '/repos/' }: Props = $props();
+  let { repos, pageSize, now, heatDays = DEFAULT_HEAT, initialSearch = '', basePath = '/repos/' }: Props = $props();
 
   let query = $state<ListingQuery>(parseQuery(new URLSearchParams(initialSearch), pageSize));
   let hydrated = $state(false);
@@ -149,7 +152,7 @@
   {:else}
     <div class="hf-repo-grid hf-repo-grid--listing">
       {#each result.items as repo (repo.slug)}
-        <RepoCard {repo} {now} {tagHref} />
+        <RepoCard {repo} {now} {tagHref} {heatDays} />
       {/each}
     </div>
   {/if}

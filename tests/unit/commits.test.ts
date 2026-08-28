@@ -74,6 +74,102 @@ describe('commits', () => {
   });
 });
 
+describe('maxCommitAgeDays (ingest timeframe limit)', () => {
+  let r: FixtureRepo;
+  let d0: string; // day 0
+  let d10: string; // day 10
+  let d40: string; // day 40 — newest, the anchor
+  const day = (n: number) => at(n * 86_400);
+
+  beforeAll(() => {
+    r = FixtureRepo.create('aged');
+    d0 = r.writeAndCommit({ 'a.txt': 'a\n' }, 'day zero', { date: day(0) });
+    d10 = r.writeAndCommit({ 'b.txt': 'b\n' }, 'day ten', { date: day(10) });
+    d40 = r.writeAndCommit({ 'c.txt': 'c\n' }, 'day forty', { date: day(40) });
+    // a stale branch whose only commit predates any reasonable cutoff
+    r.checkout('stale', true);
+    r.git('reset', '-q', '--hard', d0);
+    r.checkout('main');
+  });
+  afterAll(() => r.cleanup());
+
+  it('keeps only commits inside the window, anchored to the newest commit, and warns once', async () => {
+    const refs = await listBranchRefs(r.dir);
+    const res = await loadBranches(r.dir, refs, null, 15); // cutoff = day 25
+    const main = res.branches.find((b) => b.name === 'main')!;
+    expect(main.commits).toEqual([d40]);
+    expect(res.warnings.map((w) => w.code)).toEqual(['commits-aged-out']);
+  });
+
+  it('a branch whose commits all predate the cutoff keeps its head commit', async () => {
+    const refs = await listBranchRefs(r.dir);
+    const res = await loadBranches(r.dir, refs, null, 15);
+    const stale = res.branches.find((b) => b.name === 'stale')!;
+    expect(stale.commits).toEqual([d0]);
+    expect(stale.lastCommitDate).toBe(day(0));
+  });
+
+  it('is deterministic across runs and does not warn when nothing is dropped', async () => {
+    const refs = await listBranchRefs(r.dir);
+    const wide = await loadBranches(r.dir, refs, null, 50); // cutoff before day 0
+    expect(wide.branches.find((b) => b.name === 'main')!.commits).toEqual([d40, d10, d0]);
+    expect(wide.warnings).toEqual([]);
+    const again = await loadBranches(r.dir, refs, null, 50);
+    expect(again).toEqual(wide);
+    const narrow1 = await loadBranches(r.dir, refs, null, 35); // cutoff = day 5
+    const narrow2 = await loadBranches(r.dir, refs, null, 35);
+    expect(narrow1).toEqual(narrow2);
+    expect(narrow1.branches.find((b) => b.name === 'main')!.commits).toEqual([d40, d10]);
+  });
+
+  it('composes with maxCommits (count cap wins; capped runs report commits-capped)', async () => {
+    const refs = await listBranchRefs(r.dir);
+    const res = await loadBranches(r.dir, refs, 1, 35); // filter keeps 2, cap keeps 1
+    expect(res.branches.find((b) => b.name === 'main')!.commits).toEqual([d40]);
+    expect(res.warnings.map((w) => w.code)).toContain('commits-capped');
+  });
+
+  it('narrows everything scanRepo derives from the commit list', async () => {
+    const scanned = await scanRepo(
+      { absPath: r.dir },
+      { maxBlobBytes: 1024, maxCommits: null, maxCommitAgeDays: 35 },
+    );
+    if ('skipped' in scanned) throw new Error('unexpected skip');
+    // d0 survives only through the stale branch's keep-the-head rule
+    expect(Object.keys(scanned.repo.commits).sort()).toEqual([d0, d10, d40].sort());
+    const main = scanned.repo.branches.find((b) => b.name === 'main')!;
+    expect(main.commits).toEqual([d40, d10]);
+    expect(scanned.repo.warnings.filter((w) => w.code === 'commits-aged-out')).toHaveLength(1);
+    // insights bucket only the kept commits of the default branch: day 10 and day 40.
+    // Per-month COUNTS, not just labels — d0 shares a month with d10, so an un-narrowed
+    // bucketing would still produce the same first/last labels but report 2024-01 as 2.
+    expect(scanned.repo.insights).not.toBeNull();
+    expect(scanned.repo.insights!.commits.map((p) => [p.month, p.commits])).toEqual([
+      [day(10).slice(0, 7), 1],
+      [day(40).slice(0, 7), 1],
+    ]);
+  });
+
+  it('keeps a clock-skewed head that the filter alone would drop', async () => {
+    // A head whose COMMITTER date predates the cutoff while its parent sits inside the
+    // window: `--since-as-filter` drops the head but keeps the parent, and without the
+    // containment guard `Branch.head` would be missing from its own commit list (blank
+    // branches-page cell; no head-commit bar when it is the default branch).
+    r.checkout('skew', true);
+    r.git('reset', '-q', '--hard', d10);
+    r.writeAndCommit({ 'skew.txt': 's\n' }, 'skewed tip', { date: day(30), committerDate: day(1) });
+    const skewHead = r.head();
+    r.checkout('main');
+
+    const refs = await listBranchRefs(r.dir);
+    const res = await loadBranches(r.dir, refs, null, 35); // anchor day 40 → cutoff day 5
+    const skew = res.branches.find((b) => b.name === 'skew')!;
+    expect(skew.commits[0]).toBe(skewHead);
+    expect(skew.commits).toContain(d10);
+    expect(res.shas.has(skewHead)).toBe(true);
+  });
+});
+
 describe('commit numstat (files + stats)', () => {
   let r: FixtureRepo;
   let root: string;

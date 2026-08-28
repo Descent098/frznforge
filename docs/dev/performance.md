@@ -120,6 +120,35 @@ The plan's original measurement (15,988 pages in 5m23s) reproduces: the same cor
 now yields 16,388 HTML pages in 5m01, the difference being branches and commits added upstream
 since, plus the four new insights pages.
 
+## Measured: cross-run ingest reuse (`ingest.reuse`, 0.2.0)
+
+The 0.2.0 plan asked why "the rebuild time with a constructed cache is as slow as a build
+without one". The honest answer was that until 0.2.0 the caches saved **network only**: the
+mirror saved the clone, `.meta.json` saved the API calls, and every run still re-ran the
+full scan — `for-each-ref`, the whole `git log`, `ls-tree` per browsable ref,
+`cat-file --batch` of every stored blob, `git archive` per treed ref, the insights
+checkpoints. `ingest.reuse` (on by default) closes that: a repo whose refs, HEAD, metadata
+inputs and scan options are unchanged replays its recorded scan from
+`<cacheDir>/scan/<digest>.json`, and a remote source fetched fully-fresh within the last
+`maxAgeMinutes` (default 2) is not re-fetched at all. Reuse never changes artifact bytes —
+a hit replays exactly what the fresh scan produced, or quietly falls back to a real scan.
+
+Measured on this repository's own site (1 repo, 18 commits, 219 files, 5 notes,
+2026-08-28, Windows 11 / warm mirror):
+
+| run                                   | `npm run ingest` |
+| ------------------------------------- | ---------------- |
+| cold scan cache (first run)           | ≈ 2.0 s          |
+| warm (nothing changed)                | ≈ 0.22–0.24 s    |
+
+−89% on the no-change re-ingest, which is exactly the `npm run build` inner loop while
+editing content or styles. Keep the proportions in mind: on the four-repo remote corpus
+above, warm-cache ingest was already 7.1 s against a 204 s render — ingest reuse makes the
+small half smaller and does nothing for the large half, which remains a page-count problem
+(see the cap, and "What we did not do"). `npm run ingest -- --no-cache` bypasses every
+cache for one run; `tests/unit/reuse.test.ts` is the correctness half (byte-identity,
+tamper-proof hit/invalidation cases, the degraded-repo retry rule, prune safety).
+
 ## The knobs
 
 | knob | default | what it costs you if you raise it | what you lose if you lower it |

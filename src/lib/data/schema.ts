@@ -340,6 +340,12 @@ export const WarningCode = z.enum([
   'slug-collision',
   /** Commit list was capped by `ingest.maxCommits`. */
   'commits-capped',
+  /**
+   * Commits older than `ingest.maxCommitAgeDays` (measured from the repo's newest commit,
+   * never from the clock) were left out of the artifact. Every branch keeps at least its
+   * head commit.
+   */
+  'commits-aged-out',
   /** More tags than `ingest.tagTrees`; older tags have no browsable tree / archive. */
   'tag-trees-capped',
   /**

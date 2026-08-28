@@ -2,7 +2,7 @@
 import Base from '../../../../layouts/Base.astro';
 import RepoHeader from '../../../../components/RepoHeader.astro';
 import { commitUrl, commitsUrl, treeUrl } from '../../../../lib/routes';
-import { formatInt, getData, heatFor, relativeTime } from '../../../../lib/site';
+import { formatInt, getConfig, getData, heatFor, relativeTime } from '../../../../lib/site';
 import type { Repo } from '../../../../lib/data/schema';
 
 export async function getStaticPaths() {
@@ -13,6 +13,7 @@ export async function getStaticPaths() {
 interface Props { repo: Repo }
 const { repo } = Astro.props;
 const now = new Date();
+const heatDays = (await getConfig()).theme.heat;
 
 /**
  * Whether `/repos/<slug>/tree/<ref>/` was actually generated for this branch.
@@ -72,7 +73,7 @@ const branches = [...repo.branches].sort(
                   </td>
                   <td class="hf-fmsg">{head ? <a href={commitUrl(repo.slug, head.sha)}>{head.subject}</a> : ''}</td>
                   <td class="hf-ref-count"><a href={commitsUrl(repo.slug, b.name)}>{formatInt(b.commits.length)}</a></td>
-                  <td class="hf-fage"><span class={`hf-age t-${heatFor(b.lastCommitDate, now)}`} title={b.lastCommitDate}>{relativeTime(b.lastCommitDate, now)}</span></td>
+                  <td class="hf-fage"><span class={`hf-age t-${heatFor(b.lastCommitDate, now, heatDays)}`} title={b.lastCommitDate}>{relativeTime(b.lastCommitDate, now)}</span></td>
                 </tr>
               );
             })}

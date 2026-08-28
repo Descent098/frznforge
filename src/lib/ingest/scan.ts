@@ -64,6 +64,11 @@ function layerMeta(high: RepoMetaInput | null, low: RepoMetaInput | null | undef
 export interface ScanOptions {
   maxBlobBytes: number;
   maxCommits: number | null;
+  /**
+   * Keep only commits from the last N days, anchored to the repo's newest branch-head
+   * commit date (deterministic — see `loadBranches`). Default null = no limit.
+   */
+  maxCommitAgeDays?: number | null;
   /** Newest N tags get browsable trees + archives (0 = none). Default 25. */
   tagTrees?: number;
   /**
@@ -115,7 +120,7 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
   const empty = def.name === null;
   if (empty) warn({ code: 'repo-empty', repo: null, message: 'repository has no commits on any branch' });
 
-  const branchesRes = await loadBranches(repoPath, branchRefs, opts.maxCommits);
+  const branchesRes = await loadBranches(repoPath, branchRefs, opts.maxCommits, opts.maxCommitAgeDays ?? null);
   branchesRes.warnings.forEach(warn);
   const gitTags = empty ? [] : await loadTags(repoPath);
   const commits = await loadCommits(repoPath, branchesRes.shas);

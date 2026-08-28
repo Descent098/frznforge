@@ -2,7 +2,7 @@
 import Base from '../../../../layouts/Base.astro';
 import RepoHeader from '../../../../components/RepoHeader.astro';
 import { archiveUrl, commitUrl, releaseUrl } from '../../../../lib/routes';
-import { getData, heatFor, relativeTime } from '../../../../lib/site';
+import { getConfig, getData, heatFor, relativeTime } from '../../../../lib/site';
 import type { Repo } from '../../../../lib/data/schema';
 
 export async function getStaticPaths() {
@@ -13,6 +13,7 @@ export async function getStaticPaths() {
 interface Props { repo: Repo }
 const { repo } = Astro.props;
 const now = new Date();
+const heatDays = (await getConfig()).theme.heat;
 const tags = [...repo.gitTags].sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
 const hasArchive = (name: string) => repo.archives.some((a) => a.kind === 'tag' && a.ref === name);
 ---
@@ -47,7 +48,7 @@ const hasArchive = (name: string) => repo.archives.some((a) => a.kind === 'tag' 
                       <code>{t.target.slice(0, 7)}</code>
                     )}
                   </td>
-                  <td class="hf-fage"><span class={`hf-age t-${heatFor(t.date, now)}`} title={t.date}>{relativeTime(t.date, now)}</span></td>
+                  <td class="hf-fage"><span class={`hf-age t-${heatFor(t.date, now, heatDays)}`} title={t.date}>{relativeTime(t.date, now)}</span></td>
                   <td class="hf-ref-links">
                     {hasArchive(t.name) && <a href={archiveUrl(repo.slug, t.name)} title="Download source zip"><svg class="hf-i"><use href="#i-zip" /></svg> zip</a>}
                     {t.annotated && <a href={releaseUrl(repo.slug, t.name)}><svg class="hf-i"><use href="#i-package" /></svg> Release</a>}

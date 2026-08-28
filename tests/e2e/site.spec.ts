@@ -29,6 +29,22 @@ test.describe('profile page', () => {
 });
 
 test.describe('repo listing', () => {
+  test('repo cards carry the recency heat classes end to end (theme.heat pipeline)', async ({ page }) => {
+    // alpha's newest commit is authored 2 days before the build (inside `theme.heat.hot`),
+    // bravo's is fixed at 2024-08 (far past `cool`). This walks the whole pipeline —
+    // config → page frontmatter → island prop → RepoCard class — on both the card rail
+    // (`heat-*`) and the age label (`t-*`). A non-default cutoff cannot reach this build
+    // (the site reads the checked-in frznforge.config.ts by design), so the configured
+    // flip itself is pinned by the unit tests in format.test.ts / config-knobs.test.ts.
+    await page.goto('/repos/');
+    const alpha = page.locator('.hf-repo-card[data-slug="alpha"]');
+    await expect(alpha).toHaveClass(/heat-hot/);
+    await expect(alpha.locator('.hf-age')).toHaveClass(/t-hot/);
+    const bravo = page.locator('.hf-repo-card[data-slug="bravo"]');
+    await expect(bravo).toHaveClass(/heat-cold/);
+    await expect(bravo.locator('.hf-age')).toHaveClass(/t-cold/);
+  });
+
   test('lists all repos with JS, filters by language/tag/kind, searches, sorts, syncs URL', async ({ page }) => {
     await page.goto('/repos/');
     const cards = page.locator('.hf-repo-card');

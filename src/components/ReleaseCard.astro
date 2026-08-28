@@ -6,7 +6,7 @@
  * dwarf the card. The full markdown lives on the release page.
  */
 import { archiveUrl, commitUrl, releaseUrl, type SiteRelease } from '../lib/routes';
-import { heatFor, relativeTime } from '../lib/site';
+import { getConfig, heatFor, relativeTime } from '../lib/site';
 import type { Repo } from '../lib/data/schema';
 
 interface Props {
@@ -20,6 +20,7 @@ interface Props {
   now: Date;
 }
 const { repo, release, isLatest, providerLabel, now } = Astro.props;
+const heatDays = (await getConfig()).theme.heat;
 
 const SUMMARY_CHARS = 200;
 
@@ -62,7 +63,7 @@ const titled = release.name.trim() !== '' && release.name !== release.tag;
     {titled && <code class="hf-release-tag">{release.tag}</code>}
     {isLatest && <span class="hf-tag hf-release-latest">Latest</span>}
     {release.prerelease && <span class="hf-tag hf-release-pre">Pre-release</span>}
-    <span class={`hf-age t-${heatFor(release.date, now)}`} title={release.date}>{relativeTime(release.date, now)}</span>
+    <span class={`hf-age t-${heatFor(release.date, now, heatDays)}`} title={release.date}>{relativeTime(release.date, now)}</span>
   </header>
 
   <div class="hf-release-meta">

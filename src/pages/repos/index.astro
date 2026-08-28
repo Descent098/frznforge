@@ -15,6 +15,6 @@ const now = Date.now();
       <h1>Repositories</h1>
       <p>{repos.length} repositor{repos.length === 1 ? 'y' : 'ies'} · search, filter and sort. Heat = how recently each repo moved.</p>
     </header>
-    <RepoListing client:load repos={repos} pageSize={cfg.listing.pageSize} now={now} />
+    <RepoListing client:load repos={repos} pageSize={cfg.listing.pageSize} now={now} heatDays={cfg.theme.heat} />
   </div>
 </Base>

@@ -3,7 +3,7 @@ import Base from '../../../../layouts/Base.astro';
 import RepoHeader from '../../../../components/RepoHeader.astro';
 import CopyScript from '../../../../components/CopyScript.astro';
 import { blobUrl, commitUrl } from '../../../../lib/routes';
-import { formatInt, getData, heatFor, initials, relativeTime } from '../../../../lib/site';
+import { formatInt, getConfig, getData, heatFor, initials, relativeTime } from '../../../../lib/site';
 import type { Commit, Repo } from '../../../../lib/data/schema';
 
 export async function getStaticPaths() {
@@ -22,6 +22,7 @@ interface Props { repo: Repo }
 const { repo } = Astro.props;
 const commit: Commit = repo.commits[Astro.params.sha!]!;
 const now = new Date();
+const heatDays = (await getConfig()).theme.heat;
 
 const parents = commit.parents.filter((p) => !!repo.commits[p]);
 const sameAuthor = commit.author.name === commit.committer.name && commit.author.email === commit.committer.email;
@@ -40,11 +41,11 @@ const pathLink = (p: string) => (repo.defaultBranch && repo.files[p] ? blobUrl(r
           <div class="hf-commit-page-meta">
             <span class="hf-author"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">{initials(commit.author.name)}</span> <b>{commit.author.name}</b></span>
             <span class="hf-dot">·</span>
-            <span>authored <span class={`hf-age t-${heatFor(commit.authorDate, now)}`} title={commit.authorDate}>{relativeTime(commit.authorDate, now)}</span></span>
+            <span>authored <span class={`hf-age t-${heatFor(commit.authorDate, now, heatDays)}`} title={commit.authorDate}>{relativeTime(commit.authorDate, now)}</span></span>
             {!sameAuthor && (
               <>
                 <span class="hf-dot">·</span>
-                <span>committed by <b>{commit.committer.name}</b> <span class={`hf-age t-${heatFor(commit.commitDate, now)}`} title={commit.commitDate}>{relativeTime(commit.commitDate, now)}</span></span>
+                <span>committed by <b>{commit.committer.name}</b> <span class={`hf-age t-${heatFor(commit.commitDate, now, heatDays)}`} title={commit.commitDate}>{relativeTime(commit.commitDate, now)}</span></span>
               </>
             )}
           </div>

@@ -155,6 +155,22 @@ export const FrznforgeConfigSchema = z.object({
   }),
   theme: z.object({
     palette: Palette.default('hearth'),
+    /**
+     * Day boundaries for the recency accent (fire = recent, ice = old): age < `hot` days ⇒
+     * orange, then warm/neutral/cool, ≥ `cool` days ⇒ blue. Must be strictly ascending.
+     * The boundaries are configurable; the colours are not — they are the palette's
+     * `--hf-ember`/`--hf-ice` tokens, pinned to WCAG AA by the contrast tests.
+     */
+    heat: z.object({
+      hot: z.number().int().positive().default(7),
+      warm: z.number().int().positive().default(30),
+      neutral: z.number().int().positive().default(180),
+      cool: z.number().int().positive().default(365),
+    })
+      .refine((h) => h.hot < h.warm && h.warm < h.neutral && h.neutral < h.cool, {
+        message: 'theme.heat boundaries must be strictly ascending (hot < warm < neutral < cool)',
+      })
+      .prefault({}),
   }).prefault({}),
   /**
    * Where hand-written markdown lives, other than `owner.profile` (which keeps its own key for
@@ -199,6 +215,17 @@ export const FrznforgeConfigSchema = z.object({
     outDir: z.string().min(1).default('./data'),
     maxBlobBytes: z.number().int().positive().default(512 * 1024),
     maxCommits: z.number().int().positive().nullable().default(null),
+    /**
+     * Keep only commits from the last N days (requires git ≥ 2.37 for
+     * `--since-as-filter`). The cutoff is anchored to the newest commit date across the
+     * repo's branches — never to the clock — so the same repo at the same commits produces
+     * the same artifact on any machine, on any day. A dormant repo therefore keeps its
+     * newest N days of history rather than going empty, and every branch always keeps its
+     * head commit. History dropped by the cutoff raises a `commits-aged-out` warning
+     * (`commits-capped` when `maxCommits` truncates first). `null` = no limit. Composes
+     * with `maxCommits` (whichever cuts first).
+     */
+    maxCommitAgeDays: z.number().int().positive().nullable().default(null),
     concurrency: z.number().int().positive().default(4),
     /** Newest N tags get browsable trees + archives (schema v2). 0 disables tag trees. */
     tagTrees: z.number().int().nonnegative().default(25),
@@ -228,6 +255,27 @@ export const FrznforgeConfigSchema = z.object({
      *  - 'always' — always hit the network; failures are still warnings, never build errors
      */
     fetch: z.enum(['auto', 'never', 'always']).default('auto'),
+    /**
+     * Cross-run reuse of ingest work, all of it living in `ingest.cacheDir` sidecars so the
+     * artifact itself stays clock-free and byte-identical:
+     *
+     *  - the **freshness window** (`maxAgeMinutes`): a remote source whose last fetch
+     *    succeeded less than N minutes ago is not re-fetched — the cached provider answers
+     *    and mirror are used as-is, with no warning, because they are what a fetch would
+     *    have returned. A repo whose last fetch was degraded (failed, rate-limited, served
+     *    stale) is ALWAYS re-attempted, so a rate-limited big refresh heals itself run by
+     *    run instead of freezing the gaps in place.
+     *  - the **scan cache**: a repo whose refs, metadata inputs and scan options are
+     *    unchanged since the last run skips the scan entirely and replays the recorded
+     *    result (bytes come back from the content-addressed stores).
+     *
+     * Reuse never changes what is built — it only skips work that would have produced the
+     * identical artifact. `npm run ingest -- --no-cache` bypasses all of it for one run.
+     */
+    reuse: z.object({
+      enabled: z.boolean().default(true),
+      maxAgeMinutes: z.number().positive().default(2),
+    }).prefault({}),
     /**
      * Per-repo insights (schema v5): monthly commits/contributors plus a sampled code-size
      * series, computed at ingest and rendered at `/repos/<slug>/insights/`.

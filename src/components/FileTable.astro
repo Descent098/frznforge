@@ -4,7 +4,7 @@
  * last-commit subject links to the commit page, heat-coloured age. Optional ".." parent row.
  */
 import { blobUrl, commitUrl, isRawServable, treeUrl } from '../lib/routes';
-import { heatFor, relativeTime } from '../lib/site';
+import { getConfig, heatFor, relativeTime } from '../lib/site';
 import type { Repo, TreeEntry } from '../lib/data/schema';
 
 interface Props {
@@ -17,6 +17,7 @@ interface Props {
 }
 const { repo, refName, entries, parentUrl } = Astro.props;
 const now = new Date();
+const heatDays = (await getConfig()).theme.heat;
 const sorted = [...entries].sort(
   (a, b) => Number(b.type === 'tree') - Number(a.type === 'tree') || a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }),
 );
@@ -65,7 +66,7 @@ const hrefFor = (e: TreeEntry) =>
               )}
             </td>
             <td class="hf-fmsg">{c ? <a href={commitUrl(repo.slug, c.sha)}>{c.subject}</a> : ''}</td>
-            <td class="hf-fage"><span class={`hf-age t-${heatFor(c?.commitDate, now)}`} title={c?.commitDate}>{relativeTime(c?.commitDate, now)}</span></td>
+            <td class="hf-fage"><span class={`hf-age t-${heatFor(c?.commitDate, now, heatDays)}`} title={c?.commitDate}>{relativeTime(c?.commitDate, now)}</span></td>
           </tr>
         );
       })}

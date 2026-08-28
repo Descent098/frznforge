@@ -74,24 +74,59 @@ export interface BranchesResult {
   warnings: Warning[];
 }
 
+const DAY_MS = 86_400_000;
+
 /**
  * Per-branch commit lists (topological, newest first), capped at `maxCommits`
- * (one `commits-capped` warning per repo).
+ * (one `commits-capped` warning per repo) and — with `maxCommitAgeDays` set — limited to
+ * commits from the last N days (one `commits-aged-out` warning per repo).
+ *
+ * The age cutoff is anchored to the newest branch-head commit date across `refs`, never to
+ * the clock, so the same repo at the same commits emits the same lists on any machine, on
+ * any day. `--since-as-filter` (git ≥ 2.37) is used rather than `--since`, which stops
+ * traversal at the first old commit and can drop in-window commits reachable only through
+ * clock-skewed older ones. Every branch keeps its head commit no matter what the filter
+ * says — whether the whole branch aged out or committer-date skew put the head itself
+ * outside the window — so no branch ever goes empty or loses its tip.
  */
 export async function loadBranches(
   repo: string,
   refs: BranchRef[],
   maxCommits: number | null,
+  maxCommitAgeDays: number | null = null,
 ): Promise<BranchesResult> {
   const branches: Branch[] = [];
   const shas = new Set<string>();
   let capped = false;
+  let aged = false;
+
+  // Newest head date across all branches; headDate is ISO UTC, so string max is date max.
+  let cutoffIso: string | null = null;
+  if (maxCommitAgeDays !== null && refs.length > 0) {
+    const anchor = refs.reduce((a, b) => (b.headDate > a ? b.headDate : a), refs[0]!.headDate);
+    cutoffIso = new Date(new Date(anchor).getTime() - maxCommitAgeDays * DAY_MS).toISOString();
+  }
+
   for (const ref of refs) {
     const args = ['rev-list', '--topo-order'];
     if (maxCommits !== null) args.push(`--max-count=${maxCommits + 1}`);
+    if (cutoffIso !== null) args.push(`--since-as-filter=${cutoffIso}`);
     args.push(ref.head, '--');
     const out = await git(repo, args);
     let commits = out.split(/\r?\n/).filter((s) => s.length > 0);
+    if (cutoffIso !== null) {
+      // The head commit is ALWAYS kept — not only when the whole branch aged out. With
+      // committer-date skew, `--since-as-filter` can drop an old-dated head while keeping a
+      // newer-dated ancestor, and a `Branch.head` missing from its own commit list would
+      // blank the branches page and (for the default branch) the repo head-commit bar.
+      if (!commits.includes(ref.head)) commits.unshift(ref.head);
+      // Cheap drop detection: total history size vs what the filter kept. Skipped once
+      // `--max-count` already truncated the walk — `commits-capped` explains that case.
+      if (maxCommits === null || commits.length <= maxCommits) {
+        const total = Number((await git(repo, ['rev-list', '--count', ref.head, '--'])).trim());
+        if (Number.isFinite(total) && commits.length < total) aged = true;
+      }
+    }
     if (maxCommits !== null && commits.length > maxCommits) {
       commits = commits.slice(0, maxCommits);
       capped = true;
@@ -105,6 +140,15 @@ export async function loadBranches(
       code: 'commits-capped',
       repo: null,
       message: `commit lists were capped at ${maxCommits} per branch (ingest.maxCommits)`,
+    });
+  }
+  if (aged) {
+    warnings.push({
+      code: 'commits-aged-out',
+      repo: null,
+      message:
+        `commits older than ${maxCommitAgeDays} days (measured from the newest commit) ` +
+        `were left out (ingest.maxCommitAgeDays)`,
     });
   }
   return { branches, shas, warnings };

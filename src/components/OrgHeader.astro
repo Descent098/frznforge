@@ -15,6 +15,8 @@ import {
   commitsSince,
   earliestCommit,
   formatInt,
+  getConfig,
+  heatFor,
   initials,
   monthYear,
   prettyUrl,
@@ -37,15 +39,18 @@ const { org, repos, fm, now } = Astro.props;
 const description = fm?.description ?? org.description;
 
 const repoCount = repos.length;
+// Same "recent" window as the profile hero: `theme.heat.hot`, so KPI copy and the orange
+// recency accent agree on what counts as recent.
+const cfg = await getConfig();
+const heatDays = cfg.theme.heat;
+const hotWindow = heatDays.hot === 7 ? 'this week' : `in the last ${heatDays.hot} days`;
 const commitsThisYear = commitsSince(repos, 365, now);
-const commitsThisWeek = commitsSince(repos, 7, now);
+const commitsRecent = commitsSince(repos, heatDays.hot, now);
 const firstCommit = earliestCommit(repos);
 const years = yearsSince(firstCommit, now);
 const languages = aggregateLanguages(repos, 5);
 const templates = repos.filter((r) => r.template).length;
-const touchedThisWeek = repos.filter(
-  (r) => r.updatedAt && now.getTime() - new Date(r.updatedAt).getTime() < 7 * 86_400_000,
-).length;
+const touchedRecently = repos.filter((r) => heatFor(r.updatedAt, now, heatDays) === 'hot').length;
 
 const links = Object.entries(fm?.links ?? {}) as Array<[string, string]>;
 ---
@@ -85,14 +90,14 @@ const links = Object.entries(fm?.links ?? {}) as Array<[string, string]>;
       <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-repo" /></svg> Repositories</div>
       <div class="hf-kpi-value">{formatInt(repoCount)}</div>
       <div class="hf-kpi-sub">
-        {touchedThisWeek > 0 ? <><span class="t-hot">{touchedThisWeek} touched</span> this week</> : 'none touched this week'}
+        {touchedRecently > 0 ? <><span class="t-hot">{touchedRecently} touched</span> {hotWindow}</> : `none touched ${hotWindow}`}
         {templates > 0 && <> · {templates} template{templates === 1 ? '' : 's'}</>}
       </div>
     </div>
     <div class="hf-kpi hf-kpi--ember">
       <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-commit" /></svg> Commits this year</div>
       <div class="hf-kpi-value">{formatInt(commitsThisYear)}</div>
-      <div class="hf-kpi-sub">{commitsThisWeek > 0 ? <><span class="t-hot">+{formatInt(commitsThisWeek)}</span> in the last 7 days</> : 'none in the last 7 days'}</div>
+      <div class="hf-kpi-sub">{commitsRecent > 0 ? <><span class="t-hot">+{formatInt(commitsRecent)}</span> in the last {heatDays.hot} days</> : `none in the last ${heatDays.hot} days`}</div>
     </div>
     <div class="hf-kpi hf-kpi--ice">
       <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-history" /></svg> Years of history</div>

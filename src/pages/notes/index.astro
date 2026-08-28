@@ -11,7 +11,7 @@
  * `allRoutes`), so the empty state has to say where notes come from.
  */
 import Base from '../../layouts/Base.astro';
-import { getData } from '../../lib/site';
+import { getConfig, getData } from '../../lib/site';
 import { formatBytes, heatClass, heatFor, isoDay, relativeTime } from '../../lib/format';
 import { noteUrl } from '../../lib/routes';
 import '../../styles/notes.css';
@@ -20,6 +20,7 @@ const data = await getData();
 const notes = data.notes;
 /** Heat is relative to build time, like the repo listing (`src/pages/repos/index.astro`). */
 const now = new Date();
+const heatDays = (await getConfig()).theme.heat;
 
 /** How many file names to name on a card before collapsing the rest into "+N more". */
 const FILES_SHOWN = 4;
@@ -55,7 +56,7 @@ const FILES_SHOWN = 4;
           const hidden = note.files.length - shown.length;
           // One bucket drives both the card's heat rail (`heat-*`, like `.hf-repo-card`) and
           // the date's text colour (`t-*`), so they can never disagree.
-          const heat = heatFor(note.date, now);
+          const heat = heatFor(note.date, now, heatDays);
           return (
             <li>
               <article class={`hf-note-card heat-${heat}`}>

@@ -5,7 +5,7 @@
  * exactly like the Hearth design exploration.
  */
 import type { Repo } from './data/schema';
-import { type Heat, heatFor } from './format';
+import { DEFAULT_HEAT, type Heat, type HeatThresholds, heatFor } from './format';
 
 const DAY = 86_400_000;
 
@@ -52,7 +52,12 @@ export function commitsByDay(repos: Repo[], identities: string[] = []): Map<stri
 const isoDay = (t: number) => new Date(t).toISOString().slice(0, 10);
 
 /** Build the 52-week graph ending on `now`'s UTC day. */
-export function buildContribGraph(repos: Repo[], identities: string[] = [], now: Date = new Date()): ContribGraph {
+export function buildContribGraph(
+  repos: Repo[],
+  identities: string[] = [],
+  now: Date = new Date(),
+  heat: HeatThresholds = DEFAULT_HEAT,
+): ContribGraph {
   const counts = commitsByDay(repos, identities);
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const end = today + (6 - new Date(today).getUTCDay()) * DAY; // end of current week (Saturday)
@@ -83,7 +88,7 @@ export function buildContribGraph(repos: Repo[], identities: string[] = [], now:
       if (t > today) { col.push(null); continue; }
       const day = isoDay(t);
       const count = counts.get(day) ?? 0;
-      const cell: ContribCell = { day, count, level: levelOf(count), heat: heatFor(new Date(t), now) };
+      const cell: ContribCell = { day, count, level: levelOf(count), heat: heatFor(new Date(t), now, heat) };
       col.push(cell);
       total += count;
       if (count > 0) { streak++; longestStreak = Math.max(longestStreak, streak); } else streak = 0;

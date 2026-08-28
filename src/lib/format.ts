@@ -11,17 +11,38 @@ export type Heat = 'hot' | 'warm' | 'neutral' | 'cool' | 'cold';
 const DAY = 86_400_000;
 
 /**
- * Map an age to a heat bucket. Boundaries: < 7d hot, < 30d warm, < 180d neutral,
+ * Day boundaries for the heat buckets, ascending: age < `hot` days ⇒ 'hot', < `warm` ⇒
+ * 'warm', < `neutral` ⇒ 'neutral', < `cool` ⇒ 'cool', else 'cold'. Configurable via
+ * `theme.heat` in frznforge.config.ts; this module must stay browser-safe, so the values
+ * arrive as a plain argument (from `getConfig()` in .astro frontmatter, as an island prop
+ * for Svelte) — never from a config import.
+ */
+export interface HeatThresholds {
+  hot: number;
+  warm: number;
+  neutral: number;
+  cool: number;
+}
+
+/** The stock boundaries, used when no `theme.heat` is configured. */
+export const DEFAULT_HEAT: HeatThresholds = { hot: 7, warm: 30, neutral: 180, cool: 365 };
+
+/**
+ * Map an age to a heat bucket. Default boundaries: < 7d hot, < 30d warm, < 180d neutral,
  * < 365d cool, else cold. `now` is injectable for tests and deterministic builds.
  */
-export function heatFor(date: string | Date | null | undefined, now: Date = new Date()): Heat {
+export function heatFor(
+  date: string | Date | null | undefined,
+  now: Date = new Date(),
+  thresholds: HeatThresholds = DEFAULT_HEAT,
+): Heat {
   if (!date) return 'cold';
   const d = typeof date === 'string' ? new Date(date) : date;
   const age = now.getTime() - d.getTime();
-  if (age < 7 * DAY) return 'hot';
-  if (age < 30 * DAY) return 'warm';
-  if (age < 180 * DAY) return 'neutral';
-  if (age < 365 * DAY) return 'cool';
+  if (age < thresholds.hot * DAY) return 'hot';
+  if (age < thresholds.warm * DAY) return 'warm';
+  if (age < thresholds.neutral * DAY) return 'neutral';
+  if (age < thresholds.cool * DAY) return 'cool';
   return 'cold';
 }
 

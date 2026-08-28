@@ -21,7 +21,10 @@ import { defineConfig } from './src/lib/config/schema';
 export default defineConfig({
   site: { title: 'frznforge', url: 'https://forge.example.com' },
   owner: { name: 'Kieran Wood', handle: 'kieran', profile: './content/profile.md' },
-  theme: { palette: 'hearth' },              // 'hearth' (warm) | 'frost' (cool)
+  theme: {
+    palette: 'hearth',       // 'hearth' (warm) | 'frost' (cool)
+    // heat: { hot: 7, warm: 30, neutral: 180, cool: 365 },  // recency-accent day boundaries
+  },
   content: {
     orgs: './content/orgs',  // one <org-slug>.md per organization (optional)
   },
@@ -46,12 +49,17 @@ export default defineConfig({
     outDir: './data',        // forge.json + blobs/ + archives/ are written here (gitignored)
     maxBlobBytes: 524288,    // files above this are listed but not stored
     maxCommits: null,        // cap per repo (null = all)
+    maxCommitAgeDays: null,  // only commits from the last N days (null = all; needs git ≥ 2.37)
     concurrency: 4,          // repos scanned in parallel
     tagTrees: 25,            // newest N tags get browsable trees + archives (0 = none)
     branchTrees: 10,         // newest N *non-default* branches get browsable trees ('all' = every one)
     archives: true,          // zip source archives (git archive) for default branch + tags
     cacheDir: './.frznforge-cache',  // mirror clones of remote repos (gitignored)
     fetch: 'auto',           // 'auto' | 'never' (offline, cache only) | 'always'
+    reuse: {                 // cross-run reuse (see the note below)
+      enabled: true,
+      maxAgeMinutes: 2,      // don't re-fetch a remote fetched fresh this recently
+    },
     insights: {              // per-repo /insights/ page
       enabled: true,
       samples: 24,                    // max monthly code-size checkpoints per repo
@@ -67,6 +75,22 @@ Notes
   in the sidebar and nowhere else. Every link frznforge emits is root-absolute (`/repos/…`),
   so leaving it out changes no URL — it is reserved for absolute links and feeds later.
 - `path` is absolute or relative to the config file. Bare repos work too.
+- `theme.heat` sets the *day boundaries* of the fire→ice recency accent: age < `hot` days is
+  orange, then warm/neutral/cool, ≥ `cool` days is blue. Values must be strictly ascending.
+  The profile and organization "touched / commits recently" stats use the `hot` boundary, so
+  the copy and the accent always agree. The colours themselves are not configurable — they
+  are the palette's tokens, kept at WCAG AA by the contrast tests.
+- `maxCommitAgeDays` keeps only commits from the last N days (it uses
+  `git rev-list --since-as-filter`, which needs git ≥ 2.37). The cutoff is measured from the
+  repo's **newest commit date**, never from today's date — that keeps builds reproducible,
+  and it means a dormant repo keeps its newest N days of history instead of going empty.
+  Every branch always keeps its head commit. Everything derived from the commit list —
+  commit counts, contributors, `createdAt`, insights — narrows with it. Ingest raises a
+  `commits-aged-out` warning when the age cutoff is what dropped history (when `maxCommits`
+  truncates first, `commits-capped` is reported instead). One display consequence to know
+  about: per-file "Last commit" info in the file tables comes from full history, so a file
+  last touched *before* the window shows a dash instead of its age and subject — the commit
+  is simply not in the artifact.
 - `tagTrees` / `branchTrees` are the two biggest levers on build size, because the file
   browser (`tree`/`blob`/`raw`) is generated **per browsable ref** — a repo with 27 branches
   costs 27× its file count in pages. `tagTrees` keeps the newest N tags (those also get the
@@ -80,6 +104,18 @@ Notes
   including the case they *don't* help, which is a repo that vendors its dependencies.
 - `archives: false` skips zip generation entirely (no download links on the site). Source zips
   are usually the largest single thing in `dist/`.
+- `reuse` makes repeat builds cheap without changing a byte of output. Two things happen
+  under it: with `fetch: 'auto'`, a remote repo whose last fetch fully succeeded less than
+  `maxAgeMinutes` ago is not re-fetched (its cached provider answers and mirror are used
+  as-is; `'always'` always fetches, `'never'` never does, and a repo whose last fetch
+  failed or was rate-limited is *always* retried), and a repo whose branches, tags and
+  metadata are unchanged since the last run skips re-scanning entirely and replays the
+  recorded result. All the bookkeeping lives in `cacheDir`; the artifact stays deterministic
+  and timestamp-free. Bypass everything once with:
+
+  ```bash
+  npm run ingest -- --no-cache
+  ```
 - `insights` controls the `/repos/<slug>/insights/` page. Monthly commits and contributors are
   exact — they come from the commit list already in the artifact. Code size over time is
   **sampled**: at most `samples` monthly checkpoints (always including the first and last),

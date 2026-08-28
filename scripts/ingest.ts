@@ -6,10 +6,23 @@
  * build. Exit code 1 only for hard failures (bad config, unwritable outDir, git missing).
  */
 import { loadConfig } from '../src/lib/config/index';
-import { ingest, writeArtifact } from '../src/lib/ingest';
+import { ingest, parseIngestArgs, writeArtifact } from '../src/lib/ingest';
+
+let args;
+try {
+  args = parseIngestArgs(process.argv.slice(2));
+} catch (e) {
+  console.error(`frznforge ingest: ${e instanceof Error ? e.message : String(e)}`);
+  process.exit(1);
+}
 
 const started = performance.now();
 const config = await loadConfig();
+if (args.noCache) {
+  // ingest() forces a full fetch and reads no provider/scan caches for this run; fresh
+  // results are still recorded (under the real config's hash) for the next ordinary run.
+  console.log('  --no-cache: fetching everything; provider/scan caches ignored for this run');
+}
 
 console.log(`frznforge ingest → ${config.outDir}`);
 if (config.repos.length === 0) {
@@ -18,19 +31,26 @@ if (config.repos.length === 0) {
 
 const remoteCount = config.repos.filter((r) => r.type !== 'local').length;
 if (remoteCount > 0) {
-  console.log(`  ${remoteCount} remote source(s) — cache ${config.cacheDir} (fetch: ${config.ingest.fetch})`);
+  console.log(
+    `  ${remoteCount} remote source(s) — cache ${config.cacheDir} ` +
+      `(fetch: ${args.noCache ? 'always [--no-cache]' : config.ingest.fetch})`,
+  );
 }
 
-const { data, blobs, archives, remotes } = await ingest(config, {
-  onRepoStart: (slug) => console.log(`  ▸ ${slug}`),
-  onRemote: ({ slug, provider, action }) => console.log(`    ⇄ ${slug} (${provider}: ${action})`),
-  onRepoDone: (repo) =>
-    console.log(
-      `    ✓ ${repo.slug}: ${repo.commitCount} commits, ${repo.branches.length} branches, ` +
-        `${repo.gitTags.length} tags, ${Object.keys(repo.files).length} files` +
-        (repo.empty ? ' (empty)' : ''),
-    ),
-});
+const { data, blobs, archives, remotes } = await ingest(
+  config,
+  {
+    onRepoStart: (slug) => console.log(`  ▸ ${slug}`),
+    onRemote: ({ slug, provider, action }) => console.log(`    ⇄ ${slug} (${provider}: ${action})`),
+    onRepoDone: (repo) =>
+      console.log(
+        `    ✓ ${repo.slug}: ${repo.commitCount} commits, ${repo.branches.length} branches, ` +
+          `${repo.gitTags.length} tags, ${Object.keys(repo.files).length} files` +
+          (repo.empty ? ' (empty)' : ''),
+      ),
+  },
+  { noCache: args.noCache },
+);
 
 try {
   await writeArtifact(data, blobs, archives, config.outDir);

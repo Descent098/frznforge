@@ -53,8 +53,12 @@ import type { ScanSource } from './scan';
 /** Hard ceiling on a single network git invocation. */
 export const DEFAULT_GIT_TIMEOUT_MS = 300_000;
 
-/** What `ensureMirror` did (or could not do). */
-export type MirrorAction = 'cloned' | 'fetched' | 'cached' | 'missing';
+/**
+ * What `ensureMirror` did (or could not do). `'reused'` is the freshness window
+ * (`ingest.reuse`, 0.2.0): the last successful fetch was recent enough that neither the
+ * provider API nor the mirror was touched — deliberately fresh, not stale.
+ */
+export type MirrorAction = 'cloned' | 'fetched' | 'cached' | 'missing' | 'reused';
 
 export interface GitRunResult {
   code: number | null;
@@ -424,6 +428,19 @@ export interface PrepareRemoteResult {
 /** A configured remote source, optionally carrying the resolved cache path from the config. */
 export type RemoteRepoInput = RemoteRepoSourceConfig & { absPath?: string };
 
+export interface PrepareRemoteOptions {
+  /**
+   * Freshness window (`ingest.reuse`): the caller has established that this source was
+   * fully freshly fetched moments ago. When the provider cache and the mirror both exist,
+   * the network is skipped entirely and their contents are used with NO warning — they are
+   * what a fetch would have returned, so the artifact bytes cannot differ. Falls back to a
+   * real fetch when either is missing.
+   */
+  skipFetch?: boolean;
+  /** `--no-cache`: never read the provider `.meta.json` (failures then degrade harder). */
+  noCacheReads?: boolean;
+}
+
 function warn(code: Warning['code'], message: string): Warning {
   return { code, repo: null, message };
 }
@@ -557,6 +574,7 @@ export async function prepareRemote(
   source: RemoteRepoInput,
   cfg: ResolvedConfig,
   deps: PrepareRemoteDeps = {},
+  opts: PrepareRemoteOptions = {},
 ): Promise<PrepareRemoteResult> {
   const warnings: Warning[] = [];
   const cachePath = source.absPath ?? cachePathFor(cfg.cacheDir, source)!;
@@ -570,7 +588,39 @@ export async function prepareRemote(
   const wantProviderReleases = (source.overrides?.releaseMode ?? defaultReleaseMode(source)) === 'provider';
 
   const cacheFile = providerCachePathFor(cachePath);
-  const cached = await readProviderCache(cacheFile);
+  // `onDisk` exists solely so a partial-failure WRITE can preserve the half it did not
+  // refetch; `--no-cache` means "serve nothing from the cache", never "destroy the cache
+  // state later offline builds depend on".
+  const onDisk = await readProviderCache(cacheFile);
+  const cached = opts.noCacheReads ? null : onDisk;
+
+  // Freshness window: everything a fetch would return is already on disk from a fully
+  // successful fetch moments ago. No importer call, no git, no warning — same bytes.
+  if (opts.skipFetch && cached && (await isGitRepo(cachePath))) {
+    const providerMeta = cached.meta;
+    const releases = wantProviderReleases ? cached.releases : [];
+    const webUrl = isHttpUrl(providerMeta?.webUrl) ? providerMeta.webUrl : deriveWebUrl(source);
+    const cloneUrl = isHttpUrl(providerMeta?.cloneUrl) ? providerMeta.cloneUrl : `${webUrl}.git`;
+    const layer = providerMeta ? metaLayer(providerMeta, warnings) : null;
+    return {
+      scanSource: {
+        absPath: cachePath,
+        slug: source.slug ?? slugify(sourceRepoName(source)),
+        defaultName: sourceRepoName(source),
+        ...(source.overrides !== undefined ? { overrides: source.overrides } : {}),
+        providerMeta: layer,
+        source: buildRepoSource(source, webUrl, cloneUrl),
+        releaseMode: defaultReleaseMode(source),
+        releases,
+      },
+      providerMeta: layer,
+      releases,
+      warnings,
+      action: 'reused',
+      ready: true,
+    };
+  }
+
   const importer = makeImporter(source, { fetchImpl: deps.fetchImpl, token });
 
   let providerMeta: ImportedRepoMeta | null = null;
@@ -631,8 +681,8 @@ export async function prepareRemote(
   if (freshMeta || freshReleases) {
     await writeProviderCache(cacheFile, {
       version: PROVIDER_CACHE_VERSION,
-      meta: freshMeta ? providerMeta : (cached?.meta ?? null),
-      releases: freshReleases ? releases : (cached?.releases ?? []),
+      meta: freshMeta ? providerMeta : (onDisk?.meta ?? null),
+      releases: freshReleases ? releases : (onDisk?.releases ?? []),
     });
   }
 

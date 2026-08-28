@@ -40,7 +40,7 @@ const now = Date.now();
     </header>
     {summaries.length ? (
       /* basePath keeps tag chips and the no-JS pager inside this organization. */
-      <RepoListing client:load repos={summaries} pageSize={cfg.listing.pageSize} now={now} basePath={orgReposUrl(org.slug)} />
+      <RepoListing client:load repos={summaries} pageSize={cfg.listing.pageSize} now={now} heatDays={cfg.theme.heat} basePath={orgReposUrl(org.slug)} />
     ) : (
       <div class="hf-empty hf-card">
         <svg class="hf-i"><use href="#i-repo" /></svg>

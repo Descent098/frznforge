@@ -45,7 +45,7 @@ if (repo.links.upstream) links.push({ key: 'upstream', label: 'Upstream', icon: 
 /** Clone URL: the upstream if it looks like a git host, else nothing (no running git server here). */
 const cloneUrl = repo.links.upstream ? repo.links.upstream.replace(/\/+$/, '') + (repo.links.upstream.endsWith('.git') ? '' : '.git') : null;
 const upstreamHost = repo.links.upstream ? new URL(repo.links.upstream).hostname.replace(/^www\./, '') : null;
-const heat = heatFor(repo.updatedAt, now);
+const heat = heatFor(repo.updatedAt, now, cfg.theme.heat);
 ---
 <Base title={repo.name} description={repo.description ?? `${repo.name} — ${cfg.owner.name}`} active="repos">
   <div class="hf-container">
@@ -96,7 +96,7 @@ const heat = heatFor(repo.updatedAt, now);
               <span class="hf-dot">·</span>
               <code class="hf-sha">{headCommit.sha.slice(0, 7)}</code>
               <span class="hf-dot">·</span>
-              <span class={`hf-age t-${heatFor(headCommit.commitDate, now)}`} title={headCommit.commitDate}>{relativeTime(headCommit.commitDate, now)}</span>
+              <span class={`hf-age t-${heatFor(headCommit.commitDate, now, cfg.theme.heat)}`} title={headCommit.commitDate}>{relativeTime(headCommit.commitDate, now)}</span>
               {repo.defaultBranch && (
                 <a class="hf-commits-link" href={commitsUrl(repo.slug, repo.defaultBranch)}><svg class="hf-i"><use href="#i-history" /></svg> <b>{formatInt(repo.commitCount)}</b> commits</a>
               )}

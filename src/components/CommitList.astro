@@ -4,7 +4,7 @@
  * commits index and /page/N routes.
  */
 import { COMMITS_PER_PAGE, commitUrl, commitsPageCount, commitsUrl } from '../lib/routes';
-import { formatInt, heatFor, initials, relativeTime } from '../lib/site';
+import { formatInt, getConfig, heatFor, initials, relativeTime } from '../lib/site';
 import type { Commit, Repo } from '../lib/data/schema';
 
 interface Props {
@@ -14,6 +14,7 @@ interface Props {
 }
 const { repo, refName, page } = Astro.props;
 const now = new Date();
+const heatDays = (await getConfig()).theme.heat;
 const branch = repo.branches.find((b) => b.name === refName)!;
 const pageCount = commitsPageCount(repo, refName);
 const shas = branch.commits.slice((page - 1) * COMMITS_PER_PAGE, page * COMMITS_PER_PAGE);
@@ -71,7 +72,7 @@ const dayLabel = (day: string) =>
               <span class="hf-commit-sub">
                 <span class="hf-commit-author">{c.author.name}</span>
                 <span class="hf-dot">·</span>
-                <span class={`hf-age t-${heatFor(c.commitDate, now)}`} title={c.commitDate}>{relativeTime(c.commitDate, now)}</span>
+                <span class={`hf-age t-${heatFor(c.commitDate, now, heatDays)}`} title={c.commitDate}>{relativeTime(c.commitDate, now)}</span>
               </span>
             </div>
             <span class="hf-commit-stats" title={`${c.stats.filesChanged} file${c.stats.filesChanged === 1 ? '' : 's'} changed`}>

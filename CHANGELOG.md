@@ -1,3 +1,55 @@
+# 0.2.0 (unreleased)
+
+Plans: [docs/dev/plans/version-2-phased.md](docs/dev/plans/version-2-phased.md).
+
+## Features
+
+- **The recency accent is configurable.** `theme.heat` in `frznforge.config.ts` sets the day
+  boundaries of the fire→ice accent (`{ hot: 7, warm: 30, neutral: 180, cool: 365 }` by
+  default, strictly ascending, validated). The boundaries travel as data — `.astro` pages
+  read them from config at build time, Svelte islands receive them as a `heatDays` prop next
+  to `now` — so `format.ts` stays browser-safe and server + client render identically. The
+  profile and organization KPI copy ("N touched this week", "+N in the last 7 days") now
+  reads the same `hot` boundary, so the stats and the orange accent always agree; with a
+  non-default `hot` the copy says "in the last N days". The colours themselves are *not*
+  configurable: they are the palette's `--hf-ember`/`--hf-ice` tokens, pinned to WCAG AA by
+  the contrast tests.
+- **Ingest can be limited to recent history.** `ingest.maxCommitAgeDays` keeps only commits
+  from the last N days (via `git rev-list --since-as-filter`, git ≥ 2.37). The cutoff is
+  anchored to the repo's newest commit date, never to the clock, so the artifact stays
+  byte-identical for the same commits no matter when or where it is built; a dormant repo
+  keeps its newest N days rather than going empty, and every branch always keeps its head
+  commit (even a clock-skewed head the filter would drop). History dropped by the age
+  cutoff raises a `commits-aged-out` warning (when `maxCommits` truncates first,
+  `commits-capped` is reported instead), and everything derived from the commit list —
+  `commitCount`, `createdAt`, contributors, insights — narrows with it, including the
+  per-file "Last commit" labels for files last touched before the window. Composes with
+  `ingest.maxCommits` (whichever cuts first).
+- **Repeat builds skip work they have already done — without changing a byte of output.**
+  Two mechanisms under the new `ingest.reuse` config (`{ enabled: true, maxAgeMinutes: 2 }`),
+  with every piece of bookkeeping confined to `ingest.cacheDir` sidecars so `forge.json`
+  keeps its no-timestamp determinism guarantee:
+  - a **freshness window**: under `fetch: 'auto'`, a remote source whose last fetch fully
+    succeeded less than `maxAgeMinutes` ago is not re-fetched — its cached provider answers
+    and mirror are used as-is, with no warning, because they are exactly what a fetch would
+    have returned. A source whose last fetch failed, was rate-limited or served stale is
+    **always** retried, so a rate-limited bulk refresh heals itself run by run instead of
+    freezing the gaps in place. A window-skip never extends the window.
+  - a **per-repo scan cache**: a repo whose refs, HEAD, metadata inputs (provider
+    description/links/releases included) and scan options are unchanged since the last run
+    skips `git` entirely and replays the recorded result, reading blob and archive bytes
+    back from the content-addressed stores. Anything missing, stale or corrupt degrades to
+    a quiet re-scan — never to a wrong artifact or a failed build. On this repository's own
+    site a warm re-ingest drops from ≈2.0 s to ≈0.23 s (−89%; see
+    [performance.md](docs/dev/performance.md)).
+- **`npm run ingest -- --no-cache`** — ingest's first CLI flag: fetch everything, read no
+  provider cache, replay no scan cache, for one run (fresh results are still recorded, so
+  the next ordinary run benefits). Unknown flags are an error, not a shrug.
+
+## Bug Fixes
+
+## Other
+
 # 0.1.0 (2026-08-24)
 
 First release. frznforge turns a set of git repositories into a **static, read-only forge

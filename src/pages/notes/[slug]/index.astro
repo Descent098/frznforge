@@ -12,7 +12,7 @@ import CopyScript from '../../../components/CopyScript.astro';
 import NoteFileView from '../../../components/NoteFileView.astro';
 import { getNoteRoutes, NOTES_INDEX_URL } from '../../../lib/routes';
 import { formatBytes, heatClass, heatFor, isoDay, relativeTime } from '../../../lib/format';
-import { getData } from '../../../lib/site';
+import { getConfig, getData } from '../../../lib/site';
 import type { Note } from '../../../lib/data/schema';
 import '../../../styles/notes.css';
 
@@ -24,7 +24,7 @@ export async function getStaticPaths() {
 interface Props { note: Note }
 const { note } = Astro.props;
 const now = new Date();
-const heat = heatFor(note.date, now);
+const heat = heatFor(note.date, now, (await getConfig()).theme.heat);
 
 /**
  * Fragment id for one file section. Derived from the path so the anchor is readable and
