@@ -22,8 +22,7 @@ Plans: [docs/dev/plans/version-2-phased.md](docs/dev/plans/version-2-phased.md).
   commit (even a clock-skewed head the filter would drop). History dropped by the age
   cutoff raises a `commits-aged-out` warning (when `maxCommits` truncates first,
   `commits-capped` is reported instead), and everything derived from the commit list —
-  `commitCount`, `createdAt`, contributors, insights — narrows with it, including the
-  per-file "Last commit" labels for files last touched before the window. Composes with
+  `commitCount`, `createdAt`, contributors, insights — narrows with it. Composes with
   `ingest.maxCommits` (whichever cuts first).
 - **Repeat builds skip work they have already done — without changing a byte of output.**
   Two mechanisms under the new `ingest.reuse` config (`{ enabled: true, maxAgeMinutes: 2 }`),
@@ -45,10 +44,50 @@ Plans: [docs/dev/plans/version-2-phased.md](docs/dev/plans/version-2-phased.md).
 - **`npm run ingest -- --no-cache`** — ingest's first CLI flag: fetch everything, read no
   provider cache, replay no scan cache, for one run (fresh results are still recorded, so
   the next ordinary run benefits). Unknown flags are an error, not a shrug.
+- **```` ```mermaid ```` fences render as diagrams** (`markdown.mermaid`, default on) — on
+  **trusted content only**: the profile, org pages, notes and `type: 'local'` repos. A
+  fence in an imported repo's README or release notes stays a plain code block, full stop —
+  mermaid executes whatever grammar its author wrote, and imported content is exactly the
+  content the site owner does not control. The build stays static and deterministic: pages
+  ship the escaped diagram source (an honest code block, which is also the no-JS fallback),
+  and a locally bundled mermaid — never a CDN — renders it in the visitor's browser, loaded
+  only on pages that actually hold a diagram and only once one nears the viewport. Measured:
+  a diagram-free page still transfers the same ~48 kB of JS it did before; diagrams
+  re-render on the theme toggle, get per-diagram deterministic ids (multi-diagram pages keep
+  the duplicate-id a11y probe green), and carry `role="img"` with a scrollable, keyboard-
+  focusable container. The bundle-size arithmetic is in
+  [performance.md](docs/dev/performance.md).
 
 ## Bug Fixes
 
+- File tables no longer lose their per-file "Last commit" dates and subjects when
+  `ingest.maxCommits` (or the new `ingest.maxCommitAgeDays`) narrows the kept history:
+  per-path last commits and tag/release target commits that fall outside the kept list are
+  now carried in a separate `Repo.extraCommits` map (**artifact schema v6**), each with its
+  own `/commit/` page, and the site resolves display lookups through both maps. The
+  `maxCommits` half of this predates 0.2.0 — a mature repo with a commit cap showed dashes
+  for most of its front-page file table. Aggregates are deliberately untouched:
+  contributors, insights, activity, the contribution graph and every count still read only
+  the narrowed `commits`, so the limiting knobs keep their meaning.
+
 ## Other
+
+- **The logo grew up (and shrank 60×).** The mark is now a hand-drawn vector — a navy
+  anvil with iced-over edges, icicles under the face, and a flame in the site's ember→ice
+  brand gradient — committed as `src/assets/logo.svg` and rendered to assets by
+  `scripts/render-logo.ts` (Playwright chromium; no image toolchain added). `public/logo.png`
+  drops from a 1254×1254, 1,218 kB illustration — downloaded as a favicon on every page —
+  to a 21 kB 512px render, and `favicon.ico` is regenerated at 16/32/48 (3.3 kB). The
+  sidebar brand tile now shows the anvil (`#i-anvil` sprite symbol) instead of the generic
+  flame, and `tests/unit/assets.test.ts` guards the formats and sizes so the megabyte
+  favicon cannot return.
+- Pages render two at a time (`build.concurrency: 2` in `astro.config.mjs`) — measured ~8%
+  faster than Astro's default of 1 on the self-build, with 4 measurably worse. The other
+  two 0.2.0 performance investigations were measured and **rejected, with the numbers
+  recorded**: skip-unchanged-pages (the 0.1.0 rejection stands, and `ingest.reuse` moved
+  its revisit bar further away) and sqlite for the blob store (the entire store reads in
+  45 ms on the self-build — there is nothing there to win). All three write-ups are in
+  [performance.md](docs/dev/performance.md).
 
 # 0.1.0 (2026-08-24)
 

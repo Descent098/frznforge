@@ -6,7 +6,7 @@
  * with `set:html`. Everything below is a regression guard on "that content cannot execute".
  */
 import { describe, expect, it } from 'vitest';
-import { isMarkdownPath, isTrustedSource, renderMarkdown, safeUrl } from '../../src/lib/markdown';
+import { containsMermaid, isMarkdownPath, isTrustedSource, renderMarkdown, safeUrl } from '../../src/lib/markdown';
 
 describe('renderMarkdown (trusted)', () => {
   it('passes the owner’s own HTML through, as before', () => {
@@ -73,6 +73,56 @@ describe('renderMarkdown (code blocks)', () => {
 
   it('does the same for untrusted content', () => {
     expect(renderMarkdown('    indented code\n', { trusted: false })).toContain('<pre tabindex="0">');
+  });
+});
+
+/**
+ * ```mermaid fences (0.2.0). Trusted content gets an `hf-mermaid` container the client
+ * renderer turns into an SVG; the container's text IS the diagram source, escaped, so a
+ * reader without JavaScript gets an honest code block and nothing here can execute at build
+ * time. Untrusted content and `markdown.mermaid: false` keep today's plain code block.
+ */
+describe('renderMarkdown (mermaid fences)', () => {
+  const FENCE = ['```mermaid', 'graph TD;', '  A-->B;', '```', ''].join('\n');
+
+  it('emits the container on trusted content, with the source escaped', () => {
+    const html = renderMarkdown(FENCE);
+    expect(html).toContain('<pre class="hf-mermaid" tabindex="0"><code class="language-mermaid">');
+    expect(html).toContain('A--&gt;B;');
+    expect(containsMermaid(html)).toBe(true);
+  });
+
+  it('escapes hostile diagram source rather than letting it into the page', () => {
+    const html = renderMarkdown(['```mermaid', 'graph TD;', '  A["</code></pre><script>x</script>"]', '```', ''].join('\n'));
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('never renders a container for untrusted content', () => {
+    const html = renderMarkdown(FENCE, { trusted: false });
+    expect(html).not.toContain('hf-mermaid');
+    expect(html).toContain('<code class="language-mermaid">');
+    expect(containsMermaid(html)).toBe(false);
+  });
+
+  it('honours markdown.mermaid: false', () => {
+    const html = renderMarkdown(FENCE, { mermaid: false });
+    expect(html).not.toContain('hf-mermaid');
+    expect(html).toContain('<code class="language-mermaid">');
+    // ...and the flag does not leak into the next call
+    expect(containsMermaid(renderMarkdown(FENCE))).toBe(true);
+  });
+
+  it('matches the info string’s first word only and leaves other fences alone', () => {
+    expect(containsMermaid(renderMarkdown(['```mermaid theme=neutral', 'graph TD;', '```', ''].join('\n')))).toBe(true);
+    expect(containsMermaid(renderMarkdown(['```js', 'mermaid.render()', '```', ''].join('\n')))).toBe(false);
+    expect(renderMarkdown(['```bash', 'echo hi', '```', ''].join('\n'))).toContain('<pre tabindex="0">');
+  });
+
+  it('cannot be faked from escaped text', () => {
+    // A fence whose *content* mentions the container class stays escaped and undetected.
+    const html = renderMarkdown(['```txt', '<pre class="hf-mermaid">', '```', ''].join('\n'));
+    expect(containsMermaid(html)).toBe(false);
   });
 });
 

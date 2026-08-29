@@ -15,7 +15,9 @@ Almost every page belongs to one of three families, and one of them is multiplie
 **Per repo, once:** the overview, `/branches/`, `/tags/`, `/releases/`, and (schema v5)
 `/insights/` when `hasInsights(repo)`.
 
-**Per repo, per item:** one page per commit in `repo.commits`, one paginated commit-list page
+**Per repo, per item:** one page per commit in `repo.commits` (plus, schema v6, one per
+display-support commit in `repo.extraCommits` — nonzero only when the history-narrowing
+knobs are set or a tag points outside branch history), one paginated commit-list page
 per 50 commits *per branch* (every branch, capped or not), one page per release, one zip per
 archived ref.
 
@@ -41,7 +43,7 @@ So the whole repo comes out as:
 pages(repo) = 5                                   # overview + branches + tags + releases + insights
             + refs × (1 + dirs + files + symlinks + stored files)
             + Σ over branches ⌈commits(branch) / 50⌉
-            + |repo.commits|
+            + |repo.commits| + |repo.extraCommits|
             + distinct release tags
             + archives
 ```
@@ -149,6 +151,69 @@ small half smaller and does nothing for the large half, which remains a page-cou
 cache for one run; `tests/unit/reuse.test.ts` is the correctness half (byte-identity,
 tamper-proof hit/invalidation cases, the degraded-repo retry rule, prune safety).
 
+## Measured: astro render concurrency (0.2.0, adopted at 2)
+
+The 0.2.0 plan's "concurrently build island-pages … one thread per repo" has no supported
+shape — Astro has no per-repo build unit and no multi-process partial build, and sharding
+was rejected above. What Astro does expose is `build.concurrency`: how many pages render at
+once inside the one process. Measured on the self-build (schema v6 artifact, ~600 pages,
+Windows 11, two runs per value, `Measure-Command { npx astro build }`, 2026-08-28):
+
+| `build.concurrency` | runs           | median  |
+| ------------------- | -------------- | ------- |
+| 1 (Astro's default) | 19.2 s, 19.6 s | ≈19.4 s |
+| **2 (adopted)**     | 18.2 s, 17.6 s | ≈17.9 s |
+| 4                   | 21.8 s, 19.0 s | ≈20.4 s |
+
+2 is a small (~8%) but consistent win — both its runs beat every run at 1 and 4 — and 4 is
+measurably worse. That shape makes sense: the pages' blob reads are synchronous
+(`readFileSync` in frontmatter), so there is little I/O for concurrent renders to overlap
+and the render is CPU-bound. Adopted as a literal in `astro.config.mjs`; re-measure by
+overriding it there if the page mix ever changes materially.
+
+## Measured, then rejected again: skip-unchanged-pages (0.2.0)
+
+The 0.2.0 wish list re-floated "if the most recent commit hash matches the one on the page,
+skip rebuilding it in dist". The standing rejection above holds, and 0.2.0 moved its bar
+*further away*: `ingest.reuse` cut the no-change re-ingest from ≈2.0 s to ≈0.22 s on the
+self-build, so rendering now dominates a no-change `npm run build` even harder (the revisit
+bar — "only with a measured build where ingest, not rendering, dominates" — fails by more
+than it did in 0.1.0). Concretely, what a route → input-hash manifest would have to model
+before a single page could be skipped safely: `search-index.json` (any repo/note/org
+change), every listing page and the sidebar counts (any repo added/removed/renamed), the
+footer warning count on every page (any warning anywhere), the profile's contribution
+graph/activity feed/KPIs (any commit anywhere), org overview aggregates (any member
+change), and `_astro/*` hashed asset names (any CSS/JS change relinks every page). A miss
+in any of these is a silently wrong page in a build that reports success. Still no.
+
+## Measured, then rejected: sqlite for blobs + cache (0.2.0)
+
+The 0.2.0 wish list asked whether storing blobs and cache data in sqlite "can help make
+things faster instead of storing it all as files and having to eat the cost of
+reading+writing them all the time". Measured, that cost is a rounding error. On the
+self-build artifact (295 blobs, 2.8 MB), timed through the two functions a backend swap
+would replace (`readBlobBuffer` / `writeArtifact`):
+
+| operation                                   | measured |
+| ------------------------------------------- | -------- |
+| read every blob in the store                | 45 ms    |
+| `writeArtifact`, cold (every byte written)  | 188 ms   |
+| `writeArtifact`, warm (stat-and-skip pass)  | 25 ms    |
+
+Against a ≈2.3 s cold ingest and a ≈18 s render, a storage backend that cost literally
+zero would win a few hundred milliseconds — and on the four-repo remote corpus, warm-cache
+ingest (7.1 s) is dominated by git subprocess work, not blob I/O, with the 0.2.0 scan
+cache already skipping the repeated reads that motivated the idea. The costs of adopting
+it are real and the wins are not: reads must stay synchronous inside Astro frontmatter,
+which means `node:sqlite`'s `DatabaseSync` — still printing an `ExperimentalWarning` on
+Node 24 and flag-gated at this project's Node floor (`engines: >=22.12.0`) — or
+`better-sqlite3`, a native build dependency in a project that keeps its production
+dependency set deliberately tiny; sqlite file locking would need its own Windows
+verification; and the
+content-addressed `blobs/` directory is what makes the scan cache's rehydration and
+`writeArtifact`'s prune trivially correct today. Rejected. Revisit only with a measured
+corpus where blob-store I/O, not git or rendering, dominates the build.
+
 ## The knobs
 
 | knob | default | what it costs you if you raise it | what you lose if you lower it |
@@ -208,6 +273,17 @@ Budget, stated as a rule rather than a wish:
 - **Insights added no measurable weight**: 9.3 kB gzip median, inline SVG, no client JS, no
   chart library.
 - **No page loads a third-party asset**, so there is no budget line for fonts or CDNs.
+- **Mermaid (0.2.0) is the one deliberate exception to "no heavy JS", and it is fenced
+  off.** Rendering ```` ```mermaid ```` fences client-side puts ~3.3 MB of code-split
+  mermaid chunks *on disk* in `_astro/` — but a page loads them only if it actually holds a
+  diagram, and only once one nears the viewport (`MermaidRenderer.astro` is included
+  per-page on a `containsMermaid()` check, and the import is behind an
+  IntersectionObserver). Measured on the e2e fixture site (local server, no compression):
+  a diagram-free page still transfers exactly the ~48 kB raw JS it did before, asserted by
+  `tests/e2e/mermaid.spec.ts`; the page with a flowchart + a sequence diagram transferred
+  ~943 kB raw JS total (mermaid core + the two diagram-type chunks; gzip would cut that
+  roughly 3×). The fences themselves cost nothing at build time — the static HTML carries
+  only the escaped diagram source, which is also the no-JS fallback.
 
 ## Reproducing the measurement
 

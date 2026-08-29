@@ -9,8 +9,9 @@
 import Base from '../../../../layouts/Base.astro';
 import RepoHeader from '../../../../components/RepoHeader.astro';
 import { archiveUrl, commitUrl, refSlug, releasesUrl, resolveReleases, treeUrl } from '../../../../lib/routes';
-import { isTrustedSource, renderMarkdown } from '../../../../lib/markdown';
-import { formatBytes, getConfig, getData, heatFor, relativeTime } from '../../../../lib/site';
+import MermaidRenderer from '../../../../components/MermaidRenderer.astro';
+import { containsMermaid, isTrustedSource, renderMarkdown } from '../../../../lib/markdown';
+import { commitFor, formatBytes, getConfig, getData, heatFor, relativeTime } from '../../../../lib/site';
 import type { ReleaseAsset, Repo } from '../../../../lib/data/schema';
 
 export async function getStaticPaths() {
@@ -31,11 +32,15 @@ export async function getStaticPaths() {
 interface Props { repo: Repo; tag: string }
 const { repo, tag } = Astro.props;
 const now = new Date();
-const heatDays = (await getConfig()).theme.heat;
+const cfg = await getConfig();
+const heatDays = cfg.theme.heat;
 
 const releases = resolveReleases(repo);
 const rel = releases.find((r) => r.tag === tag)!;
 const isLatest = releases.findIndex((r) => !r.prerelease) === releases.indexOf(rel);
+const notesHtml = rel.body
+  ? renderMarkdown(rel.body, { trusted: isTrustedSource(repo.source), mermaid: cfg.markdown.mermaid })
+  : null;
 
 const PROVIDER_LABELS = { github: 'GitHub', gitlab: 'GitLab', gitea: 'Gitea', forgejo: 'Forgejo' } as const;
 const providerLabel = repo.source.type === 'local' ? null : PROVIDER_LABELS[repo.source.type];
@@ -48,7 +53,7 @@ const author =
 
 const archive = repo.archives.find((a) => a.kind === 'tag' && a.ref === rel.tag) ?? null;
 const hasTree = !!repo.refTrees[rel.tag];
-const commit = rel.commit && repo.commits[rel.commit] ? rel.commit : null;
+const commit = commitFor(repo, rel.commit) ? rel.commit : null;
 const hasDownloads = rel.assets.length > 0 || archive !== null;
 const titled = rel.name.trim() !== '' && rel.name !== rel.tag;
 
@@ -109,7 +114,8 @@ function assetIcon(asset: ReleaseAsset): string {
                 would step straight from this page's h1. Hidden — on screen the notes are
                 obviously the notes. */}
             <h2 class="hf-sr" id="release-notes-h">Release notes</h2>
-            <div class="hf-md hf-release-notes" set:html={renderMarkdown(rel.body, { trusted: isTrustedSource(repo.source) })} />
+            <div class="hf-md hf-release-notes" set:html={notesHtml} />
+            {notesHtml && containsMermaid(notesHtml) && <MermaidRenderer />}
           </section>
         )}
 

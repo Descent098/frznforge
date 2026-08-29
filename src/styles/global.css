@@ -733,6 +733,12 @@ code, kbd, pre { font-family: var(--hf-mono); }
   overflow-x: auto; font-size: 13px; line-height: 1.6;
 }
 .hf-md pre code { padding: 0; background: none; }
+/* Mermaid diagrams (0.2.0). The <pre class="hf-mermaid"> ships as a plain code block (the
+   no-JS fallback) and inherits `.hf-md pre` above; once MermaidRenderer.astro swaps the SVG
+   in, it becomes a centred, horizontally-scrollable figure. Colours inside the SVG come
+   from mermaid's own light/dark theme, re-rendered on the site's theme toggle. */
+.hf-md .hf-mermaid--rendered { text-align: center; }
+.hf-md .hf-mermaid--rendered svg { max-width: 100%; height: auto; }
 .hf-md .hf-stack { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; list-style: none; }
 .hf-md .hf-stack li { margin: 0; }
 .hf-md .hf-stack code { font-size: 12.5px; padding: 4px 9px; border-radius: 7px; border: 1px solid var(--hf-border); }

@@ -179,6 +179,7 @@ exports[`ingest > matches the artifact snapshot (paths redacted) 1`] = `
       "defaultBranch": "main",
       "description": "Alpha repo",
       "empty": false,
+      "extraCommits": {},
       "files": {
         ".frznforge.json": {
           "binary": false,
@@ -774,6 +775,7 @@ Hello.
       "defaultBranch": "main",
       "description": null,
       "empty": false,
+      "extraCommits": {},
       "files": {
         "README": {
           "binary": false,
@@ -1093,6 +1095,7 @@ Hello.
       "defaultBranch": "main",
       "description": "Alpha repo",
       "empty": false,
+      "extraCommits": {},
       "files": {
         ".frznforge.json": {
           "binary": false,
@@ -1612,7 +1615,7 @@ Hello.
       "warnings": [],
     },
   ],
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "warnings": [
     {
       "code": "repo-not-found",

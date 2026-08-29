@@ -408,6 +408,9 @@ export function repoRoutes(repo: Repo): string[] {
     for (let p = 1; p <= commitsPageCount(repo, b.name); p++) urls.push(commitsUrl(repo.slug, b.name, p));
   }
   for (const sha of Object.keys(repo.commits)) urls.push(commitUrl(repo.slug, sha));
+  // Display-support commits (schema v6) get pages too — file tables and tag rows link to
+  // them. Disjoint from `commits` by construction, so no dedupe is needed.
+  for (const sha of Object.keys(repo.extraCommits)) urls.push(commitUrl(repo.slug, sha));
   // one page per release, from provider data when there is any (dedupe: a provider may
   // report two releases against the same tag)
   const releaseUrls = new Set(resolveReleases(repo).map((r) => releaseUrl(repo.slug, r.tag)));

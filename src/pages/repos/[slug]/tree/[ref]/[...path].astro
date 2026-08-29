@@ -5,7 +5,8 @@ import RefSwitcher from '../../../../../components/RefSwitcher.astro';
 import FileTable from '../../../../../components/FileTable.astro';
 import { findRef, treeRoutes, treeUrl } from '../../../../../lib/routes';
 import { readBlob } from '../../../../../lib/data/load';
-import { isMarkdownPath, isTrustedSource, renderMarkdown } from '../../../../../lib/markdown';
+import MermaidRenderer from '../../../../../components/MermaidRenderer.astro';
+import { containsMermaid, isMarkdownPath, isTrustedSource, renderMarkdown } from '../../../../../lib/markdown';
 import { getConfig, getData } from '../../../../../lib/site';
 import type { Repo } from '../../../../../lib/data/schema';
 
@@ -43,8 +44,8 @@ const readmeInfo = readmeEntry ? ref.files[readmeEntry.path] : undefined;
 const readmeContent = readmeInfo?.stored && !readmeInfo.binary ? readBlob(cfg.outDir, readmeInfo.sha) : null;
 const readmeHtml = readmeEntry && readmeContent !== null
   ? isMarkdownPath(readmeEntry.path)
-    ? renderMarkdown(readmeContent, { trusted: isTrustedSource(repo.source) })
-    : `<pre tabindex="0">${readmeContent.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</pre>`
+    ? renderMarkdown(readmeContent, { trusted: isTrustedSource(repo.source), mermaid: cfg.markdown.mermaid })
+    : `<pre tabindex="0">${readmeContent.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)}</pre>`
   : null;
 
 const title = dirPath === '' ? `${repo.name} at ${ref.name}` : `${dirPath} · ${repo.name} at ${ref.name}`;
@@ -77,6 +78,7 @@ const title = dirPath === '' ? `${repo.name} at ${ref.name}` : `${dirPath} · ${
             <code>{readmeEntry.path}</code>
           </div>
           <div class="hf-card-body hf-md" set:html={readmeHtml} />
+          {readmeHtml && containsMermaid(readmeHtml) && <MermaidRenderer />}
         </article>
       ) : (
         dirPath !== '' && (

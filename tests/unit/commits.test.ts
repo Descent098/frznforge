@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadCommits } from '../../src/lib/ingest/commits';
 import { listBranchRefs, loadBranches } from '../../src/lib/ingest/refs';
 import { scanRepo } from '../../src/lib/ingest/scan';
+import { commitUrl, repoRoutes } from '../../src/lib/routes';
 import { FixtureRepo, at } from './helpers/fixture-repo';
 
 describe('commits', () => {
@@ -167,6 +168,62 @@ describe('maxCommitAgeDays (ingest timeframe limit)', () => {
     expect(skew.commits[0]).toBe(skewHead);
     expect(skew.commits).toContain(d10);
     expect(res.shas.has(skewHead)).toBe(true);
+  });
+});
+
+describe('extraCommits (display-support commits, schema v6)', () => {
+  let r: FixtureRepo;
+  let old: string;
+  let head: string;
+  const day = (n: number) => at(n * 86_400);
+
+  beforeAll(() => {
+    r = FixtureRepo.create('extra');
+    old = r.writeAndCommit({ 'old.txt': 'old\n' }, 'old file', { date: day(0) });
+    r.tag('v-old', { annotated: true, message: 'ancient', date: day(0) });
+    head = r.writeAndCommit({ 'new.txt': 'new\n' }, 'new file', { date: day(40) });
+  });
+  afterAll(() => r.cleanup());
+
+  it('holds per-path last commits and tag targets the window dropped, without touching aggregates', async () => {
+    const scanned = await scanRepo(
+      { absPath: r.dir },
+      { maxBlobBytes: 1024, maxCommits: null, maxCommitAgeDays: 15 }, // cutoff = day 25
+    );
+    if ('skipped' in scanned) throw new Error('unexpected skip');
+    // kept history: the head only — and every aggregate derives from it alone
+    expect(Object.keys(scanned.repo.commits)).toEqual([head]);
+    expect(scanned.repo.commitCount).toBe(1);
+    expect(scanned.repo.createdAt).toBe(day(40));
+    // ...while old.txt's last commit (also the v-old tag target) stays resolvable for display
+    expect(Object.keys(scanned.repo.extraCommits)).toEqual([old]);
+    const oldEntry = scanned.repo.tree.find((e) => e.path === 'old.txt')!;
+    expect(scanned.repo.extraCommits[oldEntry.lastCommit]).toBeTruthy();
+    // and it gets a commit page, so the file-table and tag-row links resolve
+    expect(repoRoutes(scanned.repo)).toContain(commitUrl(scanned.repo.slug, old));
+  });
+
+  it('is empty when nothing is out of reach (no limits, all tags on branch history)', async () => {
+    const scanned = await scanRepo({ absPath: r.dir }, { maxBlobBytes: 1024, maxCommits: null });
+    if ('skipped' in scanned) throw new Error('unexpected skip');
+    expect(scanned.repo.extraCommits).toEqual({});
+  });
+
+  it('also carries a tag target no branch reaches, even with no limits configured', async () => {
+    // A rebase-orphaned release tag is routine git state: commit on a branch, tag it,
+    // delete the branch. `commits` only holds branch-reachable history, so without the
+    // extras sweep this tag's target would have no commit data and no page.
+    r.checkout('doomed', true);
+    const orphan = r.writeAndCommit({ 'orphan.txt': 'o\n' }, 'orphaned work', { date: day(20) });
+    r.tag('v-orphan', { annotated: true, message: 'tagged then orphaned', date: day(20) });
+    r.checkout('main');
+    r.git('branch', '-D', 'doomed');
+
+    const scanned = await scanRepo({ absPath: r.dir }, { maxBlobBytes: 1024, maxCommits: null });
+    if ('skipped' in scanned) throw new Error('unexpected skip');
+    expect(scanned.repo.commits[orphan]).toBeUndefined();
+    expect(scanned.repo.extraCommits[orphan]).toBeTruthy();
+    expect(repoRoutes(scanned.repo)).toContain(commitUrl(scanned.repo.slug, orphan));
   });
 });
 

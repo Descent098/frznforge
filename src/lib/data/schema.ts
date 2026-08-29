@@ -17,7 +17,7 @@
  */
 import { z } from 'astro/zod';
 
-export const SCHEMA_VERSION = 5 as const;
+export const SCHEMA_VERSION = 6 as const;
 
 /* ---- primitives -------------------------------------------------------- */
 
@@ -515,11 +515,26 @@ export const Repo = z.object({
   /** Every commit reachable from any branch, keyed by sha. */
   commits: z.record(Sha, Commit),
   commitCount: z.number().int().nonnegative(),
+  /**
+   * Display-support commits (schema v6): per-path `lastCommit` targets and tag targets
+   * that fall OUTSIDE `commits` — because `ingest.maxCommits` / `ingest.maxCommitAgeDays`
+   * narrowed the kept history, or because a tag points at a commit no branch reaches (a
+   * rebase-orphaned release tag) — so file tables, tag rows and release headers can still
+   * name the commit they point at. Usually `{}` with no limits configured, but the
+   * orphaned-tag case means not always. Never feeds aggregates: contributors, insights,
+   * activity, the contribution graph and every count read `commits` only. Look commits up
+   * through `commitFor()` (`src/lib/format.ts`), which consults both maps.
+   */
+  extraCommits: z.record(Sha, Commit),
   /** Flat listing of the default-branch HEAD tree (all depths), sorted by path. */
   tree: z.array(TreeEntry),
   /** Per-file info for every blob in `tree`, keyed by path. */
   files: z.record(z.string(), FileInfo),
-  /** Trees of NON-default refs (all branches; the newest `ingest.tagTrees` tags), keyed by ref name. */
+  /**
+   * Trees of NON-default refs, keyed by ref name: the most recently updated
+   * `ingest.branchTrees` non-default branches (schema v5) plus the newest
+   * `ingest.tagTrees` tags (schema v2).
+   */
   refTrees: z.record(z.string(), RefTree),
   /** Source archives (default branch + tags with trees), produced with `git archive`. */
   archives: z.array(Archive),

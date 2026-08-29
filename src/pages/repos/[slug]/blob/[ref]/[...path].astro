@@ -5,7 +5,8 @@ import CopyScript from '../../../../../components/CopyScript.astro';
 import { blobRoutes, blobUrl, findRef, rawUrl, treeUrl } from '../../../../../lib/routes';
 import { readBlob } from '../../../../../lib/data/load';
 import { countLines, highlightToHtml } from '../../../../../lib/highlight';
-import { isMarkdownPath, isTrustedSource, renderMarkdown } from '../../../../../lib/markdown';
+import MermaidRenderer from '../../../../../components/MermaidRenderer.astro';
+import { containsMermaid, isMarkdownPath, isTrustedSource, renderMarkdown } from '../../../../../lib/markdown';
 import { formatBytes, formatInt, getConfig, getData } from '../../../../../lib/site';
 import type { Repo } from '../../../../../lib/data/schema';
 
@@ -55,7 +56,7 @@ const tooBigToHighlight = text !== null && (size > HIGHLIGHT_MAX_BYTES || (lineC
 
 /** Highlight only this page's own blob (cached per language inside highlightToHtml). */
 const codeHtml = text !== null && !tooBigToHighlight && !isMarkdown ? await highlightToHtml(text, info!.language, filePath) : null;
-const mdPreviewHtml = isMarkdown && text !== null ? renderMarkdown(text, { trusted: isTrustedSource(repo.source) }) : null;
+const mdPreviewHtml = isMarkdown && text !== null ? renderMarkdown(text, { trusted: isTrustedSource(repo.source), mermaid: cfg.markdown.mermaid }) : null;
 const mdSourceHtml = isMarkdown && text !== null && !tooBigToHighlight ? await highlightToHtml(text, 'Markdown', filePath) : null;
 
 /** Breadcrumb. */
@@ -115,6 +116,7 @@ const crumbs = dirs.map((name, i) => ({ name, url: treeUrl(repo.slug, ref.name, 
                   only other heading is the h1 in RepoHeader. */}
               <h2 class="hf-sr">Preview of {filePath}</h2>
               <div class="hf-md hf-blob-md" set:html={mdPreviewHtml} />
+              {mdPreviewHtml && containsMermaid(mdPreviewHtml) && <MermaidRenderer />}
             </div>
             <div class="hf-blob-body hf-mdview-source">
               {mdSourceHtml ? (

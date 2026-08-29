@@ -33,6 +33,7 @@ function repo(slug: string, name: string, description: string | null, tags: stri
     gitTags: [],
     commits: {},
     commitCount: 1,
+    extraCommits: {},
     tree: [
       { path: 'README.md', name: 'README.md', type: 'blob', mode: '100644', sha: sha(2), size: 10, lastCommit: sha(1) },
     ],
@@ -106,7 +107,7 @@ const organizations: Organization[] = [
 ];
 
 const data: ForgeData = {
-  schemaVersion: 5,
+  schemaVersion: 6,
   repos: [repo('alpha', 'alpha', 'Alpha repo', ['ssg']), repo('beacon', 'beacon', 'Beacon repo')],
   notes,
   organizations,

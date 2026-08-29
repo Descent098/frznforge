@@ -4,7 +4,8 @@ import RepoHeader from '../../../components/RepoHeader.astro';
 import RefSwitcher from '../../../components/RefSwitcher.astro';
 import FileTable from '../../../components/FileTable.astro';
 import { archiveUrl, browsableRefs, commitUrl, commitsUrl, getRepoRoutes } from '../../../lib/routes';
-import { isMarkdownPath, isTrustedSource, renderMarkdown } from '../../../lib/markdown';
+import MermaidRenderer from '../../../components/MermaidRenderer.astro';
+import { containsMermaid, isMarkdownPath, isTrustedSource, renderMarkdown } from '../../../lib/markdown';
 import { formatBytes, formatInt, getConfig, getData, heatFor, initials, prettyUrl, relativeTime } from '../../../lib/site';
 import type { Repo } from '../../../lib/data/schema';
 
@@ -32,8 +33,8 @@ const rootEntries = repo.tree.filter((e) => !e.path.includes('/'));
 
 const readmeHtml = repo.readme
   ? isMarkdownPath(repo.readme.path)
-    ? renderMarkdown(repo.readme.content, { trusted: isTrustedSource(repo.source) })
-    : `<pre tabindex="0">${repo.readme.content.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</pre>`
+    ? renderMarkdown(repo.readme.content, { trusted: isTrustedSource(repo.source), mermaid: cfg.markdown.mermaid })
+    : `<pre tabindex="0">${repo.readme.content.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)}</pre>`
   : null;
 
 const links: Array<{ key: string; label: string; icon: string; url: string }> = [];
@@ -120,6 +121,7 @@ const heat = heatFor(repo.updatedAt, now, cfg.theme.heat);
                 <code>{repo.readme.path}</code>
               </div>
               <div class="hf-card-body hf-md" set:html={readmeHtml} />
+              {readmeHtml && containsMermaid(readmeHtml) && <MermaidRenderer />}
             </article>
           )}
         </div>

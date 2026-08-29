@@ -115,7 +115,14 @@ export default async function globalSetup() {
 
   // alpha — normal repo with README, .frznforge.json, tags, two languages, recent-ish date
   const alpha = makeRepo('alpha', (d) => {
-    fs.writeFileSync(path.join(d, 'README.md'), '# Alpha\n\nA **fixture** repo for e2e tests.\n\n- bullet one\n- bullet two\n');
+    // Two mermaid fences (0.2.0): local repos are trusted, so these render as SVGs — two on
+    // one page so the duplicate-id a11y probe and per-container id seeding are exercised.
+    fs.writeFileSync(
+      path.join(d, 'README.md'),
+      '# Alpha\n\nA **fixture** repo for e2e tests.\n\n- bullet one\n- bullet two\n\n' +
+        '```mermaid\ngraph TD;\n  A[Ingest]-->B[Artifact];\n  B-->C[Site];\n```\n\n' +
+        'And a second diagram:\n\n```mermaid\nsequenceDiagram;\n  Reader->>Site: GET /repos/;\n  Site-->>Reader: static HTML;\n```\n',
+    );
     fs.writeFileSync(path.join(d, '.frznforge.json'), JSON.stringify({ description: 'Alpha fixture: a static site generator.', tags: ['ssg', 'astro'], links: { homepage: 'https://example.com/alpha', upstream: 'https://github.com/example/alpha' } }, null, 2));
     fs.writeFileSync(path.join(d, 'LICENSE'), 'MIT License\n\nCopyright (c) 2024 Fixture\n\nPermission is hereby granted, free of charge, to any person obtaining a copy...');
     fs.mkdirSync(path.join(d, 'src'));
@@ -199,7 +206,17 @@ export default async function globalSetup() {
 
   // charlie — a GitHub-hosted repo whose releases come from the provider API
   const charlieOrigin = makeRepoIn(ORIGINS, 'charlie', (d) => {
-    fs.writeFileSync(path.join(d, 'README.md'), '# Charlie\n\nMirrored from a provider.\n');
+    // An imported README is written by whoever can push to the upstream repo, so it gets
+    // the same payload block as the release body below: the repo overview, tree pages and
+    // the blob markdown preview all render it UNTRUSTED, and mermaid.spec.ts asserts the
+    // scripts stay inert and the mermaid fence stays a plain code block on those pages.
+    fs.writeFileSync(
+      path.join(d, 'README.md'),
+      '# Charlie\n\nMirrored from a provider.\n\n' +
+        '<script>window.__PWNED = 11</script>\n\n' +
+        '<img src=x onerror="window.__PWNED = 12">\n\n' +
+        '```mermaid\ngraph TD;\n  A-->B;\n```\n',
+    );
     fs.mkdirSync(path.join(d, 'src'));
     fs.writeFileSync(path.join(d, 'src', 'main.ts'), 'export const charlie = true;\n'.repeat(12));
     commitAll(d, 'import charlie', '2024-03-10T00:00:00Z');
@@ -257,7 +274,10 @@ export default async function globalSetup() {
           'Release candidate. **Not** for production use.\n\n' +
           '<script>window.__PWNED = 1</script>\n\n' +
           '<img src=x onerror="window.__PWNED = 2">\n\n' +
-          '[boom](javascript:window.__PWNED=3)\n',
+          '[boom](javascript:window.__PWNED=3)\n\n' +
+          // A mermaid fence in IMPORTED content must stay an inert code block (0.2.0):
+          // rendering it would execute an attacker-influenced grammar on the site's origin.
+          '```mermaid\ngraph TD;\n  A-->B;\n```\n',
         url: 'https://github.com/fixture/charlie/releases/tag/v2.2.0-rc.1',
         prerelease: true,
         publishedAt: '2024-05-01T12:00:00Z',

@@ -134,7 +134,9 @@ function measureRepo(repo: Repo): RepoRow {
     blob,
     raw,
     commitPages,
-    commits: Object.keys(repo.commits).length,
+    // extraCommits (schema v6) get /commit/ pages too — without them this column would no
+    // longer sum to `total` on artifacts built with maxCommits / maxCommitAgeDays.
+    commits: Object.keys(repo.commits).length + Object.keys(repo.extraCommits).length,
     releases: new Set(resolveReleases(repo).map((r) => r.tag)).size,
     archives: repo.archives.length,
     total: repoRoutes(repo).length,

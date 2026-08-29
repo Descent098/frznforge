@@ -286,6 +286,22 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
     }
   }
 
+  // Display-support commits (schema v6): per-path lastCommit + tag targets that fall
+  // outside the kept history. Kept in a separate map so `commits` — and everything derived
+  // from it (counts, contributors, dates, insights, activity) — stays exactly the narrowed
+  // branch history, while file tables and tag/release rows can still name the commit they
+  // point at. Two things land here: commits maxCommits / maxCommitAgeDays dropped, and tag
+  // targets reachable from no branch at all (a rebase-orphaned release tag) — so this can
+  // be non-empty even with no limit configured.
+  const extraShas = new Set<string>();
+  const noteExtra = (sha: string | null | undefined) => {
+    if (sha && !branchesRes.shas.has(sha)) extraShas.add(sha);
+  };
+  for (const e of treeRes.tree) noteExtra(e.lastCommit);
+  for (const rt of Object.values(refTrees)) for (const e of rt.tree) noteExtra(e.lastCommit);
+  for (const t of gitTags) noteExtra(t.target);
+  const extraCommits = await loadCommits(repoPath, extraShas);
+
   // dates
   let createdAt: string | null = null;
   let updatedAt: string | null = null;
@@ -323,6 +339,7 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
     gitTags,
     commits,
     commitCount: commitList.length,
+    extraCommits,
     tree: treeRes.tree,
     files: treeRes.files,
     refTrees,

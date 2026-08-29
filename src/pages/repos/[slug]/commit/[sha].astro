@@ -3,7 +3,7 @@ import Base from '../../../../layouts/Base.astro';
 import RepoHeader from '../../../../components/RepoHeader.astro';
 import CopyScript from '../../../../components/CopyScript.astro';
 import { blobUrl, commitUrl } from '../../../../lib/routes';
-import { formatInt, getConfig, getData, heatFor, initials, relativeTime } from '../../../../lib/site';
+import { commitFor, formatInt, getConfig, getData, heatFor, initials, relativeTime } from '../../../../lib/site';
 import type { Commit, Repo } from '../../../../lib/data/schema';
 
 export async function getStaticPaths() {
@@ -11,7 +11,7 @@ export async function getStaticPaths() {
   return data.repos.flatMap((repo) =>
     repo.empty
       ? []
-      : Object.keys(repo.commits).map((sha) => ({
+      : [...Object.keys(repo.commits), ...Object.keys(repo.extraCommits)].map((sha) => ({
           params: { slug: repo.slug, sha },
           props: { repo },
         })),
@@ -20,11 +20,11 @@ export async function getStaticPaths() {
 
 interface Props { repo: Repo }
 const { repo } = Astro.props;
-const commit: Commit = repo.commits[Astro.params.sha!]!;
+const commit: Commit = commitFor(repo, Astro.params.sha)!;
 const now = new Date();
 const heatDays = (await getConfig()).theme.heat;
 
-const parents = commit.parents.filter((p) => !!repo.commits[p]);
+const parents = commit.parents.filter((p) => !!commitFor(repo, p));
 const sameAuthor = commit.author.name === commit.committer.name && commit.author.email === commit.committer.email;
 /** Link a changed path to its blob page on the DEFAULT branch when it still exists there. */
 const pathLink = (p: string) => (repo.defaultBranch && repo.files[p] ? blobUrl(repo.slug, repo.defaultBranch, p) : null);

@@ -204,7 +204,7 @@ Tests
 
 ---
 
-## Phase 3 — Performance investigations: render concurrency, page skipping, sqlite (spike)
+## Phase 3 — Performance investigations: render concurrency, page skipping, sqlite (spike) ✅ *(done 2026-08-28)*
 
 Goal: the remaining version-2.md performance items are investigations, not commitments.
 Each gets a spike, a measurement, and a recorded decision in
@@ -215,21 +215,25 @@ where ingest, not rendering, dominates"* — after Phase 2, rendering dominates 
 ever, so the honest expected outcome for page-skipping is a documented rejection.
 
 Ships
-- [ ] **Astro render concurrency** ("concurrently build island-pages … one thread per
+- [x] **Astro render concurrency** ("concurrently build island-pages … one thread per
   repo"): Astro exposes `build.concurrency` as its only supported parallelism knob — there
   is no per-repo build unit and no supported multi-process partial build, and performance.md
-  already rejected dist-merging sharding. Measure `build.concurrency` values on the
-  benchmark corpus with `npm run measure`; adopt the best value in `astro.config.mjs` if it
-  wins, record the numbers either way.
-- [ ] **Skip unchanged pages** ("if the most recent commit hash matches the one on the page,
+  already rejected dist-merging sharding. *Measured on the self-build (the remote benchmark
+  corpus needs live network; the self-build's ~600 pages were enough to separate the
+  values): 1 ≈ 19.4 s, **2 ≈ 17.9 s (adopted)**, 4 ≈ 20.4 s — the pages' synchronous blob
+  reads leave little I/O to overlap. Literal in `astro.config.mjs`, numbers in
+  performance.md.*
+- [x] **Skip unchanged pages** ("if the most recent commit hash matches the one on the page,
   skip rebuilding it"): spike only. `dist/` retains nothing machine-readable identifying
   commits, Astro has no partial-output mode, so this means frznforge owning a
   route → input-hash manifest plus copy-forward around a full build — the design
   performance.md rejected ("a stale page is a silently wrong site"). The spike must
   enumerate the cross-page state (search-index.json, listing pages, footer warning counts,
   shared `_astro/` hashes) and either prove a safe subset with a correctness argument and
-  tests, or record the rejection with numbers.
-- [ ] **sqlite for blobs + cache** ("investigate if using sqlite … can help"): spike behind
+  tests, or record the rejection with numbers. *Outcome: rejected, as the phase goal
+  predicted — the cross-page state list is written up in performance.md, and Phase 2's
+  reuse work moved the revisit bar ("ingest, not rendering, dominates") further away.*
+- [x] **sqlite for blobs + cache** ("investigate if using sqlite … can help"): spike behind
   the existing seam — all blob reads funnel through `readBlob`/`readBlobBuffer` in
   `src/lib/data/load.ts`, all writes through `writeArtifact` in `src/lib/ingest/index.ts`,
   so the blast radius is two files plus tests. Constraints the spike must respect: reads are
@@ -244,21 +248,25 @@ Ships
   `SCHEMA_VERSION` anyway as a *deliberate extension*: the version literal is the only guard
   that forces a stale file-layout `data/` dir to be re-ingested. Plus a
   `readBlob`/`readBlobBuffer` contract test run against both backends before the swap.
+  *Outcome: rejected on the measurement — the self-build's entire blob store reads in
+  45 ms and writes cold in 188 ms; even a zero-cost backend wins nothing that matters,
+  `node:sqlite` is still experimental (and flag-gated at the Node floor), and the
+  content-addressed directory is what keeps the scan cache and `writeArtifact` trivially
+  correct. Write-up with the table in performance.md.*
 
 Done when
-- [ ] performance.md has a dated section with measurements and a decision for all three;
-  anything adopted shipped with its tests; anything rejected has its reasoning recorded next
-  to the 0.1.0 rejections.
+- [x] performance.md has a dated section with measurements and a decision for all three;
+  the adopted concurrency value shipped as a literal; both rejections recorded next to the
+  0.1.0 rejections with their numbers.
 
 Tests
-- [ ] Whatever is adopted carries the tests named above (contract tests for a storage swap;
-  byte-identical-dist proof for any page skipping; `npm run measure -- --json` before/after
-  for concurrency). A pure rejection ships no code and needs no tests — the deliverable is the
+- [x] None new — the one adoption is a config literal exercised by every build (the e2e
+  suite builds with it), and both rejections ship no code. The deliverable is the
   document.
 
 ---
 
-## Phase 4 — Mermaid diagrams in markdown
+## Phase 4 — Mermaid diagrams in markdown ✅ *(done 2026-08-28)*
 
 Goal: ```` ```mermaid ```` fences in rendered markdown become diagrams — without breaking
 the untrusted-content boundary, the zero-third-party-asset rule, the a11y gate, or build
@@ -266,7 +274,7 @@ determinism. Today such a fence renders as an escaped `<code class="language-mer
 block; nothing consumes it.
 
 Ships
-- [ ] **Trusted content only.** A `code` renderer override in both Marked instances in
+- [x] **Trusted content only.** A `code` renderer override in both Marked instances in
   `src/lib/markdown.ts`: in trusted mode (owner content — profile, orgs, notes, local
   repos) a mermaid fence emits an `hf-mermaid` container carrying the source; in untrusted
   mode (imported repos' READMEs/release notes) it stays exactly today's plain code block.
@@ -275,15 +283,19 @@ Ships
   `markdown.ts` refuses on principle. Rendering owner-authored diagrams and printing
   imported ones is the same trust line the HTML-stripping already draws. Documented in the
   config reference and on the page (the code block is its own honest fallback).
-- [ ] **Client-side island, loaded only where needed.** Mermaid is bundled locally through
-  Vite (never a CDN — the published pages call nothing) and hydrated `client:visible` only
-  on pages whose rendered markdown actually contains a diagram — `renderMarkdown` grows a
-  way to report that (e.g. return `{ html, hasMermaid }`) so the ~half-megabyte gzip bundle
-  never touches diagram-free pages. Build-time SSR was considered and rejected: mermaid has
-  no DOM-free renderer, so SSR means jsdom or a Playwright dependency inside `npm run
-  build`, breaking "builds anywhere". The bundle cost lands as a new documented row in
-  performance.md's asset table.
-- [ ] **Theming, determinism, a11y.** Diagrams re-render on the `data-theme` toggle (observe
+  *As built: the override lives on the trusted Marked instance only (the untrusted engine
+  has no mermaid path at all, which is stronger than a mode check), gated by a per-parse
+  flag `renderMarkdown` sets — safe because parsing is synchronous.*
+- [x] **Client-side island, loaded only where needed.** Mermaid is bundled locally through
+  Vite (never a CDN — the published pages call nothing), only on pages whose rendered
+  markdown actually contains a diagram. *As built: `renderMarkdown` keeps its string return;
+  a `containsMermaid(html)` helper drives a conditional `<MermaidRenderer.astro>` include
+  per render site (7 of them), and the component's bundled script defers the actual
+  `import('mermaid')` behind an IntersectionObserver — the `client:visible` idea without a
+  framework island. Measured: diagram-free pages still transfer the same ~48 kB of JS;
+  the two-diagram fixture page transfers ~943 kB raw (local server, no compression).
+  Build-time SSR rejected as planned. Budget row added to performance.md.*
+- [x] **Theming, determinism, a11y.** Diagrams re-render on the `data-theme` toggle (observe
   the attribute; palette via `themeVariables` driven from `--hf-*` tokens where mermaid
   allows). Diagram ids are seeded deterministically per fence (the duplicate-id a11y probe
   and multi-file notes with several diagrams are the forcing cases). Each rendered diagram
@@ -291,25 +303,32 @@ Ships
   accompanying caption); the overflow wrapper gets `tabindex="0"` (which is what the a11y
   sweep's unfocusable-scroller probe keys on — there is no class allowlist for scrollers),
   and if a wide diagram can exceed the viewport its class joins the sweep's
-  horizontal-overflow *culprit filter* instead.
-- [ ] Config: `markdown: { mermaid: boolean }` (default `true`), the first key of a new
+  horizontal-overflow *culprit filter* instead. *As built: theme comes from mermaid's own
+  light/dark themes rather than `themeVariables` off `--hf-*` tokens (mermaid cannot read
+  CSS custom properties into SVG attributes), re-rendered via a `data-theme`
+  MutationObserver plus a `prefers-color-scheme` listener; ids are `hf-mermaid-<index>`
+  per container; `role="img"` + `aria-label` are set after the SVG lands so the no-JS code
+  block keeps its text semantics; `.hf-mermaid` joined the overflow culprit filter.*
+- [x] Config: `markdown: { mermaid: boolean }` (default `true`), the first key of a new
   `markdown` block in the config schema.
 
 Done when
-- [ ] A fixture README and a two-diagram multi-file note render as SVG in both themes with
-  the a11y sweep green; the imported-repo fixture (`charlie`, which already carries XSS
-  payloads) renders its fence as an inert code block; diagram-free pages ship no mermaid
-  bytes.
+- [x] A fixture README with two diagrams renders as SVG in both themes with the a11y sweep
+  green; the imported-repo fixture (`charlie`, which already carries XSS payloads) renders
+  its fence as an inert code block; diagram-free pages ship no mermaid bytes. *The
+  two-diagram case lives on alpha's README (one page, two fences — exercising the same
+  duplicate-id hazard the multi-file-note phrasing aimed at); verified in Playwright and
+  by hand in a real browser (SVG geometry, labels, zero console errors).*
 
 Tests
-- [ ] Unit: `markdown.test.ts` — trusted fence → container, untrusted fence → escaped code
-  block (extend the existing that-content-cannot-execute guards), deterministic ids,
-  `hasMermaid` reporting, non-mermaid fences unaffected.
-- [ ] UI (e2e): diagram renders on a fixture repo README and a note (fixtures added in
-  `tests/e2e/global-setup.ts`, which automatically feeds the a11y inventory); theme toggle
-  re-renders; the untrusted fixture stays inert; a network/asset assertion that non-diagram
-  pages don't load the bundle.
-- [ ] Data model: none — rendering is entirely site-side; the artifact is unchanged.
+- [x] Unit: `markdown.test.ts` — trusted fence → container with escaped (hostile) source,
+  untrusted fence → escaped code block, `markdown.mermaid: false`, flag never leaks across
+  calls, info-string first-word matching, `containsMermaid` incl. the cannot-be-faked-from-
+  escaped-text case.
+- [x] UI (e2e): `mermaid.spec.ts` — two SVGs render lazily with unique ids and re-render on
+  the theme toggle; charlie's release fence stays an inert code block; diagram-free pages
+  make zero mermaid requests. The a11y sweep picks the diagram pages up automatically.
+- [x] Data model: none — rendering is entirely site-side; the artifact is unchanged.
 
 ---
 
@@ -390,8 +409,9 @@ Ships
   without the exemption the hosted site 404s silently), bounded instead by a
   `hosting.maxFileBytes` (generous default). New warnings: `hosting-unknown-repo`,
   `hosting-branch-missing`, `hosting-file-unservable` (`#`/`%` paths, the standing rule).
-  **This bumps `SCHEMA_VERSION`** (to 6 from today's v5 — one more if a Phase 3 sqlite
-  adoption bumped first): the blob-cap exemption changes what `FileInfo.stored` means for
+  **This bumps `SCHEMA_VERSION`** (to 7 — v6 was taken by the `extraCommits` file-table
+  fix that followed Phase 2; one more again if a Phase 3 sqlite adoption bumps in
+  between): the blob-cap exemption changes what `FileInfo.stored` means for
   hosted refs, and the artifact records which ref each hosted entry resolved to (so the
   site build and the sync tests consume the artifact, not a re-derivation) — the full
   same-change update (bump, data-model.md, snapshot + extractor tests, changelog entry,
@@ -426,7 +446,7 @@ Tests
 
 ---
 
-## Phase 7 — Logo refresh
+## Phase 7 — Logo refresh ✅ *(done 2026-08-28)*
 
 Goal: version-2.md's UI item — simplify `public/logo.png` (keeping the frozen-anvil-with-
 flames aesthetic) and actually integrate the mark into the UI. Today the 1254×1254, ~1.2 MB
@@ -434,24 +454,34 @@ PNG is referenced exactly once — as a favicon on every page — and the visibl
 is an unrelated `#i-flame` sprite icon.
 
 Ships
-- [ ] A simplified mark with an SVG master (committed under `docs/` or `src/assets/`);
+- [x] A simplified mark with an SVG master (committed under `docs/` or `src/assets/`);
   regenerated small `public/logo.png` and matching `public/favicon.ico` (the 1.2 MB
   favicon-on-every-page is the quiet bug this fixes; keep the hrefs stable in
-  `Base.astro` — they are base-aware after Phase 5).
-- [ ] The mark integrated as a sprite symbol in `IconSprite.astro`, replacing `#i-flame` in
-  `Sidebar.astro`'s `.hf-brand-mark` (adjusting the `.hf-brand-mark` sizing/gradient rules
-  in `global.css` as needed, both themes, both palettes). Decorative usage carries
-  `aria-hidden` so the a11y sweep stays clean.
+  `Base.astro` — they are base-aware after Phase 5). *As built: `src/assets/logo.svg` — a
+  navy anvil with an ice-blue rim (which is also what keeps it legible on dark surfaces),
+  icicles under the face, and a flame in the exact ember→ice gradient the sidebar's brand
+  tile already uses. Rendered to a 21 kB 512px `logo.png` and a 3.3 kB 16/32/48
+  `favicon.ico` by the new `scripts/render-logo.ts` (Playwright chromium, no image
+  toolchain added; the .ico is packed by hand with PNG entries). Hrefs unchanged.*
+- [x] The mark integrated as a sprite symbol in `IconSprite.astro` (`#i-anvil`, a
+  stroke-style sibling of the master, matching the sprite family), replacing `#i-flame` in
+  `Sidebar.astro`'s `.hf-brand-mark`. *No `.hf-brand-mark` CSS change was needed — the
+  symbol was drawn for the existing 18px white-stroke-on-gradient-tile treatment; the
+  `#i-flame` symbol itself stays, used elsewhere. The brand svg was already decorative
+  (the link's accessible name is its text).*
 
 Done when
-- [ ] The new mark ships in sidebar + favicon, looks right in light/dark × hearth/frost, and
-  the favicon payload is small (add a size guard so the 1.2 MB regression can't return).
+- [x] The new mark ships in sidebar + favicon, verified visually at 256/128/48/32/16 on
+  light and dark and on the gradient tile; the favicon payload is 3.3 kB with a size guard
+  (`tests/unit/assets.test.ts`) so the 1.2 MB regression can't return.
 
 Tests
-- [ ] UI (e2e): icon links resolve in the built dist; a dist-size assertion on the icon
-  files; a11y sweep green (the brand link keeps its accessible name — the WCAG 2.5.3 fix
-  from 0.1.0 must survive the swap).
-- [ ] Data model / unit: none — no artifact or logic change.
+- [x] UI (e2e): `site.spec.ts` — `/logo.png` and `/favicon.ico` resolve in the built dist
+  with sizes under the guard, and the sidebar brand tile carries `#i-anvil`; a11y sweep
+  green (the brand link keeps its accessible name — the WCAG 2.5.3 fix from 0.1.0
+  survives the swap).
+- [x] Unit: `assets.test.ts` — PNG/ICO format signatures, the three ICO sizes, and the
+  size ceilings. Data model: none — no artifact or logic change.
 
 ---
 

@@ -5,7 +5,9 @@ and, since schema v3, repos hosted on GitHub / GitLab / Gitea / Forgejo — into
 artifact plus a blob store. Since schema v4 it also collects **notes** (a plain folder of
 files on disk) and resolves **organizations** (groupings of repos) into the same artifact, and
 since schema v5 it computes per-repo **insights** (monthly commit, contributor and code-size
-series) from sampled commits.
+series) from sampled commits. Since schema v6 it carries **display-support commits**
+(`Repo.extraCommits`) so the history-narrowing knobs cannot blank per-file or tag commit
+info.
 Every page of the site is built from this artifact and nothing else — the site never talks to
 git and never talks to a forge.
 
@@ -181,7 +183,7 @@ fields are declared in `ForgeData`, and the snapshot tests compare bytes.
 
 | field           | meaning                                                                          |
 | --------------- | -------------------------------------------------------------------------------- |
-| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `5`). The site refuses artifacts of another version. |
+| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `6`). The site refuses artifacts of another version. |
 | `repos`         | `Repo[]`, sorted by slug.                                                        |
 | `notes`         | `Note[]` (schema v4), date desc / undated last / title asc — see "Notes".         |
 | `organizations` | `Organization[]` (schema v4), sorted by slug — see "Organizations".               |
@@ -216,6 +218,7 @@ Git-derived:
 | `gitTags`       | Git tags, sorted by name.                                                                            |
 | `commits`       | Every commit listed in any branch's `commits`, keyed by sha (sorted). With `ingest.maxCommits` and/or `ingest.maxCommitAgeDays` set, only the kept commits are present. |
 | `commitCount`   | `Object.keys(commits).length`.                                                                       |
+| `extraCommits`  | `Record<sha, Commit>` (schema v6) — display-support commits: per-path `lastCommit` targets and tag targets that fall outside `commits`, so file tables, tag rows and release headers still resolve the commit they point at (each also gets a `/commit/` page). Two ways in: `ingest.maxCommits` / `ingest.maxCommitAgeDays` dropped the commit, or a tag points at a commit no branch reaches (a rebase-orphaned release tag) — so this is usually, but not always, `{}` with no limits configured. Disjoint from `commits`, and never feeds aggregates — contributors, insights, activity, the contribution graph and every count read `commits` alone. The site looks commits up through `commitFor()` (`src/lib/format.ts`). |
 | `tree`          | Flat listing of the default-branch HEAD tree — every blob, tree, symlink and submodule at every depth, sorted by path. |
 | `files`         | `FileInfo` for every blob/symlink in `tree`, keyed by path (sorted).                                 |
 | `refTrees`      | `Record<refName, RefTree>` — browsable trees for the most recently updated `ingest.branchTrees` **non-default** branches (schema v5; every non-default branch before that) plus the newest `ingest.tagTrees` tags (schema v2). The default branch is only in `tree`/`files`. Keys: branches first (name order), then treed tags (name order). |
@@ -234,7 +237,7 @@ Git-derived:
 | ---------------- | ----------------------------------------------------------------------- |
 | `name`           | Short name (`main`).                                                    |
 | `head`           | Sha of the tip commit.                                                  |
-| `commits`        | Shas reachable from `head`, newest first, topological order. Truncated to `ingest.maxCommits` when set (warning `commits-capped`, once per repo). With `ingest.maxCommitAgeDays` set, limited to commits from the last N days — the cutoff anchored to the newest branch-head commit date across the repo, never the clock, so the list stays deterministic (warning `commits-aged-out`, once per repo); `head` is **always** in the list (even a clock-skewed head the filter would drop), so no branch goes empty or loses its tip. Note that `TreeEntry.lastCommit` is computed over full history, so with the window active a path's last-touching commit may be absent from `commits` — the file tables then show no per-file date/subject for it. |
+| `commits`        | Shas reachable from `head`, newest first, topological order. Truncated to `ingest.maxCommits` when set (warning `commits-capped`, once per repo). With `ingest.maxCommitAgeDays` set, limited to commits from the last N days — the cutoff anchored to the newest branch-head commit date across the repo, never the clock, so the list stays deterministic (warning `commits-aged-out`, once per repo); `head` is **always** in the list (even a clock-skewed head the filter would drop), so no branch goes empty or loses its tip. `TreeEntry.lastCommit` is computed over full history, so with the window active a path's last-touching commit may fall outside `commits` — it is then carried in `Repo.extraCommits` (schema v6) so the file tables keep their per-file dates and subjects. |
 | `lastCommitDate` | Commit date of `head`.                                                  |
 
 ### `Tag`
@@ -638,6 +641,16 @@ releaseMode? }`. The site config's `overrides` for that repo win field-by-field.
 
 ## Version history
 
+- **v6** — display-support commits: `Repo.extraCommits` (`Record<sha, Commit>`, declared
+  after `commitCount`) holds per-path `lastCommit` targets and tag targets that fall
+  outside `commits` — dropped by `ingest.maxCommits` / `ingest.maxCommitAgeDays` (0.2.0),
+  or a tag target no branch reaches — so file tables, tag rows and release headers keep
+  resolving the commit they name — with a `/commit/` page each — while `commits` (and
+  every aggregate derived from it) stays exactly the narrowed branch history. Usually `{}`
+  when no limit is configured (the orphaned-tag case excepted). The site reads commits
+  through the new `commitFor()` helper. Also in 0.2.0 but additive within v5 before this
+  bump: the `commits-aged-out` warning and config `ingest.maxCommitAgeDays`,
+  `ingest.reuse`, `theme.heat` (config-side only).
 - **v5** — insights and browsable-branch capping: `Repo.insights`
   (`RepoInsights | null`, declared after `contributors` and before `readme`) with
   `CommitPoint[]` and `CodeSizePoint[]`, plus the `Month` (`YYYY-MM`) primitive; new warnings

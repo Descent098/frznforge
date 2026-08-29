@@ -17,6 +17,19 @@ test.describe('profile page', () => {
     await expect(page.locator('.hf-repo-card', { hasText: 'alpha' })).toBeVisible();
   });
 
+  test('brand icons resolve and the sidebar carries the anvil mark', async ({ page }) => {
+    // Base.astro's two icon links must point at real files in the built dist (they are
+    // base-path-relevant later, and the 0.2.0 logo refresh regenerated both), and the
+    // sidebar brand tile now uses the frozen-anvil sprite symbol.
+    await page.goto('/');
+    for (const href of ['/logo.png', '/favicon.ico']) {
+      const res = await page.request.get(href);
+      expect(res.status(), href).toBe(200);
+      expect(Number(res.headers()['content-length'] ?? '0'), `${href} size`).toBeLessThan(100 * 1024);
+    }
+    await expect(page.locator('.hf-brand-mark use')).toHaveAttribute('href', '#i-anvil');
+  });
+
   test('sidebar shows repo count and theme toggle flips data-theme', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('.hf-nav a', { hasText: 'Repositories' }).locator('.hf-count')).toHaveText('5');

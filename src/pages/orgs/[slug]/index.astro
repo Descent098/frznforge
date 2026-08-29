@@ -13,7 +13,8 @@ import OrgHeader from '../../../components/OrgHeader.astro';
 import RepoCard from '../../../components/RepoCard.svelte';
 import type { Organization, Repo } from '../../../lib/data/schema';
 import { summarize } from '../../../lib/listing';
-import { renderMarkdown } from '../../../lib/markdown';
+import MermaidRenderer from '../../../components/MermaidRenderer.astro';
+import { containsMermaid, renderMarkdown } from '../../../lib/markdown';
 import { getOrgRoutes, orgReposUrl } from '../../../lib/routes';
 import { getConfig, getData } from '../../../lib/site';
 import '../../../styles/orgs.css';
@@ -26,7 +27,8 @@ export async function getStaticPaths() {
 interface Props { org: Organization; repos: Repo[] }
 const { org, repos } = Astro.props;
 const now = new Date();
-const heatDays = (await getConfig()).theme.heat;
+const cfg = await getConfig();
+const heatDays = cfg.theme.heat;
 
 const entries = await getCollection('orgs');
 const entry = entries.find((e) => e.id === org.slug) ?? null;
@@ -42,7 +44,7 @@ const fm = entry?.data ?? null;
  *
  * `entry.body` is the markdown with the frontmatter already stripped by the collection.
  */
-const bodyHtml = entry?.body?.trim() ? renderMarkdown(entry.body) : null;
+const bodyHtml = entry?.body?.trim() ? renderMarkdown(entry.body, { mermaid: cfg.markdown.mermaid }) : null;
 
 // Pinned repos must be members: pinning a repo that belongs to another org would make the
 // page lie about the group. Unknown/non-member slugs are dropped with a build warning, the
@@ -73,6 +75,7 @@ const description = fm?.description ?? org.description;
               organization page does. */}
           <h2 class="hf-sr" id="org-about-h">About {org.name}</h2>
           <div class="hf-md" set:html={bodyHtml} />
+          {containsMermaid(bodyHtml) && <MermaidRenderer />}
         </article>
       </section>
     )}

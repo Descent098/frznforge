@@ -301,7 +301,7 @@ for (const theme of THEMES) {
           culprits: Array.from(document.querySelectorAll('body *'))
             .filter((el) => {
               const r = el.getBoundingClientRect();
-              return r.width > 0 && r.right > document.documentElement.clientWidth + 1 && !el.closest('[style*="overflow"], .hf-code, .hf-chart-scroll, .hf-contrib-scroll');
+              return r.width > 0 && r.right > document.documentElement.clientWidth + 1 && !el.closest('[style*="overflow"], .hf-code, .hf-chart-scroll, .hf-contrib-scroll, .hf-mermaid');
             })
             .slice(0, 5)
             .map((el) => el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\s+/)[0] : '')),

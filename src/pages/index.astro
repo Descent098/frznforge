@@ -6,7 +6,8 @@ import RepoCard from '../components/RepoCard.svelte';
 import { buildActivity } from '../lib/activity';
 import { buildContribGraph } from '../lib/contrib';
 import { summarize } from '../lib/listing';
-import { renderMarkdown } from '../lib/markdown';
+import MermaidRenderer from '../components/MermaidRenderer.astro';
+import { containsMermaid, renderMarkdown } from '../lib/markdown';
 import { commitsUrl, tagsUrl } from '../lib/routes';
 import { heatFor, relativeTimeShort } from '../lib/format';
 import {
@@ -40,7 +41,7 @@ const fm = profile?.data;
  *
  * `entry.body` is the markdown with the frontmatter already stripped by the collection.
  */
-const profileHtml = profile?.body?.trim() ? renderMarkdown(profile.body) : null;
+const profileHtml = profile?.body?.trim() ? renderMarkdown(profile.body, { mermaid: cfg.markdown.mermaid }) : null;
 
 const repoCount = data.repos.length;
 // The "recent" window is the hot bucket of the recency accent (`theme.heat.hot`, default 7
@@ -147,6 +148,7 @@ const forges = Object.entries(fm?.forges ?? {}).filter(([, url]) => Boolean(url)
               obviously the profile README on screen. */}
           <h2 class="hf-sr" id="profile-readme-h">Profile README</h2>
           <div class="hf-md" set:html={profileHtml} />
+          {containsMermaid(profileHtml) && <MermaidRenderer />}
         </article>
       ) : (
         <div></div>

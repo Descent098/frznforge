@@ -74,7 +74,37 @@ export function safeUrl(href: string): string {
   return SAFE_SCHEMES.has(scheme[1]!) ? href : '#';
 }
 
-const trusted = new Marked(OPTIONS).use({ renderer: { heading: demoteHeading } });
+/** Minimal escaping for text placed inside the mermaid container's `<code>`. */
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Per-parse switch for the mermaid fence override below. A module-level flag is safe here
+ * because `renderMarkdown` parses synchronously — nothing can interleave — and it beats
+ * building two more Marked instances for one boolean.
+ */
+let mermaidEnabled = true;
+
+/**
+ * ```` ```mermaid ```` fences on TRUSTED content (0.2.0): emit the source in an
+ * `hf-mermaid` container that the client-side renderer (`MermaidRenderer.astro`) turns
+ * into an SVG. The `<pre><code>` IS the no-JS fallback — a reader without JavaScript gets
+ * the diagram source as an honest code block, and an invalid diagram stays one.
+ *
+ * Deliberately absent from the untrusted engine: mermaid executes an attacker-influenced
+ * grammar with a real XSS history, and its `securityLevel: 'strict'` sanitiser is exactly
+ * the kind of third-party sanitiser this module refuses to depend on (see the header). An
+ * imported repo's fence renders as a plain code block, full stop.
+ */
+function mermaidFence(token: Tokens.Code): string | false {
+  if (!mermaidEnabled) return false;
+  const lang = (token.lang ?? '').trim().toLowerCase().split(/\s+/)[0];
+  if (lang !== 'mermaid') return false;
+  return `<pre class="hf-mermaid" tabindex="0"><code class="language-mermaid">${escapeHtml(token.text)}</code></pre>\n`;
+}
+
+const trusted = new Marked(OPTIONS).use({ renderer: { heading: demoteHeading, code: mermaidFence } });
 
 /**
  * Renderer overrides for content frznforge did not author. Returning `false` from an override
@@ -105,6 +135,12 @@ export interface RenderOptions {
    * an existing call site keeps its old behaviour.
    */
   trusted?: boolean;
+  /**
+   * Render ```mermaid fences as diagram containers (`markdown.mermaid` config, 0.2.0).
+   * Defaults to true; only ever applies to trusted content — the untrusted engine has no
+   * mermaid path at all.
+   */
+  mermaid?: boolean;
 }
 
 /**
@@ -127,7 +163,21 @@ export function focusableCodeBlocks(html: string): string {
 
 export function renderMarkdown(src: string, options: RenderOptions = {}): string {
   const engine = options.trusted === false ? untrusted : trusted;
-  return focusableCodeBlocks(engine.parse(src, { async: false }) as string);
+  mermaidEnabled = options.mermaid !== false;
+  try {
+    return focusableCodeBlocks(engine.parse(src, { async: false }) as string);
+  } finally {
+    mermaidEnabled = true;
+  }
+}
+
+/**
+ * Whether rendered HTML holds at least one mermaid container — the signal a page uses to
+ * include `MermaidRenderer.astro` (and with it the lazily-loaded mermaid bundle) at all.
+ * Escaped fences in code blocks cannot match: their quotes are `&quot;`-encoded.
+ */
+export function containsMermaid(html: string): boolean {
+  return html.includes('class="hf-mermaid"');
 }
 
 /**

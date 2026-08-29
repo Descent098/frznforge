@@ -25,6 +25,9 @@ export default defineConfig({
     palette: 'hearth',       // 'hearth' (warm) | 'frost' (cool)
     // heat: { hot: 7, warm: 30, neutral: 180, cool: 365 },  // recency-accent day boundaries
   },
+  markdown: {
+    mermaid: true,           // render ```mermaid fences as diagrams (trusted content only)
+  },
   content: {
     orgs: './content/orgs',  // one <org-slug>.md per organization (optional)
   },
@@ -75,6 +78,15 @@ Notes
   in the sidebar and nowhere else. Every link frznforge emits is root-absolute (`/repos/…`),
   so leaving it out changes no URL — it is reserved for absolute links and feeds later.
 - `path` is absolute or relative to the config file. Bare repos work too.
+- `markdown.mermaid` renders ```` ```mermaid ```` fences as diagrams — in **your own
+  content only**: the profile, org pages, notes, and repos configured as `type: 'local'`.
+  A fence in an imported repo's README or release notes always stays a plain code block,
+  because a diagram executes whatever its author wrote and imported content is exactly the
+  content you don't control. Diagrams render in the visitor's browser from a copy of
+  mermaid bundled into the site (no CDN — the published pages still call nothing), loaded
+  only on pages that hold a diagram and only once one scrolls near. Without JavaScript the
+  fence reads as a code block of the diagram source, which is also what you get with
+  `mermaid: false`.
 - `theme.heat` sets the *day boundaries* of the fire→ice recency accent: age < `hot` days is
   orange, then warm/neutral/cool, ≥ `cool` days is blue. Values must be strictly ascending.
   The profile and organization "touched / commits recently" stats use the `hot` boundary, so
@@ -87,10 +99,9 @@ Notes
   Every branch always keeps its head commit. Everything derived from the commit list —
   commit counts, contributors, `createdAt`, insights — narrows with it. Ingest raises a
   `commits-aged-out` warning when the age cutoff is what dropped history (when `maxCommits`
-  truncates first, `commits-capped` is reported instead). One display consequence to know
-  about: per-file "Last commit" info in the file tables comes from full history, so a file
-  last touched *before* the window shows a dash instead of its age and subject — the commit
-  is simply not in the artifact.
+  truncates first, `commits-capped` is reported instead). File tables keep their per-file
+  "Last commit" dates and subjects either way — commits the window dropped but a file or
+  tag still points at are carried separately (`extraCommits`) without affecting the counts.
 - `tagTrees` / `branchTrees` are the two biggest levers on build size, because the file
   browser (`tree`/`blob`/`raw`) is generated **per browsable ref** — a repo with 27 branches
   costs 27× its file count in pages. `tagTrees` keeps the newest N tags (those also get the

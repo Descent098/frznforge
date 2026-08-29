@@ -2,7 +2,7 @@
 import Base from '../../../../layouts/Base.astro';
 import RepoHeader from '../../../../components/RepoHeader.astro';
 import { archiveUrl, commitUrl, releaseUrl } from '../../../../lib/routes';
-import { getConfig, getData, heatFor, relativeTime } from '../../../../lib/site';
+import { commitFor, getConfig, getData, heatFor, relativeTime } from '../../../../lib/site';
 import type { Repo } from '../../../../lib/data/schema';
 
 export async function getStaticPaths() {
@@ -42,7 +42,7 @@ const hasArchive = (name: string) => repo.archives.some((a) => a.kind === 'tag' 
                   </td>
                   <td class="hf-fmsg">{t.annotated && t.message ? t.message.split('\n')[0] : ''}</td>
                   <td>
-                    {repo.commits[t.target] ? (
+                    {commitFor(repo, t.target) ? (
                       <a class="hf-sha-link" href={commitUrl(repo.slug, t.target)}><code>{t.target.slice(0, 7)}</code></a>
                     ) : (
                       <code>{t.target.slice(0, 7)}</code>

@@ -2,7 +2,7 @@
  * Pure, browser-safe helpers: temperature (fire = recent, ice = old), relative time, number
  * formatting, aggregates over artifact data. No node imports — Svelte islands import this.
  */
-import type { LanguageStat, Repo } from './data/schema';
+import type { Commit, LanguageStat, Repo } from './data/schema';
 
 /* ---- temperature --------------------------------------------------------- */
 
@@ -121,6 +121,17 @@ export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Look a commit up for DISPLAY: the kept history first, then the display-support map
+ * (schema v6 `extraCommits` — per-path last commits and tag targets that
+ * `ingest.maxCommits` / `ingest.maxCommitAgeDays` dropped from `commits`). Aggregates must
+ * NOT use this — they iterate `commits` alone so the narrowing knobs keep their meaning.
+ */
+export function commitFor(repo: Repo, sha: string | null | undefined): Commit | null {
+  if (!sha) return null;
+  return repo.commits[sha] ?? repo.extraCommits[sha] ?? null;
 }
 
 /* ---- aggregates ---------------------------------------------------------- */

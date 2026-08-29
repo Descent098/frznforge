@@ -87,6 +87,7 @@ const repo: Repo = {
     [sha(3)]: commit(3, '2026-08-21T10:00:00Z', 'feature work'),
   },
   commitCount: 3,
+  extraCommits: {},
   tree: [entry('src', 'tree'), entry('src/a.ts', 'blob', 2), entry('README.md', 'blob')],
   files: { 'src/a.ts': file('src/a.ts'), 'README.md': file('README.md', false) },
   refTrees: {
@@ -267,7 +268,7 @@ describe('activity', () => {
 });
 
 describe('search', () => {
-  const data = { schemaVersion: 5 as const, repos: [repo], notes: [], organizations: [], warnings: [] };
+  const data = { schemaVersion: 6 as const, repos: [repo], notes: [], organizations: [], warnings: [] };
   const index = buildSearchIndex(data);
   it('indexes pages, repos and default-branch files only', () => {
     const kinds = index.docs.map((d) => d.kind);

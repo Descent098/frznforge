@@ -172,6 +172,19 @@ export const FrznforgeConfigSchema = z.object({
       })
       .prefault({}),
   }).prefault({}),
+  /** Markdown rendering options (0.2.0). */
+  markdown: z.object({
+    /**
+     * Render ```mermaid fences as diagrams — on TRUSTED content only (the profile, orgs,
+     * notes and `type: 'local'` repos). Imported repos' READMEs and release notes always
+     * keep the plain code block: mermaid executes whatever grammar the author wrote, and
+     * imported content is exactly the content the site owner does not control. Diagrams
+     * render in the visitor's browser from a locally bundled copy of mermaid — no CDN, and
+     * pages without a diagram load none of it. Without JavaScript (or with `false` here)
+     * the fence stays an honest code block.
+     */
+    mermaid: z.boolean().default(true),
+  }).prefault({}),
   /**
    * Where hand-written markdown lives, other than `owner.profile` (which keeps its own key for
    * backwards compatibility). One small block so there is a single obvious home for the next

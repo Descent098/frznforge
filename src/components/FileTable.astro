@@ -4,7 +4,7 @@
  * last-commit subject links to the commit page, heat-coloured age. Optional ".." parent row.
  */
 import { blobUrl, commitUrl, isRawServable, treeUrl } from '../lib/routes';
-import { getConfig, heatFor, relativeTime } from '../lib/site';
+import { commitFor, getConfig, heatFor, relativeTime } from '../lib/site';
 import type { Repo, TreeEntry } from '../lib/data/schema';
 
 interface Props {
@@ -44,7 +44,7 @@ const hrefFor = (e: TreeEntry) =>
         </tr>
       )}
       {sorted.map((e) => {
-        const c = repo.commits[e.lastCommit];
+        const c = commitFor(repo, e.lastCommit);
         const href = hrefFor(e);
         const why = unlinkable(e);
         return (

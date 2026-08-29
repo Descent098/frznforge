@@ -6,7 +6,7 @@
  * dwarf the card. The full markdown lives on the release page.
  */
 import { archiveUrl, commitUrl, releaseUrl, type SiteRelease } from '../lib/routes';
-import { getConfig, heatFor, relativeTime } from '../lib/site';
+import { commitFor, getConfig, heatFor, relativeTime } from '../lib/site';
 import type { Repo } from '../lib/data/schema';
 
 interface Props {
@@ -52,7 +52,7 @@ function summarize(md: string, max = SUMMARY_CHARS): string {
 const summary = summarize(release.body);
 const archive = repo.archives.find((a) => a.kind === 'tag' && a.ref === release.tag) ?? null;
 const assetCount = release.assets.length + (archive ? 1 : 0);
-const commit = release.commit && repo.commits[release.commit] ? release.commit : null;
+const commit = commitFor(repo, release.commit) ? release.commit : null;
 const url = releaseUrl(repo.slug, release.tag);
 /** Providers often title a release ("Sunrise"); tag-derived ones just repeat the tag. */
 const titled = release.name.trim() !== '' && release.name !== release.tag;

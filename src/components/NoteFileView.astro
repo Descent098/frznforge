@@ -20,7 +20,8 @@ import { isRawServable, noteRawUrl } from '../lib/routes';
 import { readBlob } from '../lib/data/load';
 import { splitFrontmatter, stripLeadingHeading } from '../lib/frontmatter';
 import { countLines, highlightToHtml } from '../lib/highlight';
-import { renderMarkdown } from '../lib/markdown';
+import MermaidRenderer from './MermaidRenderer.astro';
+import { containsMermaid, renderMarkdown } from '../lib/markdown';
 import { formatBytes, formatInt, getConfig } from '../lib/site';
 import type { NoteFile } from '../lib/data/schema';
 
@@ -80,7 +81,9 @@ const tooBigToHighlight = text !== null && (file.size > HIGHLIGHT_MAX_BYTES || (
 const codeHtml = text !== null && !tooBigToHighlight && !isMarkdown && !showImage
   ? await highlightToHtml(text, file.language, file.path, `${anchor}-`)
   : null;
-const mdPreviewHtml = isMarkdown && text !== null ? renderMarkdown(previewSource(text)) : null;
+const mdPreviewHtml = isMarkdown && text !== null
+  ? renderMarkdown(previewSource(text), { mermaid: cfg.markdown.mermaid })
+  : null;
 const mdSourceHtml = isMarkdown && text !== null && !tooBigToHighlight
   ? await highlightToHtml(text, 'Markdown', file.path, `${anchor}-`)
   : null;
@@ -127,6 +130,7 @@ const sourceId = `hf-nv-${group}-source`;
       <>
         <div class="hf-blob-body hf-nv-preview">
           <div class="hf-md hf-blob-md" set:html={mdPreviewHtml} />
+          {mdPreviewHtml && containsMermaid(mdPreviewHtml) && <MermaidRenderer />}
         </div>
         <div class="hf-blob-body hf-nv-source">
           <div class="hf-code" set:html={mdSourceHtml} />
@@ -137,6 +141,7 @@ const sourceId = `hf-nv-${group}-source`;
       // toggle to, so no radios are emitted and no toggle is offered.
       <div class="hf-blob-body">
         <div class="hf-md hf-blob-md" set:html={mdPreviewHtml} />
+        {mdPreviewHtml && containsMermaid(mdPreviewHtml) && <MermaidRenderer />}
       </div>
     ) : showImage ? (
       <div class="hf-blob-body hf-blob-image">
