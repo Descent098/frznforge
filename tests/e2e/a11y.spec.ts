@@ -49,6 +49,12 @@ const seg = (p: string) => p.split('/').map(encodeURIComponent).join('/');
  * One URL per PAGE TYPE, not one per page: the point is coverage of distinct templates and
  * distinct content shapes (a markdown blob and a binary blob exercise different branches of
  * the same template), not a crawl of 3,000 routes.
+ *
+ * Hosted static sites (schema v7, e.g. the fixture's /alpha-site/) are DELIBERATELY absent:
+ * they are arbitrary user content served verbatim, not frznforge chrome — holding someone's
+ * own built site to this suite's contrast and heading gates would fail spuriously and gate
+ * nothing this project controls. The forge's own pages for the same repo (its tree, blob
+ * and branches views of gh-pages) are covered like every other repo page.
  */
 function pageInventory(): Array<{ name: string; url: string }> {
   const pages: Array<{ name: string; url: string }> = [

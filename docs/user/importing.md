@@ -257,10 +257,11 @@ waiting for input that cannot arrive.
 npm run frznforge -- init --web
 ```
 
-`--web` replaces the numbered prompt with a small local web UI for choosing repositories:
-same providers, same tokens (still environment-only), same config write. It is interactive —
-it needs a browser on the machine you run it on, so it is not a CI form, and it cannot be
-combined with `--print`.
+`--web` replaces the numbered prompt with a small local web UI for choosing repositories —
+and, since 0.2.0, for editing the rest of `frznforge.config.ts` and your profile page too:
+same providers, same tokens (still environment-only), same textual config editing. It is
+interactive — it needs a browser on the machine you run it on, so it is not a CI form, and it
+cannot be combined with `--print`.
 
 `--provider`, `--host`, `--account` and `--releases` pre-seed the form (an account given on
 the command line is listed as soon as the page opens), `--config` fixes the file that gets
@@ -269,7 +270,7 @@ under `--web` the picking and the confirming both happen in the page.
 
 #### What you see
 
-The wizard opens one page with three steps, and it does not move on until you tell it to:
+The wizard opens one page with five sections, and it does not move on until you tell it to:
 
 1. **Source** — provider, account, and (for Gitea/Forgejo, or behind *Custom API host* for the
    others) the instance URL. Under the fields it says which environment variable it consulted
@@ -283,15 +284,39 @@ The wizard opens one page with three steps, and it does not move on until you te
    "12 of 20 selected" count. Forks and archived repositories start unticked; everything else
    starts ticked.
 3. **Write the config** — the release mode, then a live preview of the *exact* snippet that
-   will be spliced in, the full path it goes to, and **Write to config** / **Cancel**.
+   will be spliced in, the full path it goes to, and **Write to config**.
+4. **Settings** (0.2.0) — the rest of the config file: site title/URL/description and
+   [`site.base`](configuration.md), owner name/handle/profile path, theme palette and the
+   `theme.heat` recency boundaries, mermaid rendering, listing/notes/content paths, the whole
+   `ingest` block behind an accordion (blob and commit caps, concurrency, reuse, insights, …),
+   plus list editors for **organizations**, **hosted sites** (`hosting.sites`) and the
+   **sources** already in the config (remove here; add with the picker above). The card shows
+   the values your file actually sets, with schema defaults filling the gaps; **Save
+   settings** writes only the fields you changed.
+5. **Profile** (0.2.0) — the body of `content/profile.md` (or wherever `owner.profile`
+   points) in a plain editor with a server-rendered preview. A YAML frontmatter block at the
+   top of the file is shown read-only and round-trips byte-for-byte — the wizard edits the
+   body, never your metadata.
 
-Writing is the same operation the terminal flow performs: a timestamped
-`frznforge.config.ts.<stamp>.bak` is written first, the entries are spliced into the existing
-`repos: [ … ]` array, and everything else in the file — comments, formatting — is untouched.
-Entries already present are skipped, so running it twice adds nothing the second time. The
-server prints the same summary to the terminal and exits `0` as soon as the write (or
-**Cancel**) is answered; a tab left open with nothing happening shuts the server down after
-15 minutes.
+Every write is the same *textual* operation the terminal flow performs: only the edited
+field's bytes change, and everything else in the file — comments, formatting, expression
+values like `512 * 1024` — is untouched. Repo entries already present are skipped, so writing
+twice adds nothing the second time.
+
+A **Settings** save is guarded twice over. Before a byte of the file moves, the change is
+applied to the loaded config and run through the schema, so a value the schema refuses (a
+descending `theme.heat`, a reserved hosting slug) is rejected with the schema's own message.
+After the write, the wizard re-loads the file in a fresh process and checks it parses to
+*exactly* the config that check approved — if the textual edit went astray (a value that
+landed in a comment, a key the editor could not follow), the previous bytes are put back and
+nothing is left half-applied. The repo picker's own writes go through the same well-tested
+splicer the terminal `init` uses.
+
+The session stays up for any number of writes until **Done** (or **Cancel**, Ctrl-C, or 15
+idle minutes) ends it. The first write to each file takes one timestamped
+`<name>.<stamp>.bak` of its pre-wizard state — however many saves follow, undoing the whole
+session is that one copy. (A file the wizard *creates* had no pre-wizard state, so it gets no
+`.bak`.)
 
 #### Why it is safe to have a web page that can write your config
 
@@ -305,8 +330,10 @@ server prints the same summary to the terminal and exits `0` as soon as the writ
   your browser, the session key is not guessable.
 - **The `Host` and `Origin` headers are pinned** to the loopback address and port it is
   actually listening on, which is what defeats DNS rebinding.
-- **The browser never names the file.** Writes go to the path resolved by the process —
-  `--config`, or the nearest `frznforge.config.ts` — and to nothing else.
+- **The browser never names the file.** Writes go to the paths resolved by the process — the
+  config from `--config` or the nearest `frznforge.config.ts`, the profile from that config's
+  own `owner.profile` — and to nothing else. The settings endpoints only accept fields from a
+  server-side allow-list, so the page cannot invent an edit the wizard was never meant to make.
 - **The page cannot phone home.** It is served with
   `Content-Security-Policy: default-src 'none'; connect-src 'self'`, so the browser itself
   refuses any request to anywhere but the local server. No CDN, no fonts, no analytics.

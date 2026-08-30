@@ -8,6 +8,7 @@ describe('schema', () => {
       repos: [],
       notes: [],
       organizations: [],
+      hosting: [],
       warnings: [],
     });
   });

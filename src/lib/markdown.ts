@@ -87,15 +87,18 @@ function escapeHtml(text: string): string {
 let mermaidEnabled = true;
 
 /**
- * ```` ```mermaid ```` fences on TRUSTED content (0.2.0): emit the source in an
- * `hf-mermaid` container that the client-side renderer (`MermaidRenderer.astro`) turns
- * into an SVG. The `<pre><code>` IS the no-JS fallback — a reader without JavaScript gets
- * the diagram source as an honest code block, and an invalid diagram stays one.
+ * ```` ```mermaid ```` fences (0.2.0): emit the source in an `hf-mermaid` container that
+ * the client-side renderer (`MermaidRenderer.astro`) turns into an SVG. The `<pre><code>`
+ * IS the no-JS fallback — a reader without JavaScript gets the diagram source as an honest
+ * code block, and an invalid diagram stays one.
  *
- * Deliberately absent from the untrusted engine: mermaid executes an attacker-influenced
- * grammar with a real XSS history, and its `securityLevel: 'strict'` sanitiser is exactly
- * the kind of third-party sanitiser this module refuses to depend on (see the header). An
- * imported repo's fence renders as a plain code block, full stop.
+ * Applies in BOTH trust modes, by the owner's decision: importing a repo is choosing to
+ * publish its content, so its diagrams render like everything else — the owner is the one
+ * who decides what to import (the same stance the big forges take, rendering mermaid in
+ * every README). This does not weaken the untrusted engine's own guarantees — raw HTML is
+ * still dropped and URLs still filtered; the fence text is escaped here at build time, and
+ * at view time mermaid runs with `securityLevel: 'strict'`, its own sanitiser, in the
+ * visitor's browser. `markdown.mermaid: false` turns the whole thing off.
  */
 function mermaidFence(token: Tokens.Code): string | false {
   if (!mermaidEnabled) return false;
@@ -118,6 +121,7 @@ const untrusted = new Marked(OPTIONS).use({
       return '';
     },
     heading: demoteHeading,
+    code: mermaidFence,
     link(token: Tokens.Link): false {
       token.href = safeUrl(token.href);
       return false;
@@ -137,8 +141,7 @@ export interface RenderOptions {
   trusted?: boolean;
   /**
    * Render ```mermaid fences as diagram containers (`markdown.mermaid` config, 0.2.0).
-   * Defaults to true; only ever applies to trusted content — the untrusted engine has no
-   * mermaid path at all.
+   * Defaults to true and applies in both trust modes — see `mermaidFence` for why.
    */
   mermaid?: boolean;
 }

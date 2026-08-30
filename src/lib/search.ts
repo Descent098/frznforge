@@ -2,8 +2,9 @@
  * Search index + scoring for the Ctrl+K command palette (Phase 4). Pure + browser-safe:
  * the index is built at build time (endpoint /search-index.json) and scored in the browser.
  */
+import { withBase } from './base';
 import type { ForgeData } from './data/schema';
-import { NOTES_INDEX_URL, ORGS_INDEX_URL, blobUrl, noteUrl, orgUrl, repoUrl } from './routes';
+import { blobUrl, notesIndexUrl, noteUrl, orgsIndexUrl, orgUrl, repoUrl } from './routes';
 
 export interface SearchDoc {
   /** 'repo' | 'file' | 'note' | 'org' | 'page' | 'action' */
@@ -37,12 +38,12 @@ export interface SearchIndex {
  */
 export function buildSearchIndex(data: ForgeData): SearchIndex {
   const docs: SearchDoc[] = [
-    { kind: 'page', title: 'Overview', detail: 'Profile page', url: '/' },
-    { kind: 'page', title: 'Repositories', detail: 'All repositories', url: '/repos/' },
+    { kind: 'page', title: 'Overview', detail: 'Profile page', url: withBase('/') },
+    { kind: 'page', title: 'Repositories', detail: 'All repositories', url: withBase('/repos/') },
   ];
-  if (data.notes.length > 0) docs.push({ kind: 'page', title: 'Notes', detail: 'All notes', url: NOTES_INDEX_URL });
+  if (data.notes.length > 0) docs.push({ kind: 'page', title: 'Notes', detail: 'All notes', url: notesIndexUrl() });
   if (data.organizations.length > 0) {
-    docs.push({ kind: 'page', title: 'Organizations', detail: 'All organizations', url: ORGS_INDEX_URL });
+    docs.push({ kind: 'page', title: 'Organizations', detail: 'All organizations', url: orgsIndexUrl() });
   }
   for (const repo of data.repos) {
     docs.push({

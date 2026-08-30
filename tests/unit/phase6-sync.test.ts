@@ -16,8 +16,8 @@ import type { ForgeData } from '../../src/lib/data/schema';
 import { compareNotes } from '../../src/lib/data/schema';
 import { ingest, writeArtifact } from '../../src/lib/ingest';
 import {
-  NOTES_INDEX_URL,
-  ORGS_INDEX_URL,
+  notesIndexUrl,
+  orgsIndexUrl,
   allRoutes,
   getNoteRoutes,
   getOrgRoutes,
@@ -155,7 +155,7 @@ describe('phase 6: notes & organizations ↔ site sync', () => {
       expect(r.url).toBe(noteUrl(r.slug));
       expect(routes.has(r.url)).toBe(true);
     }
-    expect(routes.has(NOTES_INDEX_URL)).toBe(true);
+    expect(routes.has(notesIndexUrl())).toBe(true);
   });
 
   it('every stored note file has a raw route with readable bytes; unstored files have none', () => {
@@ -224,7 +224,7 @@ describe('phase 6: notes & organizations ↔ site sync', () => {
 
   it('every organization has an overview route and a scoped repo-listing route', () => {
     expect(data.organizations.map((o) => o.slug)).toEqual(['canadian-coding', 'lonely']);
-    expect(routes.has(ORGS_INDEX_URL)).toBe(true);
+    expect(routes.has(orgsIndexUrl())).toBe(true);
     for (const org of data.organizations) {
       expect(routes.has(orgUrl(org.slug))).toBe(true);
       expect(routes.has(orgReposUrl(org.slug))).toBe(true);

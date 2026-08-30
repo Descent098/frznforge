@@ -308,6 +308,64 @@ pre.preview {
 .radio b { font-weight: 600; font-size: 13.5px; }
 .radio small { display: block; color: var(--text-3); font-size: 12px; }
 
+/* ---- settings & profile (0.2.0) ---- */
+.setgroup { border-top: 1px solid var(--border); padding-top: 14px; }
+.setgroup:first-child { border-top: 0; padding-top: 0; }
+.setgroup .grid2 { margin-top: 9px; }
+.checks { display: flex; flex-direction: column; gap: 8px; margin-top: 9px; }
+select {
+  height: 36px; padding: 0 11px;
+  border-radius: 10px; border: 1px solid var(--border-strong);
+  background: var(--canvas); color: var(--text);
+  font: inherit; font-size: 13.5px; width: 100%; min-width: 0;
+}
+select:hover { border-color: var(--text-3); }
+select:focus { border-color: var(--ember); }
+input[type="number"] {
+  height: 36px; padding: 0 11px;
+  border-radius: 10px; border: 1px solid var(--border-strong);
+  background: var(--canvas); color: var(--text);
+  font: inherit; font-size: 13.5px; width: 100%; min-width: 0;
+}
+details.setgroup summary {
+  cursor: pointer; font-size: 12px; font-weight: 620; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.05em; list-style-position: outside;
+}
+details.setgroup summary:hover { color: var(--text); }
+.listrows { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--canvas); }
+.listrow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.listrow:last-child { border-bottom: 0; }
+.listrow .what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.listrow .what small { color: var(--text-3); }
+.listrow code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
+.listempty { padding: 10px 12px; color: var(--text-3); font-size: 12.5px; }
+.addrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.addrow .field { flex: 1 1 140px; }
+.addrow .btn { flex: none; }
+textarea.mdbody {
+  width: 100%; min-height: 220px; resize: vertical;
+  padding: 11px; border-radius: 10px; border: 1px solid var(--border-strong);
+  background: var(--canvas); color: var(--text);
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.55; tab-size: 2;
+}
+textarea.mdbody:hover { border-color: var(--text-3); }
+textarea.mdbody:focus { border-color: var(--ember); }
+pre.fmblock {
+  margin: 0; padding: 9px 12px; overflow: auto; max-height: 140px;
+  background: var(--canvas-2); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
+  font-size: 12px; line-height: 1.5; color: var(--text-3); white-space: pre;
+}
+.mdprev {
+  padding: 13px 15px; overflow: auto; max-height: 320px;
+  background: var(--canvas); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 13.5px; line-height: 1.6;
+}
+.mdprev :first-child { margin-top: 0; }
+.mdprev :last-child { margin-bottom: 0; }
+.mdprev pre { background: var(--code-bg); padding: 9px 11px; border-radius: 8px; overflow: auto; }
+.mdprev code { font-size: 12.5px; }
+.mdprev img { max-width: 100%; }
+
 /* ---- final state ---- */
 .done-body { display: flex; flex-direction: column; gap: 12px; padding: 22px; }
 .done-body h2 { font-size: 17px; }
@@ -335,7 +393,7 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
     <div class="mark" aria-hidden="true">&#9670;</div>
     <div>
       <h1>frznforge init</h1>
-      <p class="sub">Add repositories to <code id="cfgname">frznforge.config.ts</code></p>
+      <p class="sub">Add repositories and edit <code id="cfgname">frznforge.config.ts</code></p>
     </div>
     <div class="spacer"></div>
     <span class="chip" title="This page is served by a local process and is not reachable from anywhere else.">
@@ -460,9 +518,98 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
 
       <div class="row">
         <button type="button" class="btn primary" id="write">Write to config</button>
-        <button type="button" class="btn" id="cancel">Cancel</button>
         <div class="spacer"></div>
         <span class="status" id="write-status" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. everything else in the config (0.2.0) -->
+  <section class="card" id="settings-card" hidden aria-labelledby="h-settings">
+    <div class="card-head">
+      <span class="step" aria-hidden="true">4</span><h2 id="h-settings">Settings</h2>
+      <span class="note" id="settings-note"></span>
+    </div>
+    <div class="card-body">
+      <div class="alert" id="settings-unreadable" role="alert" hidden></div>
+      <div id="settings-groups"></div>
+
+      <div class="setgroup">
+        <span class="lbl">Organizations</span>
+        <div class="listrows" id="org-rows" style="margin-top:9px"></div>
+        <div class="addrow" style="margin-top:10px">
+          <div class="field"><label for="org-slug">Slug</label><input id="org-slug" type="text" spellcheck="false" autocapitalize="off" placeholder="e.g. canadian-coding"></div>
+          <div class="field"><label for="org-name">Name</label><input id="org-name" type="text" placeholder="e.g. Canadian Coding"></div>
+          <div class="field"><label for="org-desc">Description (optional)</label><input id="org-desc" type="text" placeholder="one line"></div>
+          <div class="field"><label for="org-repos">Repo slugs (optional)</label><input id="org-repos" type="text" spellcheck="false" autocapitalize="off" placeholder="comma-separated"></div>
+          <button type="button" class="btn" id="org-add">Add organization</button>
+        </div>
+      </div>
+
+      <div class="setgroup">
+        <span class="lbl">Hosted sites</span>
+        <p class="hint" style="margin-top:6px">Serve a repo's branch as a real site at <code>/&lt;slug&gt;/</code> — e.g. a <code>gh-pages</code> branch.</p>
+        <div class="listrows" id="hosting-rows" style="margin-top:9px"></div>
+        <div class="addrow" style="margin-top:10px">
+          <div class="field"><label for="hosting-repo">Repo slug</label><input id="hosting-repo" type="text" spellcheck="false" autocapitalize="off" placeholder="e.g. my-site"></div>
+          <div class="field"><label for="hosting-slug">Path slug (optional)</label><input id="hosting-slug" type="text" spellcheck="false" autocapitalize="off" placeholder="defaults to repo slug"></div>
+          <div class="field"><label for="hosting-branch">Branch (optional)</label><input id="hosting-branch" type="text" spellcheck="false" autocapitalize="off" placeholder="gh-pages / main / master"></div>
+          <button type="button" class="btn" id="hosting-add">Add hosted site</button>
+        </div>
+      </div>
+
+      <div class="setgroup">
+        <span class="lbl">Sources</span>
+        <p class="hint" style="margin-top:6px">Repositories currently in the config. Add more with the picker above.</p>
+        <div class="listrows" id="source-rows" style="margin-top:9px"></div>
+      </div>
+
+      <div class="alert" id="settings-error" role="alert" hidden></div>
+      <div class="row">
+        <button type="button" class="btn primary" id="settings-save">Save settings</button>
+        <div class="spacer"></div>
+        <span class="status" id="settings-status" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. the profile page (0.2.0) -->
+  <section class="card" id="profile-card" hidden aria-labelledby="h-profile">
+    <div class="card-head">
+      <span class="step" aria-hidden="true">5</span><h2 id="h-profile">Profile</h2>
+      <span class="note" id="profile-note"></span>
+    </div>
+    <div class="card-body">
+      <div class="field" id="profile-fm-field" hidden>
+        <span class="lbl" id="profile-fm-label">Frontmatter (kept as-is)</span>
+        <pre class="fmblock" id="profile-fm" tabindex="0" aria-labelledby="profile-fm-label"></pre>
+      </div>
+      <div class="field">
+        <label for="profile-body">Profile markdown</label>
+        <textarea id="profile-body" class="mdbody" spellcheck="true"></textarea>
+      </div>
+      <div class="field" id="profile-prev-field" hidden>
+        <span class="lbl" id="profile-prev-label">Preview</span>
+        <div class="mdprev" id="profile-prev" aria-labelledby="profile-prev-label"></div>
+      </div>
+      <div class="alert" id="profile-error" role="alert" hidden></div>
+      <div class="row">
+        <button type="button" class="btn primary" id="profile-save">Save profile</button>
+        <button type="button" class="btn" id="profile-preview">Preview</button>
+        <div class="spacer"></div>
+        <span class="status" id="profile-status" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- session controls: the wizard stays up for any number of writes until one of these -->
+  <section class="card" id="session-card">
+    <div class="card-body">
+      <div class="row">
+        <button type="button" class="btn primary" id="done">Done — stop the wizard</button>
+        <button type="button" class="btn" id="cancel">Cancel</button>
+        <div class="spacer"></div>
+        <span class="hint" id="session-note">Each edited file gets one timestamped <code>.bak</code> of its pre-wizard state.</span>
       </div>
     </div>
   </section>
@@ -522,7 +669,12 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
     releases: 'provider',
     sort: { key: 'name', dir: 1 },
     hostShown: false,
-    finished: false
+    finished: false,
+    // 0.2.0 whole-config editing
+    cfg: null,
+    base: {},
+    built: false,
+    profile: null
   };
 
   function info() { return S.ctx ? S.ctx.providers[S.provider] : null; }
@@ -843,37 +995,34 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
     if (!S.loadedFor) return;
     $('write-error').hidden = true;
     $('write').disabled = true;
-    $('cancel').disabled = true;
     busy('write-status', 'Writing…');
     api('/api/write', {
       provider: S.loadedFor.provider, host: S.loadedFor.host, account: S.loadedFor.account,
       releases: S.releases, select: selectedNames()
     }).then(function (data) {
-      S.finished = true;
-      finish(data.changed ? 'Written' : 'Already up to date', data.changed
-        ? 'The wizard has updated your config.'
-        : 'Everything you picked was already in the config, so nothing was changed.', [
-        data.added + ' entr' + (data.added === 1 ? 'y' : 'ies') + ' added'
-          + (data.skipped ? ', ' + data.skipped + ' already present and skipped' : ''),
-        ['Config', data.configPath],
-        data.backup ? ['Backup', data.backup] : null,
-        ['Next', 'npm run build']
-      ]);
+      // The session keeps going (0.2.0): report inline, refresh what the file now says.
+      idle('write-status', data.changed
+        ? 'Written — ' + data.added + ' entr' + (data.added === 1 ? 'y' : 'ies') + ' added'
+          + (data.skipped ? ', ' + data.skipped + ' skipped' : '') + '.'
+        : 'Everything selected was already in the config.');
+      schedulePreview();
+      loadConfig(true); // keep any half-typed Settings edits
     }).catch(function (err) {
       idle('write-status', '');
-      $('write').disabled = false;
-      $('cancel').disabled = false;
       fail('write-error', 'Nothing was written', err.message);
-    });
+    }).then(function () { $('write').disabled = false; });
   }
 
   function cancel() {
-    $('write').disabled = true;
+    $('done').disabled = true;
     $('cancel').disabled = true;
-    api('/api/cancel', {}).catch(function () { /* the server may close before answering */ })
-      .then(function () {
+    api('/api/cancel', {}).catch(function () { return null; /* the server may close before answering */ })
+      .then(function (data) {
         S.finished = true;
-        finish('Cancelled', 'No file was touched.', ['Run npm run frznforge -- init --web again when you are ready.']);
+        var n = data && data.writes ? data.writes : 0;
+        finish('Stopped', n
+          ? n + ' change' + (n === 1 ? ' was' : 's were') + ' written before stopping.'
+          : 'No file was touched.', ['Run npm run frznforge -- init --web again when you are ready.']);
       });
   }
 
@@ -895,11 +1044,444 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
       }
       ul.appendChild(li);
     });
-    ['repo-card', 'write-card'].forEach(function (id) { $(id).hidden = true; });
+    ['repo-card', 'write-card', 'settings-card', 'profile-card', 'session-card'].forEach(function (id) { $(id).hidden = true; });
     document.querySelector('.card').setAttribute('aria-disabled', 'true');
     document.querySelectorAll('.card input, .card button').forEach(function (el) { el.disabled = true; });
     $('done-card').hidden = false;
     $('done-card').scrollIntoView({ block: 'nearest' });
+  }
+
+  /* ---------------------------------------------------------------- step 4: settings (0.2.0) */
+
+  /**
+   * Every field the wizard can edit, by config path. The server holds the real allow-list;
+   * this table only decides what to render. `unset: true` = an empty input clears the field,
+   * `numnull` = an empty input writes `null` (the schema's "no limit").
+   */
+  var GROUPS = [
+    { title: 'Site', fields: [
+      { path: 'site.title', label: 'Title', kind: 'text' },
+      { path: 'site.url', label: 'URL', kind: 'text', unset: true, hint: 'Public URL of the deployed site. Empty = unset.' },
+      { path: 'site.description', label: 'Description', kind: 'text', unset: true },
+      { path: 'site.base', label: 'Base path', kind: 'text', unset: true, hint: 'Serve from a sub-path, e.g. /mysite. Empty = root deploy.' }
+    ] },
+    { title: 'Owner', fields: [
+      { path: 'owner.name', label: 'Name', kind: 'text' },
+      { path: 'owner.handle', label: 'Handle', kind: 'text' },
+      { path: 'owner.profile', label: 'Profile file', kind: 'text', hint: 'Markdown file path, relative to the config.' }
+    ] },
+    { title: 'Theme', fields: [
+      { path: 'theme.palette', label: 'Palette', kind: 'palette' },
+      { path: 'theme.heat.hot', label: 'Hot < days', kind: 'num' },
+      { path: 'theme.heat.warm', label: 'Warm < days', kind: 'num' },
+      { path: 'theme.heat.neutral', label: 'Neutral < days', kind: 'num' },
+      { path: 'theme.heat.cool', label: 'Cool < days', kind: 'num', hint: 'Recency accent boundaries; must be strictly ascending.' }
+    ] },
+    { title: 'Content', fields: [
+      { path: 'markdown.mermaid', label: 'Render mermaid diagrams', kind: 'check' },
+      { path: 'listing.pageSize', label: 'Repos per page', kind: 'num' },
+      { path: 'notes.dir', label: 'Notes folder', kind: 'text' },
+      { path: 'notes.useMtime', label: 'Notes: date from file mtime when frontmatter has none', kind: 'check' },
+      { path: 'notes.maxFileBytes', label: 'Notes size cap (bytes)', kind: 'num', unset: true, hint: 'Empty = use the ingest blob cap.' },
+      { path: 'content.orgs', label: 'Org pages folder', kind: 'text' },
+      { path: 'hosting.maxFileBytes', label: 'Hosted file cap (bytes)', kind: 'num' }
+    ] },
+    { title: 'Ingest', collapsed: true, fields: [
+      { path: 'ingest.outDir', label: 'Output folder', kind: 'text' },
+      { path: 'ingest.cacheDir', label: 'Cache folder', kind: 'text' },
+      { path: 'ingest.fetch', label: 'Network policy', kind: 'select', options: ['auto', 'never', 'always'] },
+      { path: 'ingest.maxBlobBytes', label: 'Blob cap (bytes)', kind: 'num' },
+      { path: 'ingest.maxCommits', label: 'Max commits per repo', kind: 'numnull', hint: 'Empty = unlimited.' },
+      { path: 'ingest.maxCommitAgeDays', label: 'Max commit age (days)', kind: 'numnull', hint: 'Empty = unlimited.' },
+      { path: 'ingest.concurrency', label: 'Concurrency', kind: 'num' },
+      { path: 'ingest.tagTrees', label: 'Browsable tags', kind: 'num' },
+      { path: 'ingest.branchTrees', label: 'Browsable branches', kind: 'branchtrees', hint: "A number, or 'all'." },
+      { path: 'ingest.archives', label: 'Produce zip archives', kind: 'check' },
+      { path: 'ingest.reuse.enabled', label: 'Reuse recent ingest work', kind: 'check' },
+      { path: 'ingest.reuse.maxAgeMinutes', label: 'Reuse window (minutes)', kind: 'num' },
+      { path: 'ingest.insights.enabled', label: 'Per-repo insights', kind: 'check' },
+      { path: 'ingest.insights.samples', label: 'Insights samples', kind: 'num' },
+      { path: 'ingest.insights.maxBytesPerSample', label: 'Insights byte budget per sample', kind: 'num' }
+    ] }
+  ];
+
+  function getPath(obj, dotted) {
+    var parts = dotted.split('.');
+    var v = obj;
+    for (var i = 0; i < parts.length; i++) {
+      if (v === null || typeof v !== 'object') return undefined;
+      v = v[parts[i]];
+    }
+    return v;
+  }
+
+  function fieldId(pathText) { return 'set-' + pathText.replace(/\./g, '-'); }
+
+  /** The value a field shows on load: the parsed config when readable, schema defaults otherwise. */
+  function shownValue(pathText) {
+    if (!S.cfg) return undefined;
+    return getPath(S.cfg.current || S.cfg.defaults, pathText);
+  }
+
+  function buildSettings() {
+    var box = $('settings-groups');
+    box.textContent = '';
+    S.base = {};
+    GROUPS.forEach(function (group) {
+      var wrap, body;
+      if (group.collapsed) {
+        wrap = document.createElement('details');
+        wrap.className = 'setgroup';
+        var summary = document.createElement('summary');
+        summary.textContent = group.title;
+        wrap.appendChild(summary);
+      } else {
+        wrap = document.createElement('div');
+        wrap.className = 'setgroup';
+        var lbl = document.createElement('span');
+        lbl.className = 'lbl';
+        lbl.textContent = group.title;
+        wrap.appendChild(lbl);
+      }
+      var grid = document.createElement('div');
+      grid.className = 'grid2';
+      var checks = document.createElement('div');
+      checks.className = 'checks';
+      group.fields.forEach(function (f) {
+        var v = shownValue(f.path);
+        if (f.kind === 'check') {
+          S.base[f.path] = !!v;
+          var tg = document.createElement('label');
+          tg.className = 'tg';
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.id = fieldId(f.path);
+          cb.checked = !!v;
+          tg.appendChild(cb);
+          tg.appendChild(document.createTextNode(f.label));
+          checks.appendChild(tg);
+          return;
+        }
+        var field = document.createElement('div');
+        field.className = 'field';
+        var label = document.createElement('label');
+        label.setAttribute('for', fieldId(f.path));
+        label.textContent = f.label;
+        field.appendChild(label);
+        var input;
+        if (f.kind === 'select' || f.kind === 'palette') {
+          input = document.createElement('select');
+          var options = f.kind === 'palette' ? (S.cfg.palettes || []) : f.options;
+          options.forEach(function (o) {
+            var opt = document.createElement('option');
+            opt.value = o;
+            opt.textContent = o;
+            input.appendChild(opt);
+          });
+          input.value = v === undefined || v === null ? '' : String(v);
+          S.base[f.path] = input.value;
+        } else {
+          input = document.createElement('input');
+          input.type = 'text';
+          input.spellcheck = false;
+          input.value = v === undefined || v === null ? '' : String(v);
+          S.base[f.path] = input.value;
+        }
+        input.id = fieldId(f.path);
+        field.appendChild(input);
+        if (f.hint) {
+          var hint = document.createElement('p');
+          hint.className = 'hint';
+          hint.textContent = f.hint;
+          field.appendChild(hint);
+        }
+        grid.appendChild(field);
+      });
+      if (grid.children.length) wrap.appendChild(grid);
+      if (checks.children.length) wrap.appendChild(checks);
+      box.appendChild(wrap);
+    });
+  }
+
+  /** Diff the inputs against what they showed on load; only changed fields become operations. */
+  function collectSettingsOps() {
+    var ops = [];
+    var problems = [];
+    GROUPS.forEach(function (group) {
+      group.fields.forEach(function (f) {
+        var el = $(fieldId(f.path));
+        if (!el) return;
+        if (f.kind === 'check') {
+          if (el.checked !== S.base[f.path]) ops.push({ op: 'set', path: f.path, value: el.checked });
+          return;
+        }
+        var text = el.value.trim();
+        if (text === S.base[f.path]) return;
+        if (text === '') {
+          if (f.unset) ops.push({ op: 'unset', path: f.path });
+          else if (f.kind === 'numnull') ops.push({ op: 'set', path: f.path, value: null });
+          else problems.push(f.label + ' cannot be empty.');
+          return;
+        }
+        if (f.kind === 'num' || f.kind === 'numnull' || (f.kind === 'branchtrees' && text !== 'all')) {
+          var n = Number(text);
+          if (!isFinite(n)) { problems.push(f.label + ' must be a number.'); return; }
+          ops.push({ op: 'set', path: f.path, value: n });
+          return;
+        }
+        ops.push({ op: 'set', path: f.path, value: text });
+      });
+    });
+    return { ops: ops, problems: problems };
+  }
+
+  function saveSettings() {
+    $('settings-error').hidden = true;
+    var collected = collectSettingsOps();
+    if (collected.problems.length) {
+      fail('settings-error', 'Not saved', collected.problems.join(' '));
+      return;
+    }
+    if (collected.ops.length === 0) {
+      idle('settings-status', 'Nothing changed.');
+      return;
+    }
+    postOps(collected.ops, 'Saved.', 'settings-status', 'settings-error');
+  }
+
+  /**
+   * POST operations, then reload the config so every card shows what the file now says.
+   * `opts.preserve` keeps the Settings inputs' in-progress edits across the reload (list
+   * add/remove must not wipe a half-typed field); `opts.onSuccess` runs only when the write
+   * actually landed (so inputs are cleared on success, not on a rejected add).
+   */
+  function postOps(ops, okText, statusId, errorId, opts) {
+    opts = opts || {};
+    $(errorId).hidden = true;
+    busy(statusId, 'Saving…');
+    $('settings-save').disabled = true;
+    api('/api/config/write', { operations: ops })
+      .then(function (data) {
+        idle(statusId, data.changed ? okText : 'Already up to date.');
+        if (data.changed && opts.onSuccess) opts.onSuccess();
+        return loadConfig(opts.preserve);
+      })
+      .catch(function (err) {
+        idle(statusId, '');
+        fail(errorId, 'Not saved', err.message);
+      })
+      .then(function () { $('settings-save').disabled = !(S.cfg && S.cfg.readable); });
+  }
+
+  function listRow(text, small, onRemove) {
+    var row = document.createElement('div');
+    row.className = 'listrow';
+    var what = document.createElement('span');
+    what.className = 'what';
+    var code = document.createElement('code');
+    code.textContent = text;
+    what.appendChild(code);
+    if (small) {
+      var s = document.createElement('small');
+      s.textContent = ' ' + small;
+      what.appendChild(s);
+    }
+    row.appendChild(what);
+    if (onRemove) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn small';
+      btn.textContent = 'Remove';
+      btn.addEventListener('click', onRemove);
+      row.appendChild(btn);
+    }
+    return row;
+  }
+
+  function renderList(boxId, items, emptyText, rowFor) {
+    var box = $(boxId);
+    box.textContent = '';
+    if (!items.length) {
+      var empty = document.createElement('p');
+      empty.className = 'listempty';
+      empty.textContent = emptyText;
+      box.appendChild(empty);
+      return;
+    }
+    items.forEach(function (item, i) { box.appendChild(rowFor(item, i)); });
+  }
+
+  /**
+   * Remove is by POSITION (`removeAt` with the row's index), never by field match: two entries
+   * can be indistinguishable by fields when one's are a subset of the other's, and a match would
+   * delete both. `expect` is the row's identifying fields, which the server double-checks against
+   * whatever actually sits at that index. `preserve` keeps any half-typed Settings input.
+   */
+  function removeAt(path, index, expect) {
+    postOps([{ op: 'removeAt', path: path, index: index, expect: expect }],
+      'Removed.', 'settings-status', 'settings-error', { preserve: true });
+  }
+
+  function renderOrgs() {
+    var orgs = (S.cfg.current && S.cfg.current.organizations) || [];
+    renderList('org-rows', orgs, 'No organizations yet.', function (org, i) {
+      return listRow(org.slug, org.name, function () {
+        removeAt('organizations', i, { slug: org.slug, name: org.name });
+      });
+    });
+  }
+
+  function renderHosting() {
+    var sites = (S.cfg.current && S.cfg.current.hosting && S.cfg.current.hosting.sites) || [];
+    renderList('hosting-rows', sites, 'No hosted sites yet.', function (site, i) {
+      var label = site.repo + ' → /' + (site.slug || site.repo) + '/';
+      var expect = { repo: site.repo };
+      if (site.slug) expect.slug = site.slug;
+      if (site.branch) expect.branch = site.branch;
+      return listRow(label, site.branch ? 'branch ' + site.branch : 'branch auto', function () {
+        removeAt('hosting.sites', i, expect);
+      });
+    });
+  }
+
+  function renderSources() {
+    // Each entry's string fields, in array order (the same order the file wrote them, so a
+    // positional remove lines up). `expect` lets the server confirm the element at that index.
+    var sources = S.cfg.sources || [];
+    renderList('source-rows', sources, 'No repositories yet — use the picker above.', function (entry, i) {
+      var name = entry.path || entry.project || ((entry.owner || '?') + '/' + (entry.repo || '?'));
+      return listRow(entry.type + ': ' + name, entry.host || '', function () {
+        removeAt('repos', i, entry);
+      });
+    });
+  }
+
+  function addOrg() {
+    var slug = $('org-slug').value.trim();
+    var name = $('org-name').value.trim();
+    if (!slug || !name) {
+      fail('settings-error', 'Not added', 'An organization needs both a slug and a name.');
+      return;
+    }
+    var item = { slug: slug, name: name };
+    var desc = $('org-desc').value.trim();
+    if (desc) item.description = desc;
+    var repos = $('org-repos').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (repos.length) item.repos = repos;
+    postOps([{ op: 'add', path: 'organizations', item: item }], 'Added.', 'settings-status', 'settings-error', {
+      preserve: true,
+      onSuccess: function () { ['org-slug', 'org-name', 'org-desc', 'org-repos'].forEach(function (id) { $(id).value = ''; }); }
+    });
+  }
+
+  function addHosting() {
+    var repo = $('hosting-repo').value.trim();
+    if (!repo) {
+      fail('settings-error', 'Not added', 'A hosted site needs the repo slug.');
+      return;
+    }
+    var item = { repo: repo };
+    var slug = $('hosting-slug').value.trim();
+    var branch = $('hosting-branch').value.trim();
+    if (slug) item.slug = slug;
+    if (branch) item.branch = branch;
+    postOps([{ op: 'add', path: 'hosting.sites', item: item }], 'Added.', 'settings-status', 'settings-error', {
+      preserve: true,
+      onSuccess: function () { ['hosting-repo', 'hosting-slug', 'hosting-branch'].forEach(function (id) { $(id).value = ''; }); }
+    });
+  }
+
+  /**
+   * Reload the config so the lists reflect the file. `preserve` keeps the Settings scalar inputs
+   * as the user left them (a list add/remove must not silently discard a half-typed field); a
+   * full save passes it falsy so the inputs reset to the freshly-saved baseline.
+   */
+  function loadConfig(preserve) {
+    return api('/api/config').then(function (cfg) {
+      S.cfg = cfg;
+      if (!cfg.configPath) return;
+      $('settings-card').hidden = false;
+      $('settings-note').textContent = cfg.configName || '';
+      $('settings-unreadable').hidden = cfg.readable;
+      if (!cfg.readable) {
+        fail('settings-unreadable', 'The config file does not load cleanly',
+          (cfg.issues || []).join('; ') + ' — the values below are the defaults, and saving is disabled until the file is fixed by hand.');
+      }
+      ['settings-save', 'org-add', 'hosting-add'].forEach(function (id) { $(id).disabled = !cfg.readable; });
+      // Rebuild the scalar inputs only when not preserving in-progress edits (and always on the
+      // first load, when there are none to keep).
+      if (!preserve || !S.built) { buildSettings(); S.built = true; }
+      renderOrgs();
+      renderHosting();
+      renderSources();
+    }).catch(function (err) {
+      fail('settings-error', 'Could not load the config', err.message);
+    });
+  }
+
+  /* ---------------------------------------------------------------- step 5: profile (0.2.0) */
+
+  function loadProfile() {
+    return api('/api/profile').then(function (p) {
+      S.profile = p;
+      if (!p.available) return;
+      $('profile-card').hidden = false;
+      $('profile-note').textContent = p.path;
+      if (p.frontmatter) {
+        $('profile-fm').textContent = p.frontmatter;
+        $('profile-fm-field').hidden = false;
+      }
+      $('profile-body').value = p.body;
+      if (!p.exists) idle('profile-status', 'New file — created on first save.');
+    }).catch(function () { /* no profile card, then */ });
+  }
+
+  function previewProfile() {
+    $('profile-error').hidden = true;
+    busy('profile-status', 'Rendering…');
+    api('/api/profile/preview', { body: $('profile-body').value })
+      .then(function (data) {
+        // Server-rendered from the owner's own markdown — the same trusted render the built
+        // site gives this exact file.
+        $('profile-prev').innerHTML = data.html;
+        $('profile-prev-field').hidden = false;
+        idle('profile-status', '');
+      })
+      .catch(function (err) {
+        idle('profile-status', '');
+        fail('profile-error', 'Preview failed', err.message);
+      });
+  }
+
+  function saveProfile() {
+    $('profile-error').hidden = true;
+    busy('profile-status', 'Saving…');
+    $('profile-save').disabled = true;
+    api('/api/profile/write', { body: $('profile-body').value })
+      .then(function (data) {
+        idle('profile-status', data.changed ? 'Saved.' : 'Already saved.');
+        if (S.profile) S.profile.exists = true;
+      })
+      .catch(function (err) {
+        idle('profile-status', '');
+        fail('profile-error', 'Not saved', err.message);
+      })
+      .then(function () { $('profile-save').disabled = false; });
+  }
+
+  /* ---------------------------------------------------------------- ending the session */
+
+  function doneClick() {
+    $('done').disabled = true;
+    $('cancel').disabled = true;
+    api('/api/done', {}).catch(function () { return null; }).then(function (data) {
+      S.finished = true;
+      var n = data && data.writes ? data.writes : 0;
+      finish('Done', n
+        ? 'The wizard wrote ' + n + ' change' + (n === 1 ? '' : 's') + ' this session.'
+        : 'Nothing was changed.',
+        n ? [['Next', 'npm run build']] : ['Run npm run frznforge -- init --web again when you are ready.']);
+    });
   }
 
   /* ---------------------------------------------------------------- small helpers */
@@ -941,6 +1523,12 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
   });
   $('write').addEventListener('click', write);
   $('cancel').addEventListener('click', cancel);
+  $('done').addEventListener('click', doneClick);
+  $('settings-save').addEventListener('click', saveSettings);
+  $('org-add').addEventListener('click', addOrg);
+  $('hosting-add').addEventListener('click', addHosting);
+  $('profile-preview').addEventListener('click', previewProfile);
+  $('profile-save').addEventListener('click', saveProfile);
 
   /* ---------------------------------------------------------------- boot */
 
@@ -954,6 +1542,8 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
     if (ctx.defaults.account) $('account').value = ctx.defaults.account;
     document.querySelectorAll('input[name="releases"]').forEach(function (el) { el.checked = el.value === S.releases; });
     if (ctx.configName) $('cfgname').textContent = ctx.configName;
+    loadConfig();
+    loadProfile();
     $('account').focus();
     if (ctx.defaults.account) load();
   }).catch(function (err) {

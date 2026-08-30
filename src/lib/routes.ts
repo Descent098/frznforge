@@ -4,10 +4,18 @@
  *
  * Ref names appear in URLs as a "ref slug": '/' → '~' (git refnames can never contain '~'),
  * so `feat/zip` browses at /repos/<slug>/tree/feat~zip/.
+ *
+ * Every URL a builder returns is prefixed with the deploy base (`site.base`, 0.2.0) via
+ * `withBase()` — pages, the search index and the sync tests all consume the same builders,
+ * so a sub-path deploy prefixes everything or nothing. getStaticPaths params never come
+ * from these URLs (routes carry `ref`/`path`/`slug` fields for that), which is what lets
+ * the URLs carry the base while the emitted file paths do not.
  */
+import { withBase } from './base';
 import type {
   FileInfo,
   ForgeData,
+  HostedSite,
   Note,
   NoteFile,
   Organization,
@@ -35,7 +43,7 @@ export function getRepoRoutes(data: ForgeData): RepoRoute[] {
 }
 
 export function repoUrl(slug: string): string {
-  return `/repos/${slug}/`;
+  return withBase(`/repos/${slug}/`);
 }
 
 /* ---- refs ---------------------------------------------------------------- */
@@ -99,21 +107,21 @@ export function findRef(repo: Repo, sluggedRef: string): BrowsableRef | undefine
 export const encodePathSegments = (path: string) => path.split('/').map(encodeURIComponent).join('/');
 
 export const treeUrl = (slug: string, ref: string, path = '') =>
-  `/repos/${slug}/tree/${encodePathSegments(refSlug(ref))}/${path ? encodePathSegments(path) + '/' : ''}`;
+  withBase(`/repos/${slug}/tree/${encodePathSegments(refSlug(ref))}/${path ? encodePathSegments(path) + '/' : ''}`);
 export const blobUrl = (slug: string, ref: string, path: string) =>
-  `/repos/${slug}/blob/${encodePathSegments(refSlug(ref))}/${encodePathSegments(path)}/`;
+  withBase(`/repos/${slug}/blob/${encodePathSegments(refSlug(ref))}/${encodePathSegments(path)}/`);
 export const rawUrl = (slug: string, ref: string, path: string) =>
-  `/repos/${slug}/raw/${encodePathSegments(refSlug(ref))}/${encodePathSegments(path)}`;
+  withBase(`/repos/${slug}/raw/${encodePathSegments(refSlug(ref))}/${encodePathSegments(path)}`);
 export const commitsUrl = (slug: string, ref: string, page = 1) =>
-  `/repos/${slug}/commits/${refSlug(ref)}/${page > 1 ? `page/${page}/` : ''}`;
-export const commitUrl = (slug: string, sha: string) => `/repos/${slug}/commit/${sha}/`;
-export const branchesUrl = (slug: string) => `/repos/${slug}/branches/`;
-export const tagsUrl = (slug: string) => `/repos/${slug}/tags/`;
-export const releasesUrl = (slug: string) => `/repos/${slug}/releases/`;
+  withBase(`/repos/${slug}/commits/${refSlug(ref)}/${page > 1 ? `page/${page}/` : ''}`);
+export const commitUrl = (slug: string, sha: string) => withBase(`/repos/${slug}/commit/${sha}/`);
+export const branchesUrl = (slug: string) => withBase(`/repos/${slug}/branches/`);
+export const tagsUrl = (slug: string) => withBase(`/repos/${slug}/tags/`);
+export const releasesUrl = (slug: string) => withBase(`/repos/${slug}/releases/`);
 /** The insights page (schema v5). Only built when `hasInsights(repo)` — see there. */
-export const insightsUrl = (slug: string) => `/repos/${slug}/insights/`;
-export const releaseUrl = (slug: string, tag: string) => `/repos/${slug}/releases/${refSlug(tag)}/`;
-export const archiveUrl = (slug: string, ref: string) => `/repos/${slug}/archive/${refSlug(ref)}.zip`;
+export const insightsUrl = (slug: string) => withBase(`/repos/${slug}/insights/`);
+export const releaseUrl = (slug: string, tag: string) => withBase(`/repos/${slug}/releases/${refSlug(tag)}/`);
+export const archiveUrl = (slug: string, ref: string) => withBase(`/repos/${slug}/archive/${refSlug(ref)}.zip`);
 
 /* ---- insights (schema v5) --------------------------------------------------- */
 
@@ -202,13 +210,17 @@ export function resolveReleases(repo: Repo): SiteRelease[] {
 
 /* ---- notes & organizations (schema v4) ------------------------------------ */
 
-/** Index of every note. Always exists, even with no notes (like `/repos/`). */
-export const NOTES_INDEX_URL = '/notes/';
+/**
+ * Index of every note. Always exists, even with no notes (like `/repos/`). A function
+ * rather than a constant so a base mocked mid-process (`setSiteBase` in tests) applies —
+ * a module-load-time constant would capture whichever base was set first.
+ */
+export const notesIndexUrl = () => withBase('/notes/');
 /** Index of every organization. Always exists, even with no organizations. */
-export const ORGS_INDEX_URL = '/orgs/';
+export const orgsIndexUrl = () => withBase('/orgs/');
 
 /** One note's page: all of its files. */
-export const noteUrl = (slug: string) => `/notes/${slug}/`;
+export const noteUrl = (slug: string) => withBase(`/notes/${slug}/`);
 
 /**
  * Characters in a file path that no static URL can round-trip.
@@ -255,11 +267,11 @@ export function isRawServable(filePath: string): boolean {
  * encoding that survives a static build (see `UNSERVABLE_CHARS`).
  */
 export const noteRawUrl = (slug: string, filePath: string) =>
-  `/notes/${slug}/raw/${filePath.split('/').map(encodeURIComponent).join('/')}`;
+  withBase(`/notes/${slug}/raw/${filePath.split('/').map(encodeURIComponent).join('/')}`);
 /** An organization's overview page (profile markdown + pinned repos + members). */
-export const orgUrl = (slug: string) => `/orgs/${slug}/`;
+export const orgUrl = (slug: string) => withBase(`/orgs/${slug}/`);
 /** The full repo listing scoped to one organization. */
-export const orgReposUrl = (slug: string) => `/orgs/${slug}/repos/`;
+export const orgReposUrl = (slug: string) => withBase(`/orgs/${slug}/repos/`);
 
 export interface NoteRoute { slug: string; url: string; note: Note }
 
@@ -309,7 +321,7 @@ export function reposInOrg(data: ForgeData, org: Organization): Repo[] {
 
 /** Every static URL the site emits for notes: the index, each note, each stored file's raw URL. */
 export function notesRoutes(data: ForgeData): string[] {
-  const urls = [NOTES_INDEX_URL];
+  const urls = [notesIndexUrl()];
   for (const { url } of getNoteRoutes(data)) urls.push(url);
   for (const { url } of noteRawRoutes(data)) urls.push(url);
   return urls;
@@ -333,9 +345,40 @@ export function unmatchedOrgContent(data: ForgeData, contentIds: readonly string
 
 /** Every static URL the site emits for organizations: the index, each org, each org's listing. */
 export function orgRoutes(data: ForgeData): string[] {
-  const urls = [ORGS_INDEX_URL];
+  const urls = [orgsIndexUrl()];
   for (const org of data.organizations) urls.push(orgUrl(org.slug), orgReposUrl(org.slug));
   return urls;
+}
+
+/* ---- hosted static sites (schema v7) -------------------------------------- */
+
+export interface HostedFileRoute { site: HostedSite; path: string; sha: string; url: string }
+
+/**
+ * Every servable file of every hosted site, in artifact order (sites by slug, files by
+ * path). Each file is emitted at its LITERAL path under `/<slug>/` — `index.html` lands at
+ * `<slug>/index.html`, so `/<slug>/` works through the same directory-index resolution
+ * every static host (and the site's own preview server) already does. Unstored files and
+ * `#`/`%` paths have nothing to serve (ingest warned `hosting-file-unservable`).
+ */
+export function hostedFiles(data: ForgeData): HostedFileRoute[] {
+  const out: HostedFileRoute[] = [];
+  const bySlug = new Map(data.repos.map((r) => [r.slug, r]));
+  for (const site of data.hosting) {
+    const repo = bySlug.get(site.repo);
+    if (!repo) continue; // the resolver only records existing repos; never crash over a hand-edited artifact
+    const files = site.ref === repo.defaultBranch ? repo.files : (repo.refTrees[site.ref]?.files ?? {});
+    for (const [p, info] of Object.entries(files)) {
+      if (!info.stored || !isRawServable(p)) continue;
+      out.push({ site, path: p, sha: info.sha, url: withBase(`/${site.slug}/${encodePathSegments(p)}`) });
+    }
+  }
+  return out;
+}
+
+/** Every static URL the hosted sites emit (one per served file). */
+export function hostedRoutes(data: ForgeData): string[] {
+  return hostedFiles(data).map((f) => f.url);
 }
 
 /* ---- exhaustive route listing (pages + sync tests) ------------------------- */
@@ -428,11 +471,12 @@ export function repoRoutes(repo: Repo): string[] {
  */
 export function allRoutes(data: ForgeData): string[] {
   return [
-    '/',
-    '/repos/',
-    '/404',
+    withBase('/'),
+    withBase('/repos/'),
+    withBase('/404'),
     ...data.repos.flatMap((r) => repoRoutes(r)),
     ...notesRoutes(data),
     ...orgRoutes(data),
+    ...hostedRoutes(data),
   ];
 }

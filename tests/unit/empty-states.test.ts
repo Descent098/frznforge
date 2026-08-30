@@ -13,6 +13,7 @@ async function scan(r: FixtureRepo): Promise<Repo> {
     repos: [res.repo],
     notes: [],
     organizations: [],
+    hosting: [],
     warnings: res.repo.warnings,
   });
   return res.repo;

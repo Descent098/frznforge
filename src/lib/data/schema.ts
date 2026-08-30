@@ -17,7 +17,7 @@
  */
 import { z } from 'astro/zod';
 
-export const SCHEMA_VERSION = 6 as const;
+export const SCHEMA_VERSION = 7 as const;
 
 /* ---- primitives -------------------------------------------------------- */
 
@@ -381,6 +381,20 @@ export const WarningCode = z.enum([
   'org-unknown-repo',
   /** A repo source declares `org` naming an organization that is not configured; ignored (schema v4). */
   'repo-unknown-org',
+  /** A `hosting.sites` entry names a repo slug no ingested repo has; the entry is dropped (schema v7). */
+  'hosting-unknown-repo',
+  /**
+   * A hosted repo has no branch to serve: the configured branch does not exist, or (with no
+   * branch configured) none of `gh-pages` / `main` / `master` do. The entry is dropped
+   * (schema v7).
+   */
+  'hosting-branch-missing',
+  /**
+   * A hosted branch holds files whose paths contain `#` or `%`, which no static URL can
+   * round-trip — those files get no hosted route (schema v7; the `repo-path-unservable`
+   * rule applied to a hosted site, where a missing file usually means a broken page).
+   */
+  'hosting-file-unservable',
 ]);
 export type WarningCode = z.infer<typeof WarningCode>;
 
@@ -639,9 +653,27 @@ export type Organization = z.infer<typeof Organization>;
 /**
  * The artifact. **Key order is part of the contract** — `serializeForgeData` writes the
  * object in declaration order, so the fields below are emitted as
- * `schemaVersion`, `repos`, `notes`, `organizations`, `warnings`. `notes` and `organizations`
- * were added after `repos` and before `warnings` in schema v4; do not reorder them.
+ * `schemaVersion`, `repos`, `notes`, `organizations`, `hosting`, `warnings`. `notes` and
+ * `organizations` were added after `repos` in schema v4, `hosting` after them in schema v7 —
+ * all before `warnings`; do not reorder them.
  */
+/**
+ * One hosted static site (schema v7): a repo's branch served as a real site at
+ * `/<slug>/…`, resolved from `hosting.sites` in the config. Recorded in the artifact so
+ * the site build and the sync tests consume the same resolution rather than re-deriving
+ * it — the branch here is the RESOLVED one (explicit config, or the first existing of
+ * `gh-pages` / `main` / `master`).
+ */
+export const HostedSite = z.object({
+  /** Top-level path segment the site serves under. */
+  slug: Slug,
+  /** Final slug of the repo whose files are served (post collision-rename). */
+  repo: Slug,
+  /** The branch whose tree is served. */
+  ref: z.string().min(1),
+});
+export type HostedSite = z.infer<typeof HostedSite>;
+
 export const ForgeData = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   /** Sorted by slug. */
@@ -650,6 +682,8 @@ export const ForgeData = z.object({
   notes: z.array(Note),
   /** Organizations (schema v4), sorted by slug. */
   organizations: z.array(Organization),
+  /** Hosted static sites (schema v7), sorted by slug. */
+  hosting: z.array(HostedSite),
   /** Site-level warnings (repo-level ones are also mirrored here with `repo` set). */
   warnings: z.array(Warning),
 });
@@ -662,7 +696,7 @@ export function parseForgeData(value: unknown): ForgeData {
 
 /** Empty artifact — what the site builds from when no repos are configured. */
 export function emptyForgeData(): ForgeData {
-  return { schemaVersion: SCHEMA_VERSION, repos: [], notes: [], organizations: [], warnings: [] };
+  return { schemaVersion: SCHEMA_VERSION, repos: [], notes: [], organizations: [], hosting: [], warnings: [] };
 }
 
 /**

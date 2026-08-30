@@ -206,7 +206,7 @@ describe('ingest', () => {
   it('handles a config with no repos', async () => {
     const empty = resolveConfig({ owner: { name: 'T', handle: 't' }, ingest: { outDir } }, os.tmpdir());
     const { data, blobs, archives } = await ingest(empty);
-    expect(data).toEqual({ schemaVersion: 6, repos: [], notes: [], organizations: [], warnings: [] });
+    expect(data).toEqual({ schemaVersion: 7, repos: [], notes: [], organizations: [], hosting: [], warnings: [] });
     expect(blobs.size).toBe(0);
     expect(archives.size).toBe(0);
   });

@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import { withBase } from '../lib/base';
 ---
 <Base title="Not found">
   <div class="hf-container">
@@ -8,8 +9,8 @@ import Base from '../layouts/Base.astro';
       <h1>Nothing at this address.</h1>
       <p>The page may have moved when the site was rebuilt, or the link was never right.</p>
       <div class="hf-404-actions">
-        <a class="hf-btn hf-btn--primary" href="/"><svg class="hf-i"><use href="#i-home" /></svg> Overview</a>
-        <a class="hf-btn" href="/repos/"><svg class="hf-i"><use href="#i-repo" /></svg> All repositories</a>
+        <a class="hf-btn hf-btn--primary" href={withBase('/')}><svg class="hf-i"><use href="#i-home" /></svg> Overview</a>
+        <a class="hf-btn" href={withBase('/repos/')}><svg class="hf-i"><use href="#i-repo" /></svg> All repositories</a>
       </div>
     </section>
   </div>

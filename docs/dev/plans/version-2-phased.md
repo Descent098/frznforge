@@ -266,7 +266,8 @@ Tests
 
 ---
 
-## Phase 4 — Mermaid diagrams in markdown ✅ *(done 2026-08-28)*
+## Phase 4 — Mermaid diagrams in markdown ✅ *(done 2026-08-28; trust restriction lifted
+same day by owner decision — see the first Ships note)*
 
 Goal: ```` ```mermaid ```` fences in rendered markdown become diagrams — without breaking
 the untrusted-content boundary, the zero-third-party-asset rule, the a11y gate, or build
@@ -283,9 +284,13 @@ Ships
   `markdown.ts` refuses on principle. Rendering owner-authored diagrams and printing
   imported ones is the same trust line the HTML-stripping already draws. Documented in the
   config reference and on the page (the code block is its own honest fallback).
-  *As built: the override lives on the trusted Marked instance only (the untrusted engine
-  has no mermaid path at all, which is stronger than a mode check), gated by a per-parse
-  flag `renderMarkdown` sets — safe because parsing is synchronous.*
+  *Superseded by owner decision (2026-08-28): mermaid renders in BOTH trust modes —
+  "importing a repo is choosing to publish its content; it's on the user." The untrusted
+  engine keeps every other guarantee (raw HTML dropped, URLs filtered), the fence source
+  is still escaped at build time, and mermaid's `securityLevel: 'strict'` sanitiser runs
+  client-side — the same stance the big forges take rendering mermaid in every README.
+  The override is shared by both Marked instances, gated by a per-parse flag
+  `renderMarkdown` sets — safe because parsing is synchronous.*
 - [x] **Client-side island, loaded only where needed.** Mermaid is bundled locally through
   Vite (never a CDN — the published pages call nothing), only on pages whose rendered
   markdown actually contains a diagram. *As built: `renderMarkdown` keeps its string return;
@@ -332,7 +337,7 @@ Tests
 
 ---
 
-## Phase 5 — Base path
+## Phase 5 — Base path ✅ *(done 2026-08-29)*
 
 Goal: the site can be served from a sub-path (version-2.md "e.g. `/mysite` as the root").
 This is the deepest cross-cutting change in 0.2.0 — the documented contract today is
@@ -340,10 +345,12 @@ This is the deepest cross-cutting change in 0.2.0 — the documented contract to
 hosted routes are born base-aware.
 
 Ships
-- [ ] `site.base` config key (normalised: leading slash, no trailing slash). `astro.config.mjs`
+- [x] `site.base` config key (normalised: leading slash, no trailing slash). `astro.config.mjs`
   becomes `astro.config.ts` and imports `resolveConfig` (the pattern `src/content.config.ts`
   already proves) to set Astro's `base` — one config-read path, no duplicated key.
-- [ ] One choke point: the URL builders in `src/lib/routes.ts` (repoUrl, treeUrl, blobUrl,
+  *As built: normalisation is a shared `normalizeBase` (zod transform + the `FRZNFORGE_BASE`
+  env override in `resolveConfig`, which joins the two existing test-suite overrides).*
+- [x] One choke point: the URL builders in `src/lib/routes.ts` (repoUrl, treeUrl, blobUrl,
   rawUrl, commit/branches/tags/releases/insights/archive/note/org helpers, the index
   constants, `allRoutes`) apply the base through one *guarded* helper —
   `import.meta.env?.BASE_URL ?? '/'` with a settable fallback — because Vite inlines
@@ -353,8 +360,12 @@ Ships
   config-free, and every helper-built URL — including most of the search index
   (`src/lib/search.ts`) — inherits the prefix. The index's two hardcoded page entries
   (`'/'` and `'/repos/'`) do *not* inherit it and join the sweep below (or move onto the
-  routes constants).
-- [ ] The hardcoded-literal sweep, every one now base-aware: `Sidebar.astro` (`/`,
+  routes constants). *As built: the helper is its own module `src/lib/base.ts`
+  (`siteBase`/`withBase`/`setSiteBase`) so islands can import it without dragging
+  `routes.ts`'s zod dependency into the client bundle; `NOTES_INDEX_URL`/`ORGS_INDEX_URL`
+  became `notesIndexUrl()`/`orgsIndexUrl()` so a base mocked mid-process applies to them
+  too; search.ts's two page entries moved onto `withBase`.*
+- [x] The hardcoded-literal sweep, every one now base-aware: `Sidebar.astro` (`/`,
   `/repos/`, `/notes/`, `/orgs/`), `Base.astro` (`/logo.png`, `/favicon.ico`),
   `404.astro`, `RepoHeader.astro`, `pages/index.astro`, `RepoCard.svelte`
   (`/repos/<slug>/`, `/repos/?tag=`), `RepoListing.svelte`'s `basePath = '/repos/'`
@@ -363,37 +374,40 @@ Ships
   `src/lib/search.ts`'s two literal page entries, and `CommandPalette.svelte`'s
   `fetch('/search-index.json')`. The Done-when dist grep is the backstop for anything this
   list still missed.
-- [ ] Docs: `configuration.md`'s root-absolute contract rewritten;
+- [x] Docs: `configuration.md`'s root-absolute contract rewritten;
   `deploying.md` gains the sub-path deploy recipe (GitHub Pages project sites being the
   motivating case).
 
 Done when
-- [ ] A build with `site.base: '/mysite'` served from that prefix works end-to-end: sidebar
+- [x] A build with `site.base: '/mysite'` served from that prefix works end-to-end: sidebar
   nav, repo cards, deep tree/blob/raw links, archives, the palette (open, search, jump),
-  favicon — with zero root-absolute leaks (assert by grepping dist for `href="/` outside
-  the base).
+  favicon — with zero root-absolute leaks. *`base-path.spec.ts` walks all of it against a
+  real prefix-mounted server (requests outside the prefix 404), and its last test scans
+  every built HTML file for `href|src|action="/…"` outside the base — zero found.*
 
 Tests
-- [ ] Unit: routes helpers under a mocked `BASE_URL` (default base asserts today's exact
-  URLs so nothing regresses); the three sync suites re-run green — they consume the same
-  helpers, which is the point of the choke-point design.
-- [ ] UI (e2e): a second, deliberately small base-path build (fewer fixture repos — the main
-  e2e build is already the suite's dominant cost) served under a prefix by `serve.ts` in a
-  new prefix mode; asserts nav, palette fetch, raw/archive URLs, search-index doc URLs.
-- [ ] Data model: none — the artifact stores no *site-relative* URLs; the URLs it does
+- [x] Unit: `base-path.test.ts` — normalisation, the env override, every builder under
+  `setSiteBase('/mysite')`, `allRoutes` and the search index fully prefixed, and the
+  no-base default asserting today's exact URLs; the three sync suites re-run green —
+  they consume the same helpers, which is the point of the choke-point design.
+- [x] UI (e2e): a second build of the same fixture artifact under `/mysite` (an extra
+  `astro build` in global-setup — reusing the artifact was cheaper than a smaller second
+  fixture set), served in `serve.ts`'s new prefix mode on port 4398; asserts nav, palette
+  fetch + jump, raw links, icons, out-of-prefix 404s, and the dist leak scan.
+- [x] Data model: none — the artifact stores no *site-relative* URLs; the URLs it does
   store (source `webUrl`/`cloneUrl`, repo links, release URLs) are external and unaffected
   by `site.base`.
 
 ---
 
-## Phase 6 — Static-site hosting
+## Phase 6 — Static-site hosting ✅ *(done 2026-08-29)*
 
 Goal: a repo that *is* a static site can be served *as* a site at a top-level path, while
 its normal forge view stays at `/repos/<slug>/` (version-2.md's `my-site` / `gh-pages` /
 `/mysite` example).
 
 Ships
-- [ ] **Config.** New top-level `hosting` block: an array (consistent with
+- [x] **Config.** New top-level `hosting` block: an array (consistent with
   `organizations[]`, diverging deliberately from version-2.md's object sketch)
   `hosting: { sites: [{ repo: 'my-site', slug?: <defaults to repo slug>, branch?: <auto> }] }`.
   Unset `branch` resolves in version-2.md's stated order — `gh-pages`, then `main`, then
@@ -402,8 +416,11 @@ Ships
   errors via zod refinement: duplicate hosted slugs, and **reserved paths** — `repos`,
   `notes`, `orgs` (the version-2.md three) plus everything else the build owns:
   `_astro`, `search-index.json`, `404.html`, `index.html`, `logo.png`, `favicon.ico` — with
-  a build-time collision check against the user-owned contents of `public/`.
-- [ ] **Ingest.** A hosted branch always gets a `RefTree` — exempt from the `branchTrees`
+  a build-time collision check against the user-owned contents of `public/`. *As built:
+  the `public/` check lives in `resolveHosting` at ingest (a hard error there), NOT in the
+  endpoint — inside the built server bundle, project-root resolution points at the output
+  tree, so only ingest can see the real `public/`.*
+- [x] **Ingest.** A hosted branch always gets a `RefTree` — exempt from the `branchTrees`
   cap (a dormant `gh-pages` is exactly the branch the cap would drop) — and its files are
   exempt from `maxBlobBytes` (a built site's bundles and images routinely exceed 512 KB;
   without the exemption the hosted site 404s silently), bounded instead by a
@@ -415,8 +432,14 @@ Ships
   hosted refs, and the artifact records which ref each hosted entry resolved to (so the
   site build and the sync tests consume the artifact, not a re-derivation) — the full
   same-change update (bump, data-model.md, snapshot + extractor tests, changelog entry,
-  sync tests).
-- [ ] **Emission.** A `hostedRoutes(data, cfg)` enumerator in `src/lib/routes.ts`, folded
+  sync tests). *As built: branch resolution is one shared pure function
+  (`resolveHostedBranch`) used at scan time (tree forcing, matched on the pre-collision
+  slug — a collision loser's forced trees are harmless) and again at assembly (final
+  binding, post-rename, the organizations way); the per-ref tree cache is keyed by
+  cap AND commit so a hosted branch sharing a commit with a normal ref stores the right
+  file set; and the hosted inputs ride the scan-cache digest via `ScanSource`, so warm
+  runs stay correct.*
+- [x] **Emission.** A `hostedRoutes(data, cfg)` enumerator in `src/lib/routes.ts`, folded
   into `allRoutes()` so the exhaustive-route sync contract survives, feeding a static
   endpoint (`src/pages/[hosted]/[...path].ts`-style, the raw-endpoint pattern: bytes via
   `readBlobBuffer`, content type via `src/lib/mime.ts`), with `/<slug>/` serving the
@@ -425,24 +448,26 @@ Ships
   `npm run measure` learns the new route family.
 
 Done when
-- [ ] A fixture repo with a `gh-pages` branch serves its `index.html` at `/mysite/` with
-  correct content types for its assets, while `/repos/my-site/` still renders the normal
-  repo view; a config claiming slug `repos` fails the build with a hard error naming the
-  reserved set.
+- [x] A fixture repo with a `gh-pages` branch serves its `index.html` at `/alpha-site/`
+  with correct content types for its assets (its own JS runs, verbatim), while
+  `/repos/alpha/` still renders the normal repo view with gh-pages browsable; a config
+  claiming slug `repos` fails the parse with a hard error naming the reserved set.
 
 Tests
-- [ ] Unit: config validation (reserved set, duplicate slugs, `public/` collision); branch
-  resolution order; cap exemption (extend `branch-cap.test.ts`: hosted branch treed beyond
-  the cap); blob-cap exemption boundaries + `hosting-file-unservable`; `hostedRoutes`
-  joined into the sync suites *in both directions* (every hosted file has a route; every
-  hosted route resolves to stored bytes); dangling `repo`/`branch` warnings in the
-  `orgs.test.ts` style; schema + snapshot regenerated for the bump.
-- [ ] UI (e2e): the hosted fixture site loads and its assets resolve; the repo view
-  coexists; `a11y.spec.ts`'s page inventory makes a *deliberate, documented* decision to
-  exclude hosted pages from the contrast/heading gate — they are arbitrary user content,
-  not frznforge chrome, and gating them would fail spuriously.
-- [ ] Data model: the v6 bump above, executed as one change with its docs, snapshot and
-  sync tests — this is the phase where the `TODO` data-model rules bite hardest.
+- [x] Unit: `hosting.test.ts` — config validation (reserved set, duplicate slugs incl.
+  defaulted ones, un-sluggable repo names, `public/` collision as an ingest hard error);
+  branch resolution order; the cap exemption driven end to end (a dormant gh-pages forced
+  past `branchTrees: 1`, its over-cap bundle stored); the default-branch-hosted cap raise;
+  dangling `repo`/`branch` warnings on both the site and repo lists; `hostedFiles` ↔
+  `allRoutes` in both directions with every route resolving to stored bytes; and
+  byte-identical re-ingest. Schema + snapshot regenerated for the bump.
+- [x] UI (e2e): `hosting.spec.ts` — the hosted fixture site loads with real content types
+  and working script, the forge view coexists; the base-path build hosts it under
+  `/mysite/alpha-site/` and the leak scan covers its HTML; `a11y.spec.ts` documents the
+  deliberate exclusion of hosted pages from the contrast/heading gate — they are arbitrary
+  user content, not frznforge chrome.
+- [x] Data model: the v7 bump, executed as one change with its docs, snapshot and sync
+  tests — this is the phase where the `TODO` data-model rules bite hardest.
 
 ---
 
@@ -494,7 +519,7 @@ ingest settings, and **every setting 0.2.0 added** (`theme.heat`, `ingest.maxCom
 because of that dependency.
 
 Ships
-- [ ] **A config-edit engine** (`scripts/lib/config-edit.ts`) built on the existing
+- [x] **A config-edit engine** (`scripts/lib/config-edit.ts`) built on the existing
   string/comment-aware primitives (`matchBracket`, `stripComments`, `quote`):
   `setObjectField(source, path, value)`, `insertIntoArray` / `removeFromArray`
   (parameterising today's `repos`-only `insertRepos`). The textual-edit contract from
@@ -503,13 +528,20 @@ Ships
   expression-valued field the user did not touch is never flattened. Every written string
   goes through `quote()`-grade escaping (owner names and org descriptions are free text —
   the current config already contains an escaped apostrophe).
-- [ ] **Session lifecycle.** The write-once latch becomes a serialized multi-write session:
+  *As built (2026-08-29):* the walkers moved out of `cli.ts` into the shared module
+  (cli re-imports them); `renderValue` renders primitives, strings, string lists and
+  flat objects; missing chains are created (`theme: { heat: { hot: 3 } }`) rather than
+  refused. 16 tests in `tests/unit/config-edit.test.ts`.
+- [x] **Session lifecycle.** The write-once latch becomes a serialized multi-write session:
   per-file write queue, an explicit **Done** button ends the run, one coalesced `.bak` per
   file per session, and the idle-timeout warns about unsaved editor state instead of
   silently discarding it. The security envelope is unchanged: 127.0.0.1 bind, per-run key,
   Host/Origin pinning, token never serialized to the browser, paths always resolved
   server-side.
-- [ ] **Sections.** `/api/config` serves current values + schema defaults — derived
+  *As built:* `/api/done` and `/api/cancel` drain the write queue before the process
+  exits, so a queued save can never be cut off mid-write; every session-ending message
+  (done/cancel/idle/SIGINT) reports how many writes were saved.
+- [x] **Sections.** `/api/config` serves current values + schema defaults — derived
   per block from the sub-schemas that carry them (`FrznforgeConfigSchema.parse({})` itself
   throws: `owner` has required fields and no prefault) — so the page never duplicates a
   default. An **Owner** card (name/handle/profile path); an **Ingest settings** card in a
@@ -523,7 +555,20 @@ Ships
   **Sources** card lists existing `repos[]` entries with remove (and the field edits the
   array splicer makes cheap: slug, org, releases mode); adding sources stays the picker's
   job.
-- [ ] **Profile editor.** `GET/POST /api/profile` for `content/profile.md`, path pinned
+  *As built:* defaults come from one `parse({ owner: <placeholder> })` (same result,
+  simpler than per-block derivation); every 0.2.0 key plus site/owner/theme/markdown/
+  notes/content/listing/hosting is editable, behind a **server-side allow-list of
+  operations** (`set`/`unset`/`add`/`remove`) — the page proposes, the server disposes.
+  Changes are validated by applying them to a clone of the loaded config and running
+  `FrznforgeConfigSchema` *before* the file is touched, and the written file is
+  re-loaded afterwards (in a fresh child process — tsx's module cache ignores
+  query-string busting, so an in-process re-import read stale values) with automatic
+  restore if it no longer parses. Scoped down, knowingly: organizations are add
+  (slug/name/description/repos) + remove — in-place *edit* of an existing entry and
+  `content/orgs/<slug>.md` scaffolding did not ship (remove+re-add covers the former,
+  the terminal `new org` command the latter); the Sources card is list + remove only —
+  per-entry slug/org/releases edits need an indexed-set the engine does not have yet.
+- [x] **Profile editor.** `GET/POST /api/profile` for `content/profile.md`, path pinned
   server-side from the resolved config (the browser never names a file — the standing
   rule). The YAML frontmatter block round-trips untouched; the editor edits the body.
   The WYSIWYG: version-2.md names **retoken**, which is not the npm package of that name
@@ -531,28 +576,45 @@ Ships
   the page or a local asset route (the CSP forbids external loads); ship the body editor
   as a textarea with a server-rendered preview first so the phase does not block on the
   dependency, and slot the WYSIWYG in when resolved.
+  *As built:* textarea + server-rendered preview (`renderMarkdown`, trusted, mermaid
+  off — the wizard page ships no diagram bundle), per the fallback above; the WYSIWYG
+  slot stays open for 0.3.x. The frontmatter split is offset-based
+  (`frontmatterEndOffset`) so the block round-trips byte-for-byte, CRLF included —
+  `splitFrontmatter` normalises line endings and was left to parsing.
 
 Done when
-- [ ] Starting from this repo's own config, a user can — entirely from the page — edit
+- [x] Starting from this repo's own config, a user can — entirely from the page — edit
   owner fields, toggle an ingest setting, add and remove an organization, set a heat
   cutoff, and edit the profile body; the resulting `frznforge.config.ts` differs from the
   original *only* in the edited fields, and `npm run build` succeeds on it.
-- [ ] The provider token appears in no response from any endpoint, old or new (the existing
+  *As built:* proven by the unit suites plus the Playwright spec (settings save, org
+  add, source remove, profile save, Done — asserting the file on disk each time);
+  "still builds" is enforced structurally — schema-validate before the write, re-load
+  and parse after it, restore on failure.
+- [x] The provider token appears in no response from any endpoint, old or new (the existing
   sweep, extended).
 
 Tests
-- [ ] Unit: a splicer suite mirroring the `insertRepos` blocks — comments, expressions,
+- [x] Unit: a splicer suite mirroring the `insertRepos` blocks — comments, expressions,
   escaped quotes, nested arrays, idempotence, and byte-identity outside the edited field;
   endpoint suites for `/api/config` and `/api/profile` (path pinning, frontmatter
   preservation, `.bak` behaviour, malformed-payload rejection); lifecycle tests
   *replacing* the write-once tests (serialized writes, two-tab behaviour, explicit
   finish); the token-never-leaks sweep over every new endpoint.
-- [ ] UI (e2e): the wizard's first Playwright spec — boot `runWebInit` against a temp
+  *As built:* `tests/unit/web-init.test.ts` grew to 42 — the two-tab test now asserts
+  all six concurrent writes land under one session backup, and the allow-list suite
+  covers off-list paths, `__proto__`, empty matches and schema-refused values
+  (descending heat, reserved hosting slug).
+- [x] UI (e2e): the wizard's first Playwright spec — boot `runWebInit` against a temp
   config (a second `webServer` entry or per-spec fixture; the static server owns 4399, so
   a distinct fixed port), drive the real page through one edit of each section, assert the
   file on disk. The page JS has been untested since 0.1.0; it stops being so in the phase
   that triples it.
-- [ ] Data model: none — the wizard edits config and content files, never the artifact.
+  *As built:* `tests/e2e/wizard.spec.ts`, serial, per-spec fixture on an **ephemeral**
+  port (no fixed port to collide with, no webServer entry needed) — 7 tests: tokenless
+  403, values shown from the file, setting saved with comments kept, org added, source
+  removed, profile body saved under an untouched frontmatter block, Done.
+- [x] Data model: none — the wizard edits config and content files, never the artifact.
 
 ---
 

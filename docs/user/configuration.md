@@ -19,14 +19,18 @@ Everything is read at **build time**. Change something → run `npm run build` (
 import { defineConfig } from './src/lib/config/schema';
 
 export default defineConfig({
-  site: { title: 'frznforge', url: 'https://forge.example.com' },
+  site: {
+    title: 'frznforge',
+    url: 'https://forge.example.com',
+    // base: '/mysite',      // serve from a sub-path (e.g. a GitHub Pages project site)
+  },
   owner: { name: 'Kieran Wood', handle: 'kieran', profile: './content/profile.md' },
   theme: {
     palette: 'hearth',       // 'hearth' (warm) | 'frost' (cool)
     // heat: { hot: 7, warm: 30, neutral: 180, cool: 365 },  // recency-accent day boundaries
   },
   markdown: {
-    mermaid: true,           // render ```mermaid fences as diagrams (trusted content only)
+    mermaid: true,           // render ```mermaid fences as diagrams
   },
   content: {
     orgs: './content/orgs',  // one <org-slug>.md per organization (optional)
@@ -48,6 +52,13 @@ export default defineConfig({
       description: 'Tools and teaching material.',
       repos: ['useful', 'frznforge'] },
   ],
+  hosting: {
+    sites: [
+      // serve a repo's branch as a real site at /my-site/ (the forge view stays at /repos/…)
+      // { repo: 'my-site', slug: 'my-site', branch: 'gh-pages' },  // branch defaults to gh-pages → main → master
+    ],
+    maxFileBytes: 20 * 1024 * 1024,  // size cap for hosted files (replaces maxBlobBytes there)
+  },
   ingest: {
     outDir: './data',        // forge.json + blobs/ + archives/ are written here (gitignored)
     maxBlobBytes: 524288,    // files above this are listed but not stored
@@ -75,17 +86,24 @@ export default defineConfig({
 
 Notes
 - `site.url` is **display only** today: it is rendered as the host label under the site title
-  in the sidebar and nowhere else. Every link frznforge emits is root-absolute (`/repos/…`),
-  so leaving it out changes no URL — it is reserved for absolute links and feeds later.
+  in the sidebar and nowhere else. Leaving it out changes no URL — it is reserved for
+  absolute links and feeds later.
+- `site.base` serves the whole site from a sub-path: with `base: '/mysite'`, every link the
+  site emits — pages, raw files, archives, the favicon, the command palette's search
+  index — is prefixed with `/mysite`, which is what a GitHub Pages *project* site (or any
+  deploy that is not the domain root) needs. Any spelling (`mysite`, `/mysite/`) is
+  normalised; omit it (or use `'/'`) for a root deploy, where links stay root-absolute
+  exactly as before. See [deploying.md](./deploying.md) for the host-side half.
 - `path` is absolute or relative to the config file. Bare repos work too.
-- `markdown.mermaid` renders ```` ```mermaid ```` fences as diagrams — in **your own
-  content only**: the profile, org pages, notes, and repos configured as `type: 'local'`.
-  A fence in an imported repo's README or release notes always stays a plain code block,
-  because a diagram executes whatever its author wrote and imported content is exactly the
-  content you don't control. Diagrams render in the visitor's browser from a copy of
-  mermaid bundled into the site (no CDN — the published pages still call nothing), loaded
-  only on pages that hold a diagram and only once one scrolls near. Without JavaScript the
-  fence reads as a code block of the diagram source, which is also what you get with
+- `markdown.mermaid` renders ```` ```mermaid ```` fences as diagrams — everywhere markdown
+  renders on the site: the profile, org pages, notes, your local repos, **and imported
+  repos' READMEs and release notes**. Importing a repo is choosing to publish its content,
+  so its diagrams are your call the same way its prose is; the imported-content renderer
+  still strips raw HTML and filters URLs regardless, and mermaid runs in the visitor's
+  browser with its own strict-mode sanitiser. Diagrams render from a copy of mermaid
+  bundled into the site (no CDN — the published pages still call nothing), loaded only on
+  pages that hold a diagram and only once one scrolls near. Without JavaScript the fence
+  reads as a code block of the diagram source, which is also what you get with
   `mermaid: false`.
 - `theme.heat` sets the *day boundaries* of the fire→ice recency accent: age < `hot` days is
   orange, then warm/neutral/cool, ≥ `cool` days is blue. Values must be strictly ascending.
@@ -140,8 +158,19 @@ Notes
 - `overrides` has the same shape as `.frznforge.json` and wins over it.
 - `org` on a repo puts it in that organization; so does listing the repo's slug under
   `organizations[].repos`. Doing both is fine — membership is the union of the two.
-- The env var `FRZNFORGE_OUT_DIR` overrides `ingest.outDir`, and `FRZNFORGE_CACHE_DIR`
-  overrides `ingest.cacheDir` (both used by the test suite).
+- `hosting.sites` serves a repo's branch as a **real site** at `/<slug>/…` — a `gh-pages`
+  branch holding a built site is the classic case — while the normal forge view of the
+  same repo stays at `/repos/<slug>/`. `branch` left unset picks the first existing of
+  `gh-pages`, `main`, `master`; the hosted branch always gets a browsable file tree (even
+  past the `branchTrees` cap) and its files are stored up to `hosting.maxFileBytes`
+  instead of `maxBlobBytes`, since built sites carry bundles bigger than 512 kB. Slugs the
+  build itself owns (`repos`, `notes`, `orgs`, `_astro`, …) or that collide with a file in
+  `public/` are hard errors; a mistyped `repo` or missing branch is a warning and the site
+  is simply not served. Every hosted file becomes a page, so hosting a large site grows
+  the build the way `branchTrees` does — `npm run measure` shows the count.
+- The env var `FRZNFORGE_OUT_DIR` overrides `ingest.outDir`, `FRZNFORGE_CACHE_DIR`
+  overrides `ingest.cacheDir`, and `FRZNFORGE_BASE` overrides `site.base` (all used by the
+  test suite).
 - `cacheDir` / `fetch` only matter when you import repos from a forge —
   see [importing.md](./importing.md) for `github` / `gitlab` / `gitea` / `forgejo` sources,
   API tokens, and offline builds.

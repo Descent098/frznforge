@@ -21,6 +21,7 @@ import { languageStats } from './languages';
 import { detectSpdx, findLicenseEntry, resolveLicense } from './license';
 import { mergeMeta, readRepoMetaFile, repoBasename, slugFor } from './meta';
 import { findReadmeEntry } from './readme';
+import { resolveHostedBranch } from './hosting';
 import { detectDefaultBranch, listBranchRefs, loadBranches, loadTags } from './refs';
 import { listRootTree, scanTree } from './tree';
 import { isRawServable } from '../routes';
@@ -46,6 +47,15 @@ export interface ScanSource {
   releaseMode?: 'tags' | 'provider';
   /** Provider-imported releases; only kept when the effective mode is 'provider'. */
   releases?: Release[];
+  /**
+   * Branches `hosting.sites` wants served from this repo (schema v7); `undefined` entries
+   * mean "resolve automatically" (gh-pages → main → master). A resolved hosted branch
+   * always gets a browsable tree — exempt from the `branchTrees` cap — scanned with the
+   * `hostedMaxFileBytes` cap instead of `maxBlobBytes`, because a built site's bundles
+   * and images routinely exceed the blob cap and an unstored file is a silent 404 on the
+   * hosted site.
+   */
+  hostedRequests?: Array<string | undefined>;
 }
 
 /** Merge two metadata layers field-by-field, `high` winning wherever it is set. */
@@ -84,6 +94,8 @@ export interface ScanOptions {
   archives?: boolean;
   /** Insights knobs (schema v5). Defaults to `DEFAULT_INSIGHTS_OPTIONS`. */
   insights?: InsightsOptions;
+  /** Byte cap for files on HOSTED branches (schema v7, `hosting.maxFileBytes`). */
+  hostedMaxFileBytes?: number;
 }
 
 export type ScanResult =
@@ -126,11 +138,24 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
   const commits = await loadCommits(repoPath, branchesRes.shas);
   const commitList = Object.values(commits);
 
+  // Hosted branches (schema v7): resolve each request against the real branch list. A
+  // hosted branch's tree is scanned with the (bigger) hosted cap — including the default
+  // branch when it is the hosted one, which raises that whole branch's stored-file cap.
+  const branchNames = branchRefs.map((b) => b.name);
+  const hostedBranches = new Set<string>();
+  for (const req of source.hostedRequests ?? []) {
+    const resolved = resolveHostedBranch(branchNames, req);
+    if (resolved !== null) hostedBranches.add(resolved);
+  }
+  const hostedCap = Math.max(opts.maxBlobBytes, opts.hostedMaxFileBytes ?? 0);
+  const capFor = (refName: string | null) =>
+    refName !== null && hostedBranches.has(refName) ? hostedCap : opts.maxBlobBytes;
+
   // default-branch tree
   const defaultRef = def.name ? branchRefs.find((b) => b.name === def.name)! : null;
   const head = defaultRef?.head ?? null;
   const treeRes = head
-    ? await scanTree(repoPath, head, { maxBlobBytes: opts.maxBlobBytes })
+    ? await scanTree(repoPath, head, { maxBlobBytes: capFor(def.name) })
     : { tree: [], files: {}, blobs: new Map<string, Buffer>(), contents: new Map<string, Buffer>() };
   if (head && treeRes.tree.length === 0) {
     warn({
@@ -144,16 +169,20 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
   const tagTreeCap = opts.tagTrees ?? 25;
   const branchTreeCap = opts.branchTrees ?? 10;
   const blobs = new Map<string, Buffer>(treeRes.blobs);
+  // Keyed by cap AND commit: a hosted branch can share a commit with the default branch or
+  // a tag, and the two scans store different file sets (the hosted cap is bigger). Same
+  // commit + same cap still reuses the scan.
   const treeCache = new Map<string, { tree: typeof treeRes.tree; files: typeof treeRes.files }>();
-  if (head) treeCache.set(head, { tree: treeRes.tree, files: treeRes.files });
+  if (head) treeCache.set(`${capFor(def.name)}:${head}`, { tree: treeRes.tree, files: treeRes.files });
 
-  const treeFor = async (commit: string) => {
-    const cached = treeCache.get(commit);
+  const treeFor = async (commit: string, cap: number = opts.maxBlobBytes) => {
+    const key = `${cap}:${commit}`;
+    const cached = treeCache.get(key);
     if (cached) return cached;
-    const res = await scanTree(repoPath, commit, { maxBlobBytes: opts.maxBlobBytes });
+    const res = await scanTree(repoPath, commit, { maxBlobBytes: cap });
     for (const [sha, buf] of res.blobs) blobs.set(sha, buf);
     const entry = { tree: res.tree, files: res.files };
-    treeCache.set(commit, entry);
+    treeCache.set(key, entry);
     return entry;
   };
 
@@ -166,9 +195,12 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
   const branchesByDateDesc = [...nonDefaultBranches].sort((a, b) =>
     a.headDate > b.headDate ? -1 : a.headDate < b.headDate ? 1 : a.name < b.name ? -1 : 1,
   );
-  const treedBranches = (
-    branchTreeCap === 'all' ? branchesByDateDesc : branchesByDateDesc.slice(0, branchTreeCap)
-  ).sort((a, b) => (a.name < b.name ? -1 : 1));
+  const cappedBranches = branchTreeCap === 'all' ? branchesByDateDesc : branchesByDateDesc.slice(0, branchTreeCap);
+  // A hosted branch always gets a tree, cap or no cap (schema v7): a dormant `gh-pages`
+  // is exactly the branch the most-recently-updated cap would drop, and a hosted site
+  // with no tree has no bytes to serve.
+  const forcedHosted = nonDefaultBranches.filter((b) => hostedBranches.has(b.name) && !cappedBranches.includes(b));
+  const treedBranches = [...cappedBranches, ...forcedHosted].sort((a, b) => (a.name < b.name ? -1 : 1));
   const browsableBranchCount = treedBranches.length + (def.name ? 1 : 0);
   if (browsableBranchCount < branchRefs.length) {
     warn({
@@ -182,7 +214,7 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
 
   const refTrees: Record<string, RefTree> = {};
   for (const ref of treedBranches) {
-    const t = await treeFor(ref.head);
+    const t = await treeFor(ref.head, capFor(ref.name));
     refTrees[ref.name] = { kind: 'branch', name: ref.name, commit: ref.head, tree: t.tree, files: t.files };
   }
 

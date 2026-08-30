@@ -77,10 +77,12 @@ describe('renderMarkdown (code blocks)', () => {
 });
 
 /**
- * ```mermaid fences (0.2.0). Trusted content gets an `hf-mermaid` container the client
- * renderer turns into an SVG; the container's text IS the diagram source, escaped, so a
- * reader without JavaScript gets an honest code block and nothing here can execute at build
- * time. Untrusted content and `markdown.mermaid: false` keep today's plain code block.
+ * ```mermaid fences (0.2.0). Both trust modes get an `hf-mermaid` container the client
+ * renderer turns into an SVG — importing a repo is the owner choosing to publish its
+ * content, so its diagrams render like everything else (mermaid's own strict-mode
+ * sanitiser runs at view time). The container's text IS the diagram source, escaped, so a
+ * reader without JavaScript gets an honest code block and nothing here can execute at
+ * build time. `markdown.mermaid: false` keeps the plain code block.
  */
 describe('renderMarkdown (mermaid fences)', () => {
   const FENCE = ['```mermaid', 'graph TD;', '  A-->B;', '```', ''].join('\n');
@@ -98,11 +100,13 @@ describe('renderMarkdown (mermaid fences)', () => {
     expect(html).toContain('&lt;script&gt;');
   });
 
-  it('never renders a container for untrusted content', () => {
-    const html = renderMarkdown(FENCE, { trusted: false });
-    expect(html).not.toContain('hf-mermaid');
-    expect(html).toContain('<code class="language-mermaid">');
-    expect(containsMermaid(html)).toBe(false);
+  it('renders a container for untrusted content too, without weakening its other guarantees', () => {
+    const html = renderMarkdown(`${FENCE}\n<script>alert(1)</script>\n`, { trusted: false });
+    expect(html).toContain('<pre class="hf-mermaid" tabindex="0"><code class="language-mermaid">');
+    expect(html).toContain('A--&gt;B;');
+    expect(containsMermaid(html)).toBe(true);
+    // raw HTML in the surrounding document is still dropped, escaped fence text included
+    expect(html).not.toContain('<script>');
   });
 
   it('honours markdown.mermaid: false', () => {

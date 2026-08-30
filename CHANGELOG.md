@@ -44,19 +44,73 @@ Plans: [docs/dev/plans/version-2-phased.md](docs/dev/plans/version-2-phased.md).
 - **`npm run ingest -- --no-cache`** — ingest's first CLI flag: fetch everything, read no
   provider cache, replay no scan cache, for one run (fresh results are still recorded, so
   the next ordinary run benefits). Unknown flags are an error, not a shrug.
-- **```` ```mermaid ```` fences render as diagrams** (`markdown.mermaid`, default on) — on
-  **trusted content only**: the profile, org pages, notes and `type: 'local'` repos. A
-  fence in an imported repo's README or release notes stays a plain code block, full stop —
-  mermaid executes whatever grammar its author wrote, and imported content is exactly the
-  content the site owner does not control. The build stays static and deterministic: pages
-  ship the escaped diagram source (an honest code block, which is also the no-JS fallback),
-  and a locally bundled mermaid — never a CDN — renders it in the visitor's browser, loaded
-  only on pages that actually hold a diagram and only once one nears the viewport. Measured:
-  a diagram-free page still transfers the same ~48 kB of JS it did before; diagrams
-  re-render on the theme toggle, get per-diagram deterministic ids (multi-diagram pages keep
-  the duplicate-id a11y probe green), and carry `role="img"` with a scrollable, keyboard-
-  focusable container. The bundle-size arithmetic is in
-  [performance.md](docs/dev/performance.md).
+- **```` ```mermaid ```` fences render as diagrams** (`markdown.mermaid`, default on) —
+  everywhere markdown renders, imported repos' READMEs and release notes included:
+  importing a repo is choosing to publish its content, so its diagrams are the owner's
+  call the same way its prose is. The imported-content renderer still strips raw HTML and
+  filters URLs regardless, and mermaid runs with its own strict-mode sanitiser. The build
+  stays static and deterministic: pages ship the escaped diagram source (an honest code
+  block, which is also the no-JS fallback), and a locally bundled mermaid — never a CDN —
+  renders it in the visitor's browser, loaded only on pages that actually hold a diagram
+  and only once one nears the viewport. Measured: a diagram-free page still transfers the
+  same ~48 kB of JS it did before; diagrams re-render on the theme toggle, get per-diagram
+  deterministic ids (multi-diagram pages keep the duplicate-id a11y probe green), and
+  carry `role="img"` with a scrollable, keyboard-focusable container. The bundle-size
+  arithmetic is in [performance.md](docs/dev/performance.md).
+- **The site can deploy under a sub-path** (`site.base`, e.g. `'/mysite'` for a GitHub
+  Pages *project* site). One choke point (`src/lib/base.ts`, reading Astro's inlined
+  `BASE_URL`) prefixes every URL the site emits — pages, file/raw/archive routes, the
+  favicon links, the command palette's `search-index.json` fetch and every document inside
+  it — and the handful of hand-written chrome links were swept onto it. The old
+  "every link is root-absolute" contract still holds for root deploys, byte for byte.
+  Astro's config became `astro.config.ts` so `base` comes from `frznforge.config.ts`
+  instead of a second, driftable copy. Guarded so `npm run measure` and the test tooling
+  (which load the URL builders outside Vite) keep working, and `FRZNFORGE_BASE` joins the
+  test-suite env overrides. The e2e suite now builds the fixture site a second time under
+  `/mysite`, serves it prefix-mounted (requests outside the prefix 404, like a real
+  sub-path host), drives navigation and the palette through it, and scans every built HTML
+  file for root-absolute leaks — zero tolerated.
+
+- **A repo can be served as a real static site** (`hosting.sites`, **artifact schema v7**):
+  point an entry at a repo and its `gh-pages` branch (or an explicit branch; the fallback
+  order is `gh-pages` → `main` → `master`) is served file-for-file at `/<slug>/…` — with
+  correct content types, `index.html` directory resolution, and the repo's normal forge
+  view intact at `/repos/<slug>/`, gh-pages browsable like any ref. The hosted branch
+  always gets a tree (exempt from the `branchTrees` cap — a dormant `gh-pages` is exactly
+  the branch the recency cap would drop) and its files are stored up to
+  `hosting.maxFileBytes` (default 20 MiB) instead of `maxBlobBytes`, because a built
+  site's bundles routinely exceed 512 kB and an unstored file is a silent 404. Reserved
+  slugs (`repos`, `notes`, `orgs`, `_astro`, …), duplicates and collisions with `public/`
+  files are hard errors; a mistyped repo or missing branch degrades to a warning
+  (`hosting-unknown-repo` / `hosting-branch-missing`), the organizations way. The
+  resolution is recorded in the artifact, every hosted file is a real route in the
+  exhaustive sync contract, hosted pages are deliberately excluded from the a11y sweep
+  (they are the user's own content, not forge chrome), and it all composes with
+  `site.base`. Costs are stated honestly: hosted files multiply page count like the
+  `branchTrees` lever, and `npm run measure` reports them as their own line.
+
+- **The init wizard edits the whole config now, not just the repo list**
+  (`npm run frznforge -- init --web`). Two new page sections: **Settings** — site
+  title/URL/description/`site.base`, owner fields, palette and `theme.heat`,
+  `markdown.mermaid`, listing/notes/content paths, the full `ingest` block (reuse and
+  insights included) behind an accordion, plus list editors for organizations, hosted
+  sites and the sources already in the config — and **Profile**, a body editor for
+  `owner.profile` with a server-rendered preview in which a YAML frontmatter block
+  round-trips byte-for-byte. Every edit is textual and field-precise: comments,
+  formatting and expression values (`512 * 1024`) survive everywhere but the field being
+  changed (`scripts/lib/config-edit.ts`, the same engine the repo splicer now shares).
+  Settings edits are judged by the config schema *before* the file moves — a descending
+  `theme.heat` or a reserved hosting slug is refused with the schema's own message — and
+  verified after: the wizard re-loads the written file in a fresh process and rolls back
+  unless it parses to exactly the config that check approved (so an edit that landed in a
+  comment or a key the editor cannot follow is undone, not silently misapplied). The
+  session became multi-write: serialized
+  writes (two tabs can no longer lose each other's saves), an explicit **Done** button,
+  and one coalesced `.bak` per file per session holding the pre-wizard state. The
+  security envelope is unchanged and now tested over every new endpoint: loopback-only,
+  per-run session key, Host/Origin pinning, a server-side allow-list of editable fields,
+  paths always resolved server-side, and the provider token in no response. The page
+  gained its first Playwright suite along the way.
 
 ## Bug Fixes
 

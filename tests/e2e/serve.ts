@@ -12,14 +12,27 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { mimeFor } from '../../src/lib/mime';
 
-const [, , rootArg, portArg] = process.argv;
+const [, , rootArg, portArg, baseArg] = process.argv;
 const root = path.resolve(rootArg ?? 'dist');
 const port = Number(portArg ?? 4399);
+/**
+ * Optional mount prefix (0.2.0 base-path e2e): with `/mysite`, the dist is served ONLY
+ * under that prefix and everything outside it 404s — exactly how a real sub-path deploy
+ * behaves, which is what makes a root-absolute link leak fail loudly in the specs.
+ */
+const base = (baseArg ?? '').replace(/\/+$/, '');
 
 http
   .createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
-    const p = decodeURIComponent(url.pathname);
+    let p = decodeURIComponent(url.pathname);
+    if (base) {
+      if (p !== base && !p.startsWith(`${base}/`)) {
+        res.writeHead(404, { 'content-type': 'text/plain' });
+        return res.end(`not under the deploy base ${base}`);
+      }
+      p = p.slice(base.length) || '/';
+    }
     let file = path.join(root, p);
     if (file.endsWith(path.sep) || !path.extname(file)) file = path.join(file, 'index.html');
     if (!file.startsWith(root)) {

@@ -25,6 +25,8 @@ const ORIGINS = path.join(TMP, 'origins');
 const CACHE = path.join(TMP, 'cache');
 const DATA = path.join(TMP, 'data');
 const DIST = path.join(TMP, 'dist');
+/** Second build of the SAME artifact under `site.base: '/mysite'` (0.2.0 base-path e2e). */
+const DIST_BASE = path.join(TMP, 'dist-base');
 
 const gitEnv = (date: string) => ({
   ...process.env,
@@ -161,6 +163,16 @@ export default async function globalSetup() {
     git(d, ['tag', '-a', 'v1.0.0', '-m', 'First release'], '2024-02-01T00:00:00Z');
     git(d, ['tag', '-a', '--cleanup=verbatim', 'v1.1.0', '-m', 'Second release\n\n## Highlights\n\n- adds a *guide*\n- new `extra` module\n'], '2024-03-01T00:00:00Z');
     git(d, ['tag', 'light'], '2024-03-02T00:00:00Z');
+    // gh-pages: a tiny BUILT site, served at /alpha-site/ by the hosting config below
+    // (0.2.0, schema v7). Its own links are relative on purpose — hosted content is user
+    // content, and the base-path build's leak scan must not trip over it.
+    git(d, ['checkout', '-q', '-b', 'gh-pages'], '2024-03-05T00:00:00Z');
+    git(d, ['rm', '-r', '-q', 'src', 'docs', 'assets', 'README.md', '.frznforge.json', 'LICENSE'], '2024-03-05T00:00:00Z');
+    fs.writeFileSync(path.join(d, 'index.html'), '<!doctype html><meta charset="utf-8"><title>alpha site</title><link rel="stylesheet" href="style.css"><h1>built by alpha</h1><script src="app.js"></script>');
+    fs.writeFileSync(path.join(d, 'style.css'), 'h1 { color: rebeccapurple; }\n');
+    fs.writeFileSync(path.join(d, 'app.js'), 'document.title += " ✓";\n');
+    commitAll(d, 'publish the site', '2024-03-05T00:00:00Z');
+    git(d, ['checkout', '-q', 'main'], '2024-03-05T00:00:00Z');
   });
 
   // bravo — template repo, Go, and the only fixture with a LONG history.
@@ -208,8 +220,8 @@ export default async function globalSetup() {
   const charlieOrigin = makeRepoIn(ORIGINS, 'charlie', (d) => {
     // An imported README is written by whoever can push to the upstream repo, so it gets
     // the same payload block as the release body below: the repo overview, tree pages and
-    // the blob markdown preview all render it UNTRUSTED, and mermaid.spec.ts asserts the
-    // scripts stay inert and the mermaid fence stays a plain code block on those pages.
+    // the blob markdown preview all render it UNTRUSTED — mermaid.spec.ts asserts the raw
+    // HTML stays inert while the mermaid fence renders (importing = choosing to publish).
     fs.writeFileSync(
       path.join(d, 'README.md'),
       '# Charlie\n\nMirrored from a provider.\n\n' +
@@ -275,8 +287,9 @@ export default async function globalSetup() {
           '<script>window.__PWNED = 1</script>\n\n' +
           '<img src=x onerror="window.__PWNED = 2">\n\n' +
           '[boom](javascript:window.__PWNED=3)\n\n' +
-          // A mermaid fence in IMPORTED content must stay an inert code block (0.2.0):
-          // rendering it would execute an attacker-influenced grammar on the site's origin.
+          // A mermaid fence in IMPORTED content renders like any other (0.2.0, owner's
+          // decision — importing a repo is choosing to publish it); the raw-HTML payloads
+          // above must stay inert regardless.
           '```mermaid\ngraph TD;\n  A-->B;\n```\n',
         url: 'https://github.com/fixture/charlie/releases/tag/v2.2.0-rc.1',
         prerelease: true,
@@ -344,6 +357,9 @@ export default async function globalSetup() {
           repos: ['bravo'],
         },
       ],
+      // alpha's gh-pages branch served as a real site (0.2.0, schema v7); hosting.spec.ts
+      // and the base-path leak scan both drive it.
+      hosting: { sites: [{ repo: 'alpha', slug: 'alpha-site' }] },
       // `insights.samples` is deliberately below bravo's active-month count so the build
       // exercises checkpoint THINNING (`sampled: true`) rather than measuring every month —
       // the path a real repo with years of history takes. Every other knob stays at its
@@ -365,5 +381,16 @@ export default async function globalSetup() {
     stdio: 'pipe',
     shell: true,
     env: { ...process.env, FRZNFORGE_OUT_DIR: DATA },
+  });
+
+  // The same artifact again, deployed under a sub-path: `FRZNFORGE_BASE` flows through
+  // resolveConfig → astro.config.ts → Astro's `base` → import.meta.env.BASE_URL, which is
+  // everything the site reads. `base-path.spec.ts` drives this dist (served with the
+  // matching prefix by serve.ts on port 4398) and asserts no root-absolute URL leaked.
+  execFileSync('npx', ['astro', 'build', '--outDir', DIST_BASE], {
+    cwd: ROOT,
+    stdio: 'pipe',
+    shell: true,
+    env: { ...process.env, FRZNFORGE_OUT_DIR: DATA, FRZNFORGE_BASE: '/mysite' },
   });
 }

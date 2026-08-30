@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { RepoSummary } from '../lib/listing';
+  import { withBase } from '../lib/base';
   import { DEFAULT_HEAT, type HeatThresholds, heatFor, relativeTime } from '../lib/format';
 
   interface Props {
@@ -11,7 +12,7 @@
     /** Recency-accent day boundaries (`theme.heat`), passed down like `now`. */
     heatDays?: HeatThresholds;
   }
-  let { repo, now, tagHref = (t) => `/repos/?tag=${encodeURIComponent(t)}`, heatDays = DEFAULT_HEAT }: Props = $props();
+  let { repo, now, tagHref = (t) => withBase(`/repos/?tag=${encodeURIComponent(t)}`), heatDays = DEFAULT_HEAT }: Props = $props();
 
   const nowDate = $derived(new Date(now));
   const heat = $derived(heatFor(repo.updatedAt, nowDate, heatDays));
@@ -21,7 +22,7 @@
 <article class="hf-repo-card heat-{heat}" data-slug={repo.slug}>
   <div class="hf-repo-top">
     <span class="hf-repo-icon"><svg class="hf-i"><use href="#i-repo" /></svg></span>
-    <a class="hf-repo-name" href={`/repos/${repo.slug}/`}>{repo.name}</a>
+    <a class="hf-repo-name" href={withBase(`/repos/${repo.slug}/`)}>{repo.name}</a>
     {#if repo.template}<span class="hf-tag hf-tag--template">Template</span>{/if}
   </div>
   <p class="hf-repo-desc">{repo.description ?? (repo.empty ? 'Empty repository.' : 'No description.')}</p>

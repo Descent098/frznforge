@@ -120,6 +120,24 @@ export function defaultReleaseMode(source: RepoSourceConfig): 'provider' | 'tags
 }
 
 /**
+ * Top-level path segments the build itself emits (schema v7 hosting). A hosted site may
+ * not claim any of them — colliding with `/repos/` would shadow the whole forge. Files the
+ * user drops in `public/` are checked separately at build time (the set here is static;
+ * `public/` is not).
+ */
+export const RESERVED_HOSTING_SLUGS: ReadonlySet<string> = new Set([
+  'repos',
+  'notes',
+  'orgs',
+  '_astro',
+  'search-index.json',
+  'index.html',
+  '404.html',
+  'logo.png',
+  'favicon.ico',
+]);
+
+/**
  * One organization (schema v4): a named grouping of repos with its own overview page.
  *
  * `repos` is one of the two ways a repo joins an org; the other is `org: '<slug>'` on the repo
@@ -142,11 +160,33 @@ export const OrganizationConfig = z.object({
 });
 export type OrganizationConfig = z.infer<typeof OrganizationConfig>;
 
+/**
+ * Normalise a deploy base path (0.2.0): any of `mysite`, `/mysite`, `/mysite/` becomes
+ * `/mysite`; `''` and `'/'` mean a root deploy and normalise to `undefined`. Exported so
+ * the `FRZNFORGE_BASE` env override in `resolveConfig` normalises identically.
+ */
+export function normalizeBase(value: string): string | undefined {
+  const trimmed = value.trim().replace(/\/+$/, '');
+  if (trimmed === '' || trimmed === '/') return undefined;
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
 export const FrznforgeConfigSchema = z.object({
   site: z.object({
     title: z.string().min(1).default('frznforge'),
     url: z.url().optional(),
     description: z.string().optional(),
+    /**
+     * Serve the site from a sub-path (0.2.0) — `'/mysite'` for
+     * `https://host.example/mysite/`. Normalised to a leading slash and no trailing slash;
+     * omit (or `'/'`) for a root deploy. Flows into Astro's `base` via astro.config.ts, and
+     * every URL the site emits is prefixed with it (`src/lib/base.ts`).
+     */
+    base: z
+      .string()
+      .refine((v) => !/[\s#%?]/.test(v), { message: 'site.base must not contain whitespace, #, % or ?' })
+      .transform(normalizeBase)
+      .optional(),
   }).prefault({}),
   owner: z.object({
     name: z.string().min(1),
@@ -175,13 +215,13 @@ export const FrznforgeConfigSchema = z.object({
   /** Markdown rendering options (0.2.0). */
   markdown: z.object({
     /**
-     * Render ```mermaid fences as diagrams — on TRUSTED content only (the profile, orgs,
-     * notes and `type: 'local'` repos). Imported repos' READMEs and release notes always
-     * keep the plain code block: mermaid executes whatever grammar the author wrote, and
-     * imported content is exactly the content the site owner does not control. Diagrams
-     * render in the visitor's browser from a locally bundled copy of mermaid — no CDN, and
-     * pages without a diagram load none of it. Without JavaScript (or with `false` here)
-     * the fence stays an honest code block.
+     * Render ```mermaid fences as diagrams — everywhere markdown renders, imported repos'
+     * READMEs and release notes included. Importing a repo is choosing to publish its
+     * content, so its diagrams are on you the same way its prose is; the untrusted
+     * renderer still strips raw HTML and filters URLs, and mermaid runs client-side with
+     * its own strict-mode sanitiser. Diagrams render in the visitor's browser from a
+     * locally bundled copy of mermaid — no CDN, and pages without a diagram load none of
+     * it. Without JavaScript (or with `false` here) the fence stays an honest code block.
      */
     mermaid: z.boolean().default(true),
   }).prefault({}),
@@ -224,6 +264,62 @@ export const FrznforgeConfigSchema = z.object({
   }).prefault({}),
   /** Organizations repos can be grouped under (schema v4). */
   organizations: z.array(OrganizationConfig).default([]),
+  /**
+   * Hosted static sites (schema v7): serve a repo's branch as a real site at a top-level
+   * path, while the normal forge view stays at `/repos/<slug>/`. The classic case is a
+   * `gh-pages` branch holding a built site.
+   */
+  hosting: z.object({
+    sites: z.array(z.object({
+      /**
+       * Slug of the repo whose branch is served. A plain string on purpose (see
+       * `remoteSourceFields.org`): a typo becomes a `hosting-unknown-repo` warning at
+       * ingest, never a parse failure.
+       */
+      repo: z.string().min(1),
+      /** Top-level path to serve under; defaults to the repo slug. */
+      slug: Slug.optional(),
+      /**
+       * Branch to serve. Left unset, the first existing of `gh-pages`, `main`, `master`
+       * is used; a configured branch that does not exist is a `hosting-branch-missing`
+       * warning and the entry is dropped.
+       */
+      branch: z.string().min(1).optional(),
+    })).default([]),
+    /**
+     * Byte cap for files on a HOSTED branch, replacing `ingest.maxBlobBytes` there — a
+     * built site's bundles and images routinely exceed 512 KB, and an unstored file is a
+     * silent 404 on the hosted site. Hosting a repo's *default* branch raises that whole
+     * branch's stored-file cap (its blob pages then serve the bigger files too).
+     */
+    maxFileBytes: z.number().int().positive().default(20 * 1024 * 1024),
+  })
+    .superRefine((h, ctx) => {
+      // Structural mistakes are authoring errors, not repo state — fail the parse.
+      const seen = new Set<string>();
+      h.sites.forEach((site, i) => {
+        const slug = site.slug ?? site.repo;
+        if (RESERVED_HOSTING_SLUGS.has(slug)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['sites', i, 'slug'],
+            message: `hosted slug '${slug}' is a path the build itself owns (reserved: ${[...RESERVED_HOSTING_SLUGS].join(', ')})`,
+          });
+        }
+        if (seen.has(slug)) {
+          ctx.addIssue({ code: 'custom', path: ['sites', i, 'slug'], message: `hosted slug '${slug}' is used twice` });
+        }
+        seen.add(slug);
+        if (site.slug === undefined && !Slug.safeParse(site.repo).success) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['sites', i, 'repo'],
+            message: `'${site.repo}' is not usable as a path segment; set an explicit 'slug'`,
+          });
+        }
+      });
+    })
+    .prefault({}),
   ingest: z.object({
     outDir: z.string().min(1).default('./data'),
     maxBlobBytes: z.number().int().positive().default(512 * 1024),

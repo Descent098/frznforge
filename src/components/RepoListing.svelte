@@ -5,6 +5,7 @@
    */
   import { onMount } from 'svelte';
   import RepoCard from './RepoCard.svelte';
+  import { withBase } from '../lib/base';
   import { DEFAULT_HEAT, type HeatThresholds } from '../lib/format';
   import {
     applyListing,
@@ -33,7 +34,7 @@
      */
     basePath?: string;
   }
-  let { repos, pageSize, now, heatDays = DEFAULT_HEAT, initialSearch = '', basePath = '/repos/' }: Props = $props();
+  let { repos, pageSize, now, heatDays = DEFAULT_HEAT, initialSearch = '', basePath = withBase('/repos/') }: Props = $props();
 
   let query = $state<ListingQuery>(parseQuery(new URLSearchParams(initialSearch), pageSize));
   let hydrated = $state(false);

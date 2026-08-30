@@ -15,6 +15,7 @@ import {
   type Repo,
   type Warning,
 } from '../data/schema';
+import { resolveHosting } from './hosting';
 import { slugFor, slugify } from './meta';
 import { collectNotes } from './notes';
 import { resolveOrganizations, type OrgRepoInput } from './orgs';
@@ -39,6 +40,8 @@ export { ensureMirror, prepareRemote } from './remote';
 export type { EnsureMirrorOptions, EnsureMirrorResult, GitRunner, MirrorAction, PrepareRemoteDeps, PrepareRemoteOptions } from './remote';
 export { parseIngestArgs, readRunLog, runLogPathFor, scanCachePathFor, withinFreshWindow } from './reuse';
 export type { IngestArgs, RunLog, RunLogEntry } from './reuse';
+export { HOSTED_BRANCH_FALLBACKS, resolveHostedBranch, resolveHosting } from './hosting';
+export type { ResolveHostingResult } from './hosting';
 export { collectNotes } from './notes';
 export type { CollectNotesOptions, CollectNotesResult } from './notes';
 export { resolveOrganizations } from './orgs';
@@ -114,6 +117,7 @@ export async function ingest(
     branchTrees: config.ingest.branchTrees,
     archives: config.ingest.archives,
     insights: config.ingest.insights,
+    hostedMaxFileBytes: config.hosting.maxFileBytes,
   };
 
   // Cross-run reuse (`ingest.reuse`): reads are disabled by `--no-cache`, writes are not —
@@ -152,7 +156,17 @@ export async function ingest(
     // *final* slug (after collision renaming) without putting a site-config concern on `Repo`.
     const org = src.org ?? null;
 
-    let scanSource: ScanSource = { absPath: src.absPath, slug: src.slug, overrides: src.overrides };
+    // Hosting (schema v7): branches this repo must serve, matched on the pre-collision
+    // slug (the scan needs to know before renaming; a collision loser's forced trees are
+    // harmless, and the final binding happens post-rename in `resolveHosting`).
+    const hostedRequests = config.hosting.sites.filter((s) => s.repo === slug).map((s) => s.branch);
+
+    let scanSource: ScanSource = {
+      absPath: src.absPath,
+      slug: src.slug,
+      overrides: src.overrides,
+      ...(hostedRequests.length > 0 ? { hostedRequests } : {}),
+    };
     // Remote warnings are raised with `repo: null`; the slug is stamped on here so they read
     // the same as scanner warnings and follow the repo through a slug-collision rename.
     let remoteWarnings: Warning[] = [];
@@ -192,7 +206,7 @@ export async function ingest(
       remote = { slug, provider: src.type, action: prepared.action, skipped: !prepared.ready };
       hooks.onRemote?.(remote);
       if (!prepared.ready) return skipRemote(`no usable mirror for ${src.type} repo '${slug}'; repo skipped`);
-      scanSource = prepared.scanSource;
+      scanSource = { ...prepared.scanSource, ...(hostedRequests.length > 0 ? { hostedRequests } : {}) };
     }
 
     // Scan cache: replay the recorded result when every input is unchanged. The digest is
@@ -279,10 +293,15 @@ export async function ingest(
   const orgInputs: OrgRepoInput[] = scanned.map((s) => ({ slug: s.repo.slug, org: s.org }));
   const orgRes = resolveOrganizations(config, orgInputs);
 
+  // Hosting (schema v7): resolved against the final slugs, like organizations. Runs before
+  // the warning mirror below because it pushes repo-scoped warnings onto matched repos.
+  const hostingRes = resolveHosting(config, scanned.map((s) => s.repo));
+
   const blobs = new Map<string, Buffer>();
   const archives = new Map<string, Buffer>();
-  // Fixed warning order: site-level, then notes, then organizations, then per repo in slug order.
-  const warnings: Warning[] = [...siteWarnings, ...noteRes.warnings, ...orgRes.warnings];
+  // Fixed warning order: site-level, then notes, then organizations, then hosting, then
+  // per repo in slug order.
+  const warnings: Warning[] = [...siteWarnings, ...noteRes.warnings, ...orgRes.warnings, ...hostingRes.warnings];
   for (const { repo, blobs: b, archives: a } of scanned) {
     for (const w of repo.warnings) warnings.push({ ...w, repo: repo.slug });
     for (const [sha, buf] of b) blobs.set(sha, buf);
@@ -296,6 +315,7 @@ export async function ingest(
     repos: scanned.map((s) => s.repo),
     notes: noteRes.notes,
     organizations: orgRes.organizations,
+    hosting: hostingRes.hosting,
     warnings,
   };
 

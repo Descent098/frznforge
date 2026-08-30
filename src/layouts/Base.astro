@@ -9,6 +9,7 @@ import '../styles/repo.css';
 import IconSprite from '../components/IconSprite.astro';
 import Sidebar from '../components/Sidebar.astro';
 import CommandPalette from '../components/CommandPalette.svelte';
+import { withBase } from '../lib/base';
 import { getConfig, getData } from '../lib/site';
 
 interface Props {
@@ -31,8 +32,8 @@ const fullTitle = title === cfg.site.title ? title : `${title} · ${cfg.site.tit
     <meta name="color-scheme" content="light dark" />
     <title>{fullTitle}</title>
     {description && <meta name="description" content={description} />}
-    <link rel="icon" type="image/png" href="/logo.png" />
-    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" href={withBase('/logo.png')} />
+    <link rel="icon" href={withBase('/favicon.ico')} />
     <script is:inline>
       (function () {
         try {

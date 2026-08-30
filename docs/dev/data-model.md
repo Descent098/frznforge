@@ -7,7 +7,8 @@ files on disk) and resolves **organizations** (groupings of repos) into the same
 since schema v5 it computes per-repo **insights** (monthly commit, contributor and code-size
 series) from sampled commits. Since schema v6 it carries **display-support commits**
 (`Repo.extraCommits`) so the history-narrowing knobs cannot blank per-file or tag commit
-info.
+info, and since schema v7 it resolves **hosted static sites** (`ForgeData.hosting`) — a
+repo's branch served as a real site at `/<slug>/…`.
 Every page of the site is built from this artifact and nothing else — the site never talks to
 git and never talks to a forge.
 
@@ -135,7 +136,7 @@ never correctness.
   `notes` by date desc with undated notes last, then title, then slug (`compareNotes`);
   `Note.files` by path; `organizations` by slug; `Organization.repos` by slug.
 - Warnings are collected in a fixed order: site-level, then notes, then organizations, then
-  per repo in slug order.
+  hosting, then per repo in slug order.
 - Sampling is deterministic: the insights checkpoints (schema v5) are derived from the commit
   list, so a sampled series is as reproducible as an exhaustive one. See "Insights".
 - **One opt-out, and it is loud.** `notes.useMtime` lets an undated note take its date from
@@ -183,10 +184,11 @@ fields are declared in `ForgeData`, and the snapshot tests compare bytes.
 
 | field           | meaning                                                                          |
 | --------------- | -------------------------------------------------------------------------------- |
-| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `6`). The site refuses artifacts of another version. |
+| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `7`). The site refuses artifacts of another version. |
 | `repos`         | `Repo[]`, sorted by slug.                                                        |
 | `notes`         | `Note[]` (schema v4), date desc / undated last / title asc — see "Notes".         |
 | `organizations` | `Organization[]` (schema v4), sorted by slug — see "Organizations".               |
+| `hosting`       | `HostedSite[]` (schema v7), sorted by slug — see "Hosted static sites".           |
 | `warnings`      | `Warning[]` — site-level warnings plus a mirror of every repo's own warnings (with `repo` set). |
 
 ## `Repo`
@@ -286,7 +288,7 @@ Tags that point at trees or blobs (not commits) are not representable and are sk
 | `size`     | Bytes.                                                                        |
 | `binary`   | A NUL byte occurs in the first 8000 bytes (git's heuristic).                  |
 | `tooLarge` | `size > ingest.maxBlobBytes`; content not stored.                             |
-| `stored`   | `size <= ingest.maxBlobBytes` — content written to `blobs/<sha>`. Since schema v2 this **includes binary files** within the cap (for raw file serving / image previews); before v2 binaries were never stored. |
+| `stored`   | `size <= ingest.maxBlobBytes` — content written to `blobs/<sha>`. Since schema v2 this **includes binary files** within the cap (for raw file serving / image previews); before v2 binaries were never stored. On a HOSTED ref (schema v7) the cap is `hosting.maxFileBytes` instead. |
 | `language` | Language name from the extension/filename map (`src/lib/ingest/languages.ts`) or `null`. |
 
 ### `RefTree` (schema v2)
@@ -490,6 +492,9 @@ annotated-tag derivation, newest first either way. `SiteRelease.source` (`'provi
 | `repo-path-unservable`     | repo  | A committed path (or a ref name) contains `#` or `%`, which no static URL can round-trip — same cause as `note-file-unservable`. The path is still ingested and still listed in the file table, but gets no `tree`/`blob`/`raw` route and is rendered unlinked. A ref whose name is affected loses the whole ref's file routes. |
 | `org-unknown-repo`          | site  | An `organizations[].repos` entry names a slug no ingested repo has (typo, or the repo was removed/skipped). The entry is dropped from `Organization.repos`. |
 | `repo-unknown-org`          | repo  | A repo source declares `org: '<slug>'` that is not in `organizations[]`. The repo joins no org. `repo` holds the repo's slug. |
+| `hosting-unknown-repo`      | site  | A `hosting.sites` entry names a repo slug no ingested repo has; the site is not served (schema v7). |
+| `hosting-branch-missing`    | repo  | A hosted repo has no branch to serve — the configured branch does not exist, or none of `gh-pages`/`main`/`master` do; the site is not served (schema v7). |
+| `hosting-file-unservable`   | repo  | A hosted branch holds files whose paths contain `#` or `%`; they are missing from the hosted site (schema v7 — the `repo-path-unservable` rule, where a missing file usually means a broken page). |
 
 ### Path encoding in repo routes
 
@@ -633,6 +638,41 @@ still gets a page, built from config plus its member repos.
 repo listing scoped to the org, reusing the Phase 2 listing island). Derived by
 `orgRoutes(data)` in `src/lib/routes.ts`.
 
+## Hosted static sites (schema v7)
+
+A repo's branch served as a real site at `/<slug>/…` — the classic case is a `gh-pages`
+branch holding a built site — while the normal forge view stays at `/repos/<slug>/`.
+Configured as `hosting.sites` (`{ repo, slug?, branch? }`); structural mistakes (a reserved
+or duplicate slug, a slug colliding with a `public/` file) are hard errors, dangling
+references are warnings (`hosting-unknown-repo`, `hosting-branch-missing`), matching the
+organizations rules.
+
+### `HostedSite`
+
+| field  | meaning                                                                              |
+| ------ | ------------------------------------------------------------------------------------ |
+| `slug` | Top-level path segment the site serves under (defaults to the repo slug in config).   |
+| `repo` | Final slug (post collision-rename) of the repo whose files are served.                |
+| `ref`  | The RESOLVED branch: the configured one, else the first existing of `gh-pages`, `main`, `master`. |
+
+Resolution happens at ingest — like organizations, against the slugs that actually reached
+the artifact — and the resolved record is stored so the site build and the sync tests
+consume the same answer. Two ingest-side consequences:
+
+- a hosted branch **always gets a browsable tree**, exempt from the `ingest.branchTrees`
+  cap (a dormant `gh-pages` is exactly the branch the recency cap would drop);
+- its tree is scanned with the `hosting.maxFileBytes` cap (default 20 MiB) instead of
+  `ingest.maxBlobBytes` — a built site's bundles routinely exceed the blob cap, and an
+  unstored file is a silent 404 on the hosted site. This **changes what `FileInfo.stored`
+  means on a hosted ref** (part of the v7 bump); hosting a repo's *default* branch raises
+  that whole branch's stored-file cap, blob pages included.
+
+Every stored, servable file is emitted at its literal path under `/<slug>/…`
+(`hostedFiles()` in `src/lib/routes.ts`, folded into `allRoutes()`), so `/<slug>/` works
+through the directory-index resolution every static host already does. Paths holding
+`#`/`%` cannot be served (`hosting-file-unservable`). Hosted files multiply page count
+exactly like the `branchTrees` lever — `npm run measure` reports them as their own line.
+
 ## Per-repo metadata: `.frznforge.json`
 
 Read from the default branch's HEAD tree (`<branch>:.frznforge.json`), never from disk.
@@ -641,6 +681,14 @@ releaseMode? }`. The site config's `overrides` for that repo win field-by-field.
 
 ## Version history
 
+- **v7** — hosted static sites: `ForgeData.hosting` (`HostedSite[]` — `{ slug, repo, ref }`,
+  declared after `organizations` and before `warnings`) records each `hosting.sites` entry
+  resolved against the final repos; new warnings `hosting-unknown-repo`,
+  `hosting-branch-missing`, `hosting-file-unservable`; new config `hosting.sites` and
+  `hosting.maxFileBytes`. Beyond the new field, the bump also covers a semantics change:
+  on a hosted ref, `FileInfo.stored` is governed by `hosting.maxFileBytes` (default
+  20 MiB) rather than `ingest.maxBlobBytes`, and a hosted branch is exempt from the
+  `ingest.branchTrees` cap.
 - **v6** — display-support commits: `Repo.extraCommits` (`Record<sha, Commit>`, declared
   after `commitCount`) holds per-path `lastCommit` targets and tag targets that fall
   outside `commits` — dropped by `ingest.maxCommits` / `ingest.maxCommitAgeDays` (0.2.0),

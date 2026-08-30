@@ -645,25 +645,6 @@ export interface RepoEntry {
 const ENTRY_KEY_ORDER = ['type', 'host', 'owner', 'repo', 'project', 'slug', 'releases'] as const;
 
 /**
- * Single-quoted JS string literal, matching the style of frznforge.config.ts.
- *
- * Line terminators matter as much as quotes here: a raw `\n` inside `'…'` is a syntax error in
- * JS/TS, so a repo name with a newline in it would leave the user's config unparseable — the
- * damage is not injection (the quote escaping holds) but a config that no longer builds.
- * U+2028/U+2029 terminate a line for older parsers, so they go too.
- */
-function quote(value: string): string {
-  const escaped = value
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
-  return `'${escaped}'`;
-}
-
-/**
  * The characters a name, owner, project or slug may contain before it is written into the
  * config. A superset of what GitHub, GitLab, Gitea and Forgejo actually allow in a path, so a
  * value that fails this came from a hostile or broken API response rather than a real repo.
@@ -784,178 +765,12 @@ export function entriesFor(
 
 /* ------------------------------------------------------------------ config editing */
 
-/** Walk `text` from `open` (an opening bracket) to its match, skipping strings and comments. */
-function matchBracket(text: string, open: number): number {
-  const pairs: Record<string, string> = { '[': ']', '{': '}', '(': ')' };
-  const closer = pairs[text[open]!];
-  if (!closer) return -1;
-  let depth = 0;
-  for (let i = open; i < text.length; i += 1) {
-    const ch = text[i]!;
-    const next = text[i + 1];
-    if (ch === '/' && next === '/') {
-      const nl = text.indexOf('\n', i);
-      i = nl === -1 ? text.length : nl;
-      continue;
-    }
-    if (ch === '/' && next === '*') {
-      const end = text.indexOf('*/', i + 2);
-      i = end === -1 ? text.length : end + 1;
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === '`') {
-      for (let j = i + 1; j < text.length; j += 1) {
-        if (text[j] === '\\') {
-          j += 1;
-          continue;
-        }
-        if (text[j] === ch) {
-          i = j;
-          break;
-        }
-        if (j === text.length - 1) i = j;
-      }
-      continue;
-    }
-    if (ch === '[' || ch === '{' || ch === '(') depth += 1;
-    else if (ch === ']' || ch === '}' || ch === ')') {
-      depth -= 1;
-      if (depth === 0) return ch === closer ? i : -1;
-    }
-  }
-  return -1;
-}
+// `quote` and the source walkers moved to ./lib/config-edit (0.2.0) so the wizard's
+// field editors and the repo splicer here share one implementation; re-exported so
+// existing importers keep working.
+import { lastMeaningfulIndex, matchBracket, quote, readField, stripComments, topLevelItems } from './lib/config-edit';
+export { quote, stripComments };
 
-/** Index of the last character in `body` that is neither whitespace nor part of a comment. */
-function lastMeaningfulIndex(body: string): number {
-  let last = -1;
-  for (let i = 0; i < body.length; i += 1) {
-    const ch = body[i]!;
-    const next = body[i + 1];
-    if (ch === '/' && next === '/') {
-      const nl = body.indexOf('\n', i);
-      i = nl === -1 ? body.length : nl;
-      continue;
-    }
-    if (ch === '/' && next === '*') {
-      const end = body.indexOf('*/', i + 2);
-      i = end === -1 ? body.length : end + 1;
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === '`') {
-      for (let j = i + 1; j < body.length; j += 1) {
-        if (body[j] === '\\') {
-          j += 1;
-          continue;
-        }
-        if (body[j] === ch) {
-          i = j;
-          break;
-        }
-        if (j === body.length - 1) i = j;
-      }
-      last = i;
-      continue;
-    }
-    if (!/\s/.test(ch)) last = i;
-  }
-  return last;
-}
-
-/** Split an array body into its top-level elements (used to read the entries already there). */
-function topLevelItems(body: string): string[] {
-  const items: string[] = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < body.length; i += 1) {
-    const ch = body[i]!;
-    const next = body[i + 1];
-    if (ch === '/' && next === '/') {
-      const nl = body.indexOf('\n', i);
-      i = nl === -1 ? body.length : nl;
-      continue;
-    }
-    if (ch === '/' && next === '*') {
-      const end = body.indexOf('*/', i + 2);
-      i = end === -1 ? body.length : end + 1;
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === '`') {
-      for (let j = i + 1; j < body.length; j += 1) {
-        if (body[j] === '\\') {
-          j += 1;
-          continue;
-        }
-        if (body[j] === ch) {
-          i = j;
-          break;
-        }
-        if (j === body.length - 1) i = j;
-      }
-      continue;
-    }
-    if (ch === '[' || ch === '{' || ch === '(') depth += 1;
-    else if (ch === ']' || ch === '}' || ch === ')') depth -= 1;
-    else if (ch === ',' && depth === 0) {
-      items.push(body.slice(start, i));
-      start = i + 1;
-    }
-  }
-  items.push(body.slice(start));
-  return items.filter((s) => s.trim() !== '');
-}
-
-/**
- * Strip line and block comments out of one array element, leaving string literals intact.
- *
- * `topLevelItems` skips comments when it looks for separators, but the slice it hands back
- * still contains them — and `readField` takes the *first* match, so a commented-out entry
- * sitting above a real one is read instead of the real one. That makes `init` skip a repo
- * that is only mentioned in a comment, or add a duplicate of one that is really there.
- * frznforge.config.ts ships with comments inside `repos: [ … ]`, so this is the normal case.
- */
-export function stripComments(text: string): string {
-  let out = '';
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i]!;
-    const next = text[i + 1];
-    if (ch === '/' && next === '/') {
-      const nl = text.indexOf('\n', i);
-      if (nl === -1) return out;
-      out += '\n';
-      i = nl;
-      continue;
-    }
-    if (ch === '/' && next === '*') {
-      const end = text.indexOf('*/', i + 2);
-      if (end === -1) return out;
-      out += ' ';
-      i = end + 1;
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === '`') {
-      let j = i + 1;
-      for (; j < text.length; j += 1) {
-        if (text[j] === '\\') {
-          j += 1;
-          continue;
-        }
-        if (text[j] === ch) break;
-      }
-      out += text.slice(i, Math.min(j, text.length - 1) + 1);
-      i = j;
-      continue;
-    }
-    out += ch;
-  }
-  return out;
-}
-
-/** Pull `key: 'value'` (single or double quoted) out of one array element's source text. */
-function readField(item: string, key: string): string | undefined {
-  const m = new RegExp(`\\b${key}\\s*:\\s*(['"\`])([^'"\`]*)\\1`).exec(item);
-  return m ? m[2] : undefined;
-}
 
 /** Identity keys of the remote sources already present in an array body. */
 function existingKeys(body: string): Set<string> {
@@ -1053,7 +868,7 @@ export interface WriteResult extends InsertResult {
  * name the same file and the second would overwrite the first — losing the only copy of the
  * pre-write state. `wx` makes the collision visible and a counter steps around it.
  */
-async function writeBackup(file: string, source: string, now: Date): Promise<string> {
+export async function writeBackup(file: string, source: string, now: Date): Promise<string> {
   const base = backupPathFor(file, now);
   for (let n = 0; ; n += 1) {
     const candidate = n === 0 ? base : `${base}.${n}`;

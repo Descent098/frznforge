@@ -167,6 +167,60 @@ async function writeConfig(): Promise<string> {
   return file;
 }
 
+/**
+ * A config the settings endpoints can actually *load*: `FIXTURE_CONFIG` imports
+ * `./src/lib/config/schema`, which resolves nowhere from a temp dir, so it doubles as the
+ * "unreadable config" fixture. This one defines `defineConfig` inline — the engine only needs
+ * the token, and the import needs no resolution at all.
+ */
+const EDITABLE_CONFIG = `// hand-written config, full of comments worth keeping
+function defineConfig(c: unknown) { return c; }
+
+export default defineConfig({
+  site: {
+    title: 'My Forge', // shown in the sidebar
+  },
+  owner: { name: 'Kieran Wood', handle: 'kieran' },
+  repos: [
+    { type: 'local', path: '.', slug: 'frznforge' },
+    { type: 'github', owner: 'me', repo: 'old' },
+  ],
+  organizations: [
+    { slug: 'cc', name: 'Canadian Coding' },
+  ],
+  hosting: {
+    sites: [
+      { repo: 'frznforge', branch: 'gh-pages' },
+    ],
+  },
+  ingest: {
+    maxBlobBytes: 512 * 1024, // half a meg, kept as an expression
+    outDir: './data', // keep this comment
+  },
+});
+`;
+
+async function writeEditableConfig(): Promise<string> {
+  const file = path.join(tmp, 'frznforge.config.ts');
+  await fs.writeFile(file, EDITABLE_CONFIG, 'utf8');
+  return file;
+}
+
+/**
+ * A config that *loads* but does not survive the schema — the deterministic way to exercise
+ * the unreadable-config paths. (An unresolvable import is environment-dependent: vitest's
+ * resolver finds `./src/...` from anywhere inside the project, tsx does not.)
+ */
+const BROKEN_CONFIG = `function defineConfig(c: unknown) { return c; }
+export default defineConfig({ owner: { name: '', handle: 'Not A Slug!' } });
+`;
+
+async function writeBrokenConfig(): Promise<string> {
+  const file = path.join(tmp, 'frznforge.config.ts');
+  await fs.writeFile(file, BROKEN_CONFIG, 'utf8');
+  return file;
+}
+
 const SELECT_ALL = { provider: 'github', host: 'https://api.github.com', account: 'me', releases: 'provider', select: ['me/ezcv', 'me/sdu', 'me/attic'] };
 
 /* ------------------------------------------------------------------ guards */
@@ -384,6 +438,7 @@ describe('/api/write', () => {
     expect(again!.changed).toBe(false);
     expect(again!.text).toBe(written);
 
+    await post(run, '/api/done', {});
     expect(await run.exit).toBe(0);
   });
 
@@ -397,6 +452,7 @@ describe('/api/write', () => {
     expect(await fs.readFile(file, 'utf8')).toContain(
       "{ type: 'forgejo', host: 'https://codeberg.org', owner: 'me', repo: 'tool', releases: 'tags' },",
     );
+    await post(run, '/api/done', {});
     expect(await run.exit).toBe(0);
   });
 
@@ -414,6 +470,7 @@ describe('/api/write', () => {
     expect((await res.json() as { configPath: string }).configPath).toBe(file);
     expect(await fs.readFile(decoy, 'utf8')).toBe(FIXTURE_CONFIG);
     expect(await fs.readFile(file, 'utf8')).toContain("repo: 'ezcv'");
+    await post(run, '/api/done', {});
     expect(await run.exit).toBe(0);
   });
 
@@ -433,6 +490,7 @@ describe('/api/write', () => {
 
     const first = await start();
     expect((await post(first, '/api/write', { entries })).status).toBe(200);
+    await post(first, '/api/done', {});
     expect(await first.exit).toBe(0);
     const afterFirst = await fs.readFile(file, 'utf8');
 
@@ -440,6 +498,7 @@ describe('/api/write', () => {
     const res = await post(second, '/api/write', { entries });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ added: 0, skipped: 1, changed: false, backup: null });
+    await post(second, '/api/done', {});
     expect(await second.exit).toBe(0);
 
     const afterSecond = await fs.readFile(file, 'utf8');
@@ -447,11 +506,17 @@ describe('/api/write', () => {
     expect(afterSecond.split("repo: 'ezcv'").length - 1).toBe(1);
   });
 
-  it('stops the server once the write is answered', async () => {
+  it('keeps the session up after a write; /api/done is what stops it', async () => {
     await writeConfig();
     const run = await start();
     expect((await post(run, '/api/write', { entries: [{ type: 'github', owner: 'me', repo: 'ezcv' }] })).status).toBe(200);
+    // Multi-write session (0.2.0): a write no longer ends the run.
+    expect((await get(run, '/api/context')).status).toBe(200);
+    const done = await post(run, '/api/done', {});
+    expect(done.status).toBe(200);
+    expect(await done.json()).toMatchObject({ done: true, writes: 1 });
     expect(await run.exit).toBe(0);
+    expect(run.out.join('\n')).toContain('Done — 1 write');
     await expect(get(run, '/api/context')).rejects.toThrow();
   });
 });
@@ -488,6 +553,13 @@ describe('the provider token', () => {
     seen.push(await fullText(await post(run, '/api/nope', {})));
     seen.push(await fullText(await get(run, '/api/context', 'wrong')));
     seen.push(await fullText(await post(run, '/api/write', { entries: [{ type: 'github', owner: 'me', repo: 'ezcv' }] })));
+    // The 0.2.0 editor endpoints — including their failure answers, which carry import errors.
+    seen.push(await fullText(await get(run, '/api/config')));
+    seen.push(await fullText(await get(run, '/api/profile')));
+    seen.push(await fullText(await post(run, '/api/config/write', { operations: [{ op: 'set', path: 'site.title', value: 'X' }] })));
+    seen.push(await fullText(await post(run, '/api/profile/preview', { body: '# hi' })));
+    seen.push(await fullText(await post(run, '/api/profile/write', { body: '# hi' })));
+    seen.push(await fullText(await post(run, '/api/done', {})));
     expect(await run.exit).toBe(0);
 
     for (const text of seen) expect(text).not.toContain(SENTINEL_TOKEN);
@@ -616,10 +688,11 @@ describe('payloads that could corrupt the config', () => {
 /* ------------------------------------------------------------------ concurrency */
 
 describe('/api/write under two tabs', () => {
-  it('answers one write and refuses the rest instead of losing them silently', async () => {
+  it('serialises concurrent writes: every entry lands, under one session backup', async () => {
     // Nothing binds the session to one tab: the URL is printed, and `openBrowser` may already
     // have opened one. Six unserialized read-modify-writes all reported "added 1" while only
-    // the last entry survived.
+    // the last entry survived. The write queue makes each read see the previous write, and
+    // the session keeps ONE .bak of the pre-wizard file however many writes follow.
     const file = await writeConfig();
     const run = await start();
     const numbers = [1, 2, 3, 4, 5, 6];
@@ -629,20 +702,422 @@ describe('/api/write under two tabs', () => {
         return { status: res.status, body: (await res.json()) as { added?: number; error?: string } };
       }),
     );
-    expect(results.filter((r) => r.status === 200)).toHaveLength(1);
-    for (const rejected of results.filter((r) => r.status !== 200)) {
-      expect(rejected.status).toBe(409);
-      expect(rejected.body.error).toMatch(/already (in progress|been written)/);
+    for (const r of results) {
+      expect(r.status).toBe(200);
+      expect(r.body.added).toBe(1);
     }
 
     const written = await fs.readFile(file, 'utf8');
-    const added = numbers.filter((n) => written.includes(`repo${n}`));
-    expect(added).toHaveLength(1);
-    // Exactly one backup, and it is the pre-write file rather than another writer's output.
+    for (const n of numbers) expect(written).toContain(`repo${n}`);
+    // Exactly one backup, and it is the pre-wizard file rather than any writer's output.
     const backups = (await fs.readdir(tmp)).filter((f) => f.endsWith('.bak'));
     expect(backups).toHaveLength(1);
     expect(await fs.readFile(path.join(tmp, backups[0]!), 'utf8')).toBe(FIXTURE_CONFIG);
 
+    const done = await post(run, '/api/done', {});
+    expect(await done.json()).toMatchObject({ writes: 6 });
     expect(await run.exit).toBe(0);
+  });
+});
+
+/* ------------------------------------------------------------------ the whole-config editor (0.2.0) */
+
+describe('/api/config', () => {
+  it("reports the file's own values, its raw sources, and the schema defaults", async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    const body = await cleanJson<{
+      configPath: string;
+      readable: boolean;
+      current: Record<string, any>;
+      defaults: Record<string, any>;
+      sources: Array<Record<string, string>>;
+      palettes: string[];
+    }>(await get(run, '/api/config'));
+    expect(body.configPath).toBe(file);
+    expect(body.readable).toBe(true);
+    expect(body.current.site.title).toBe('My Forge');
+    expect(body.current.owner.name).toBe('Kieran Wood');
+    expect(body.current.theme.palette).toBe('hearth'); // default applied by the schema
+    expect(body.current.ingest.maxBlobBytes).toBe(512 * 1024); // the expression, evaluated
+    expect(body.current.hosting.sites).toEqual([{ repo: 'frznforge', branch: 'gh-pages' }]);
+    expect(body.defaults.listing.pageSize).toBe(50);
+    expect(body.palettes).toEqual(['hearth', 'frost']);
+    // Raw string fields as the file wrote them — what a remove has to match against.
+    expect(body.sources).toEqual([
+      { type: 'local', path: '.', slug: 'frznforge' },
+      { type: 'github', owner: 'me', repo: 'old' },
+    ]);
+    await post(run, '/api/cancel', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('says so when the config cannot be loaded, and never pretends', async () => {
+    await writeBrokenConfig();
+    const run = await start();
+    const body = await cleanJson<{ readable: boolean; current: unknown; issues: string[] }>(await get(run, '/api/config'));
+    expect(body.readable).toBe(false);
+    expect(body.current).toBe(null);
+    expect(body.issues.join('; ')).toContain('owner.');
+    await post(run, '/api/cancel', {});
+    expect(await run.exit).toBe(0);
+  });
+});
+
+describe('/api/config/write', () => {
+  it('edits exactly the named fields and keeps every comment and expression', async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    const res = await post(run, '/api/config/write', {
+      operations: [
+        { op: 'set', path: 'site.title', value: 'New Name' },
+        { op: 'set', path: 'theme.heat.hot', value: 3 },
+        { op: 'set', path: 'ingest.maxCommits', value: 200 },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const body = await cleanJson<{ changed: boolean; backup: string }>(res);
+    expect(body.changed).toBe(true);
+
+    const written = await fs.readFile(file, 'utf8');
+    expect(written).toContain("title: 'New Name', // shown in the sidebar");
+    expect(written).toContain('512 * 1024, // half a meg, kept as an expression');
+    expect(written).toContain("outDir: './data', // keep this comment");
+    expect(written).toContain('theme: { heat: { hot: 3 } }'); // missing chain created
+    expect(written).toContain('maxCommits: 200');
+    expect(await fs.readFile(body.backup, 'utf8')).toBe(EDITABLE_CONFIG);
+
+    // The written file still loads — the next read reflects the change.
+    const cfg = (await (await get(run, '/api/config')).json()) as { current: { site: { title: string } } };
+    expect(cfg.current.site.title).toBe('New Name');
+
+    await post(run, '/api/done', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('takes one backup per file per session, however many saves', async () => {
+    await writeEditableConfig();
+    const run = await start();
+    expect((await post(run, '/api/config/write', { operations: [{ op: 'set', path: 'site.title', value: 'A' }] })).status).toBe(200);
+    expect((await post(run, '/api/config/write', { operations: [{ op: 'set', path: 'site.title', value: 'B' }] })).status).toBe(200);
+    const backups = (await fs.readdir(tmp)).filter((f) => f.endsWith('.bak'));
+    expect(backups).toHaveLength(1);
+    // The backup is the PRE-WIZARD file, not the intermediate state.
+    expect(await fs.readFile(path.join(tmp, backups[0]!), 'utf8')).toBe(EDITABLE_CONFIG);
+    const done = await post(run, '/api/done', {});
+    expect(await done.json()).toMatchObject({ writes: 2 });
+    expect(await run.exit).toBe(0);
+    expect(run.out.join('\n')).toContain('Done — 2 writes');
+  });
+
+  it('refuses a change the schema refuses, leaving the file untouched', async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    // hot=400 breaks "strictly ascending" against the default warm=30.
+    const res = await post(run, '/api/config/write', { operations: [{ op: 'set', path: 'theme.heat.hot', value: 400 }] });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain('ascending');
+    expect(await fs.readFile(file, 'utf8')).toBe(EDITABLE_CONFIG);
+    expect((await fs.readdir(tmp)).filter((f) => f.endsWith('.bak'))).toHaveLength(0);
+    await post(run, '/api/cancel', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('refuses every path off the allow-list', async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    for (const operations of [
+      [{ op: 'set', path: 'repos.0.type', value: 'github' }],
+      [{ op: 'set', path: '__proto__.polluted', value: true }],
+      [{ op: 'set', path: 'constructor', value: 'x' }],
+      [{ op: 'add', path: 'repos', item: { type: 'github' } }],
+      [{ op: 'removeAt', path: 'nope', index: 0, expect: {} }],
+      [{ op: 'removeAt', path: 'organizations', index: -1, expect: {} }],
+      [{ op: 'removeAt', path: 'organizations', index: 'x', expect: {} }],
+      [{ op: 'removeAt', path: 'repos', index: 0, expect: { releases: 'provider' } }],
+    ]) {
+      const res = await post(run, '/api/config/write', { operations });
+      expect(res.status).toBe(400);
+    }
+    expect(await fs.readFile(file, 'utf8')).toBe(EDITABLE_CONFIG);
+    await post(run, '/api/cancel', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('adds and removes organizations and hosted sites', async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    const add = await post(run, '/api/config/write', {
+      operations: [
+        { op: 'add', path: 'organizations', item: { slug: 'new-org', name: 'New Org' } },
+        { op: 'add', path: 'hosting.sites', item: { repo: 'frznforge', slug: 'docs' } },
+      ],
+    });
+    expect(add.status).toBe(200);
+    let written = await fs.readFile(file, 'utf8');
+    expect(written).toContain("{ slug: 'new-org', name: 'New Org' },");
+    expect(written).toContain("{ repo: 'frznforge', slug: 'docs' },");
+    expect(written).toContain("{ slug: 'cc', name: 'Canadian Coding' },"); // neighbour untouched
+
+    // cc is index 0 (new-org was appended after it).
+    const remove = await post(run, '/api/config/write', {
+      operations: [{ op: 'removeAt', path: 'organizations', index: 0, expect: { slug: 'cc' } }],
+    });
+    expect(remove.status).toBe(200);
+    written = await fs.readFile(file, 'utf8');
+    expect(written).not.toContain('Canadian Coding');
+    expect(written).toContain("{ slug: 'new-org', name: 'New Org' },");
+
+    await post(run, '/api/done', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('removes only the intended row when a slug-less hosted site shares its repo', async () => {
+    // The subset-match trap: [{ repo }, { repo, slug }] — a content match on { repo } would
+    // delete both. Positional removal deletes exactly the row the page pointed at.
+    const config = `function defineConfig(c) { return c; }
+export default defineConfig({
+  owner: { name: 'K', handle: 'k' },
+  repos: [{ type: 'local', path: '.', slug: 'docs' }],
+  hosting: {
+    sites: [
+      { repo: 'docs' },
+      { repo: 'docs', slug: 'documentation', branch: 'docs' },
+    ],
+  },
+});
+`;
+    const file = path.join(tmp, 'frznforge.config.ts');
+    await fs.writeFile(file, config, 'utf8');
+    const run = await start();
+    // Remove the slug-less row (index 0).
+    const res = await post(run, '/api/config/write', {
+      operations: [{ op: 'removeAt', path: 'hosting.sites', index: 0, expect: { repo: 'docs' } }],
+    });
+    expect(res.status).toBe(200);
+    const written = await fs.readFile(file, 'utf8');
+    expect(written).not.toContain('{ repo: \'docs\' },'); // the slug-less one is gone
+    expect(written).toContain("{ repo: 'docs', slug: 'documentation', branch: 'docs' },"); // the other stays
+    await post(run, '/api/done', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('rolls back an edit that cannot be applied faithfully (defineConfig in a comment)', async () => {
+    // The real defineConfig is below a commented-out one; the schema pre-check passes on the
+    // clone, but the textual edit must not silently corrupt the comment — the post-write
+    // equality check re-loads and rolls back.
+    const config = `function defineConfig(c) { return c; }
+// old: export default defineConfig({ site: { title: 'OLD' } })
+export default defineConfig({
+  site: { title: 'Real' },
+  owner: { name: 'K', handle: 'k' },
+});
+`;
+    const file = path.join(tmp, 'frznforge.config.ts');
+    await fs.writeFile(file, config, 'utf8');
+    const run = await start();
+    const res = await post(run, '/api/config/write', {
+      operations: [{ op: 'set', path: 'site.title', value: 'New' }],
+    });
+    // The comment-aware walker finds the real call, so this actually SUCCEEDS and edits the
+    // real title — proving findRootObject skips the commented one.
+    expect(res.status).toBe(200);
+    const written = await fs.readFile(file, 'utf8');
+    expect(written).toContain("title: 'New'");
+    expect(written).toContain("title: 'OLD'"); // the comment is untouched
+    await post(run, '/api/done', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('refuses an addition the schema refuses: a reserved hosting slug', async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    const res = await post(run, '/api/config/write', {
+      operations: [{ op: 'add', path: 'hosting.sites', item: { repo: 'frznforge', slug: 'repos' } }],
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain('reserved');
+    expect(await fs.readFile(file, 'utf8')).toBe(EDITABLE_CONFIG);
+    await post(run, '/api/cancel', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('removes a repos entry by its own raw fields', async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    const res = await post(run, '/api/config/write', {
+      operations: [{ op: 'removeAt', path: 'repos', index: 1, expect: { type: 'github', owner: 'me', repo: 'old' } }],
+    });
+    expect(res.status).toBe(200);
+    const written = await fs.readFile(file, 'utf8');
+    expect(written).not.toContain("repo: 'old'");
+    expect(written).toContain("{ type: 'local', path: '.', slug: 'frznforge' },");
+    const cfg = (await (await get(run, '/api/config')).json()) as { sources: unknown[] };
+    expect(cfg.sources).toEqual([{ type: 'local', path: '.', slug: 'frznforge' }]);
+    await post(run, '/api/done', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('rolls back when the textual edit cannot follow the file (a quoted key it would duplicate)', async () => {
+    // A quoted key is invisible to the field walker, which would append a duplicate `site: {…}`
+    // that drops the original block. The schema pre-check passes on the clone, but the post-write
+    // equality check re-loads the file, sees it does not match the intended config, and restores.
+    const config = `function defineConfig(c) { return c; }
+export default defineConfig({
+  'site': { title: 'Quoted', url: 'https://example.com' },
+  owner: { name: 'K', handle: 'k' },
+});
+`;
+    const file = path.join(tmp, 'frznforge.config.ts');
+    await fs.writeFile(file, config, 'utf8');
+    const run = await start();
+    const res = await post(run, '/api/config/write', {
+      operations: [{ op: 'set', path: 'site.title', value: 'New' }],
+    });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toMatch(/did not change the config the way it should/);
+    // The file is exactly as it was — no duplicate site block, url intact.
+    expect(await fs.readFile(file, 'utf8')).toBe(config);
+    await post(run, '/api/cancel', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('refuses to edit a config that does not load', async () => {
+    const file = await writeBrokenConfig();
+    const run = await start();
+    const res = await post(run, '/api/config/write', { operations: [{ op: 'set', path: 'site.title', value: 'X' }] });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toContain('does not load cleanly');
+    expect(await fs.readFile(file, 'utf8')).toBe(BROKEN_CONFIG);
+    await post(run, '/api/cancel', {});
+    expect(await run.exit).toBe(0);
+  });
+});
+
+describe('/api/profile', () => {
+  const PROFILE = '---\r\ntitle: Me\r\nkind: profile\r\n---\r\n# Hi\r\n\r\nold body\r\n';
+
+  async function writeProfile(): Promise<string> {
+    const file = path.join(tmp, 'content', 'profile.md');
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, PROFILE, 'utf8');
+    return file;
+  }
+
+  it('reads and writes the body while the frontmatter block keeps its exact bytes', async () => {
+    await writeEditableConfig();
+    const file = await writeProfile();
+    const run = await start();
+
+    const got = await cleanJson<{ available: boolean; exists: boolean; path: string; frontmatter: string; body: string }>(
+      await get(run, '/api/profile'),
+    );
+    expect(got.available).toBe(true);
+    expect(got.exists).toBe(true);
+    expect(got.path).toBe(file);
+    // CRLF and all — the block is bytes, not parsed YAML.
+    expect(got.frontmatter).toBe('---\r\ntitle: Me\r\nkind: profile\r\n---\r\n');
+    expect(got.body).toBe('# Hi\r\n\r\nold body\r\n');
+
+    const res = await post(run, '/api/profile/write', { body: '# New\n\nfresh body\n' });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as object).toMatchObject({ changed: true, path: file });
+    expect(await fs.readFile(file, 'utf8')).toBe('---\r\ntitle: Me\r\nkind: profile\r\n---\r\n# New\n\nfresh body\n');
+
+    await post(run, '/api/done', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('creates a missing profile file (and its folder) on first save', async () => {
+    await writeEditableConfig();
+    const run = await start();
+    const before = await cleanJson<{ exists: boolean; body: string }>(await get(run, '/api/profile'));
+    expect(before.exists).toBe(false);
+    expect(before.body).toBe('');
+
+    const res = await post(run, '/api/profile/write', { body: '# Hello\n' });
+    expect(res.status).toBe(200);
+    expect(await fs.readFile(path.join(tmp, 'content', 'profile.md'), 'utf8')).toBe('# Hello\n');
+
+    await post(run, '/api/done', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('previews with the trusted renderer, mermaid fences staying code blocks', async () => {
+    await writeEditableConfig();
+    const run = await start();
+    const body = await cleanJson<{ html: string }>(
+      await post(run, '/api/profile/preview', { body: '# Hello\n\n```mermaid\ngraph TD;\n```\n' }),
+    );
+    // The site's renderer demotes `#` one level (pages already carry their own <h1>).
+    expect(body.html).toContain('<h2>Hello</h2>');
+    expect(body.html).not.toContain('hf-mermaid'); // no diagram bundle on the wizard page
+    expect(body.html).toContain('graph TD;');
+    await post(run, '/api/cancel', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('refuses a body with a NUL byte', async () => {
+    await writeEditableConfig();
+    const run = await start();
+    const res = await post(run, '/api/profile/write', { body: 'a\u0000b' });
+    expect(res.status).toBe(400);
+    await post(run, '/api/cancel', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('keeps the terminator on its own line when the frontmatter ends at EOF with no newline', async () => {
+    await writeEditableConfig();
+    const file = path.join(tmp, 'content', 'profile.md');
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, '---\ntitle: Me\n---', 'utf8'); // closing --- is the last line, no newline
+    const run = await start();
+    const res = await post(run, '/api/profile/write', { body: '# Hello\n' });
+    expect(res.status).toBe(200);
+    // A separating newline is inserted so the block is not fused into '---# Hello'.
+    expect(await fs.readFile(file, 'utf8')).toBe('---\ntitle: Me\n---\n# Hello\n');
+    await post(run, '/api/done', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('does not back up a wizard-created file on a later save (there is no pre-wizard state)', async () => {
+    await writeEditableConfig();
+    const run = await start();
+    expect((await post(run, '/api/profile/write', { body: '# One\n' })).status).toBe(200);
+    expect((await post(run, '/api/profile/write', { body: '# Two\n' })).status).toBe(200);
+    const baks: string[] = [];
+    for (const dir of [tmp, path.join(tmp, 'content')]) {
+      for (const f of await fs.readdir(dir)) if (f.endsWith('.bak')) baks.push(f);
+    }
+    expect(baks).toHaveLength(0);
+    expect(await fs.readFile(path.join(tmp, 'content', 'profile.md'), 'utf8')).toBe('# Two\n');
+    await post(run, '/api/done', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  // owner.profile is browser-settable, so the profile writer must refuse a target that escapes
+  // the project, is not markdown, or is the config file itself (which the wizard executes).
+  it('refuses to write the profile outside the project or to a non-markdown / config target', async () => {
+    const configFile = path.join(tmp, 'frznforge.config.ts');
+    const outside = path.join(path.dirname(tmp), 'escape.md');
+    await fs.rm(outside, { force: true });
+
+    for (const profile of ['../escape.md', './frznforge.config.ts', './evil.ts']) {
+      const config =
+        'function defineConfig(c) { return c; }\n' +
+        'export default defineConfig({\n' +
+        "  owner: { name: 'K', handle: 'k', profile: '" + profile + "' },\n" +
+        '});\n';
+      await fs.writeFile(configFile, config, 'utf8');
+      const run = await start();
+      const got = (await (await get(run, '/api/profile')).json()) as { available: boolean };
+      expect(got.available).toBe(false);
+      const res = await post(run, '/api/profile/write', { body: 'export const pwned = 1\n' });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(await fs.readFile(configFile, 'utf8')).toBe(config);
+      await post(run, '/api/cancel', {});
+      expect(await run.exit).toBe(0);
+    }
+    expect(await fs.readFile(outside, 'utf8').catch(() => 'ABSENT')).toBe('ABSENT');
   });
 });

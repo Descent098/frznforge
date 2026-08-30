@@ -38,6 +38,7 @@ import {
   blobRoutes,
   browsableRefs,
   commitsPageCount,
+  hostedRoutes,
   notesRoutes,
   orgRoutes,
   rawRoutes,
@@ -146,6 +147,8 @@ function measureRepo(repo: Repo): RepoRow {
 
 const rows = data.repos.map(measureRepo);
 const siteRoutes = allRoutes(data);
+/** Hosted static-site files (schema v7): site-level, one route per served file. */
+const hostedCount = hostedRoutes(data).length;
 const sum = (pick: (r: RepoRow) => number) => rows.reduce((n, r) => n + pick(r), 0);
 
 /* ---- optional build ------------------------------------------------------- */
@@ -292,6 +295,7 @@ if (asJson) {
   console.log(`    repo pages         ${sum((r) => r.total)}`);
   console.log(`    notes pages        ${notesRoutes(data).length}`);
   console.log(`    org pages          ${orgRoutes(data).length}`);
+  if (hostedCount > 0) console.log(`    hosted files       ${hostedCount}  (hosting.sites, schema v7)`);
   console.log(`    site pages         3  (/, /repos/, /404)`);
   if (ingestMs !== null) console.log(`  ingest wall clock    ${secs(ingestMs)}   (--ingest-ms)`);
   if (dist) {

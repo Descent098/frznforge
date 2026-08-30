@@ -197,6 +197,16 @@ the site's content changes when the *other* repositories change, not when this o
 Pages serves directory URLs, redirects `/x` → `/x/`, and uses a root `404.html`. Nothing to
 configure for any of that.
 
+**Project site (served at `https://<user>.github.io/<repo>/`)?** Set the sub-path in the
+config and every emitted link carries it:
+
+```ts
+site: { base: '/<repo>' },
+```
+
+A *user/organization* site (`<user>.github.io`) is a root deploy — leave `base` out. The
+same knob covers any host that serves the forge from a subdirectory.
+
 **Deploy from Actions, not from a branch.** The Actions path uploads an artifact and serves it
 verbatim. The branch path (`gh-pages`) runs the files through Jekyll, which **ignores every
 directory starting with `_`** — including `_astro/`, which is all of your CSS and JavaScript.
@@ -430,7 +440,8 @@ often than the repositories change just burns rate limit.
 
 - [ ] `npm run build` finishes and prints `0 warning(s)`, or you know why it doesn't.
 - [ ] `npm run preview` shows the profile page with styling, and `/repos/<slug>/` loads.
-- [ ] The deploy target is a domain **root**, not a subpath.
+- [ ] The deploy target is a domain **root** — or `site.base` names the subpath it lives
+      under (0.2.0).
 - [ ] Every repository in `frznforge.config.ts` is reachable from wherever ingest runs.
 - [ ] Tokens live in the host's secret store; `git grep` finds none in the repository.
 - [ ] `dist/` fits the host's file-count and size limits.

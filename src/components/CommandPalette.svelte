@@ -5,6 +5,7 @@
    * Fully keyboard operable: Ctrl+K / Cmd+K / `/` open, Esc closes, ↑↓ navigate, Enter opens.
    */
   import { onMount, tick } from 'svelte';
+  import { withBase } from '../lib/base';
   import { search, type ScoredDoc, type SearchDoc } from '../lib/search';
 
   let open = $state(false);
@@ -112,7 +113,7 @@
     actions = actionDocs();
     if (!docs && !loadError) {
       try {
-        const res = await fetch('/search-index.json');
+        const res = await fetch(withBase('/search-index.json'));
         docs = ((await res.json()) as { docs: SearchDoc[] }).docs;
       } catch {
         loadError = true;

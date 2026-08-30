@@ -107,10 +107,11 @@ const organizations: Organization[] = [
 ];
 
 const data: ForgeData = {
-  schemaVersion: 6,
+  schemaVersion: 7,
   repos: [repo('alpha', 'alpha', 'Alpha repo', ['ssg']), repo('beacon', 'beacon', 'Beacon repo')],
   notes,
   organizations,
+  hosting: [],
   warnings: [],
 };
 

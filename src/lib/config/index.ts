@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import userConfig from '../../../frznforge.config';
 import {
   FrznforgeConfigSchema,
+  normalizeBase,
   type FrznforgeConfig,
   type FrznforgeConfigInput,
   type RemoteRepoSourceConfig,
@@ -155,15 +156,21 @@ export function sourceRepoName(source: RemoteRepoSourceConfig): string {
 /**
  * Validate, apply defaults, and resolve paths against the project root.
  * `FRZNFORGE_OUT_DIR` / `FRZNFORGE_CACHE_DIR` (env) override `ingest.outDir` and
- * `ingest.cacheDir` — used by the e2e tests to build the site against a fixture artifact
- * without touching the real one. `notes.dir` and `content.orgs` have no env override: nothing
- * needs one (the tests point the config itself at a fixture folder), and every extra env knob
- * is another way for a build to differ from the config that is checked in.
+ * `ingest.cacheDir`, and `FRZNFORGE_BASE` (0.2.0) overrides `site.base` — all three are
+ * used by the e2e tests to build the site against fixture artifacts (and, for the base,
+ * under a sub-path) without touching the real one. `notes.dir` and `content.orgs` have no
+ * env override: nothing needs one (the tests point the config itself at a fixture folder),
+ * and every extra env knob is another way for a build to differ from the config that is
+ * checked in.
  */
 export function resolveConfig(input: FrznforgeConfigInput, root: string = PROJECT_ROOT): ResolvedConfig {
   const cfg = FrznforgeConfigSchema.parse(input);
   const env = typeof process !== 'undefined' ? process.env : ({} as NodeJS.ProcessEnv);
   const cacheDir = path.resolve(root, env.FRZNFORGE_CACHE_DIR || cfg.ingest.cacheDir);
+  if (env.FRZNFORGE_BASE !== undefined) {
+    const base = normalizeBase(env.FRZNFORGE_BASE);
+    cfg.site = { ...cfg.site, ...(base === undefined ? { base: undefined } : { base }) };
+  }
   return {
     ...cfg,
     root,

@@ -10,7 +10,7 @@
 import Base from '../../../layouts/Base.astro';
 import CopyScript from '../../../components/CopyScript.astro';
 import NoteFileView from '../../../components/NoteFileView.astro';
-import { getNoteRoutes, NOTES_INDEX_URL } from '../../../lib/routes';
+import { getNoteRoutes, notesIndexUrl } from '../../../lib/routes';
 import { formatBytes, heatClass, heatFor, isoDay, relativeTime } from '../../../lib/format';
 import { getConfig, getData } from '../../../lib/site';
 import type { Note } from '../../../lib/data/schema';
@@ -45,7 +45,7 @@ const files = note.files.map((file, i) => ({ file, anchor: anchorFor(file.path, 
 <Base title={note.title} description={note.description ?? undefined} active="notes">
   <div class="hf-container">
     <p class="hf-note-backlink">
-      <a href={NOTES_INDEX_URL}><svg class="hf-i" aria-hidden="true"><use href="#i-arrow-left" /></svg> All notes</a>
+      <a href={notesIndexUrl()}><svg class="hf-i" aria-hidden="true"><use href="#i-arrow-left" /></svg> All notes</a>
     </p>
 
     <header class="hf-page-head hf-note-head">
