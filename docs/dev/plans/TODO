@@ -17,18 +17,21 @@ Additional things to keep in mind:
   - [x] The drop-down for cloning is really skinny. It looks like it's tying the width to the size of the button, which is making things poke out of the popup
   - [x] In the insights tab, make the lines of code the larger text, and the approximate size the smaller text in the `code size` section
   - [x] For the license, if it's a common one, link the license badge to the https://choosealicense.com/ or https://creativecommons.org/licenses/ url
-- [ ] Indicate somewhere stored if when building, fetching the data and metadata was successful (if you don't already), this will be relevant in a later ask
+- [x] Indicate somewhere stored if when building, fetching the data and metadata was successful (if you don't already), this will be relevant in a later ask
 - [ ] Document, with diagrams the process the build pipeline takes, with mermaid diagrams and code references to a document in `docs/dev/build-steps.md`
-- [ ] Give the options for users to opt-in to build settings for
-  - [ ] Do not re-fetch on same commit hash
-    - [ ] If the commit hash is the same as it was last time for that branch, don't fetch that branch
-  - [ ] Re-fetch cooldown (time in seconds)
-    - [ ] If the cooldown period has not elapsed since last **successful** fetch, skip the repo
-    - [ ] Indicate this during the build with a message "this repo is on cooldown" With the usual warning emoji
+- [x] Give the options for users to opt-in to build settings for
+  - [x] Do not re-fetch on same commit hash (`ingest.reuse.skipUnchanged`)
+    - [x] If the commit hash is the same as it was last time for that branch, don't fetch that branch
+      - NOTE: git mirrors fetch per REPO, not per branch, so this is "every ref matches → skip
+        the repo's fetch", decided by one `git ls-remote`. Your call, 2026-08-31.
+  - [x] Re-fetch cooldown (time in seconds) (`ingest.reuse.cooldownSeconds`)
+    - [x] If the cooldown period has not elapsed since last **successful** fetch, skip the repo
+    - [x] Indicate this during the build with a message "this repo is on cooldown" With the usual warning emoji
 - [ ] `npm run dev` in it's current form seems mostly useless, probably best to find some way to make it show a message that the information displayed is taken from the most recent build, and that it doesn't build itself, then run `astro preview`
-- [ ] I'm hitting a bunch of 429 rate limits on builds and want to make some changes when building
-  - [ ] If there are repo's that have no metadata, run updates on them first, since they're most likely to be misses from a previous build
-  - [ ] Add some exponential backoff retry logic on rate limits, keyed to the origin (e.g. github.com should have 1 timeout, codeberg.com a different one, etc.)
+- [x] I'm hitting a bunch of 429 rate limits on builds and want to make some changes when building
+  - [x] If there are repo's that have no metadata, run updates on them first, since they're most likely to be misses from a previous build
+  - [x] Add some exponential backoff retry logic on rate limits, keyed to the origin (e.g. github.com should have 1 timeout, codeberg.com a different one, etc.)
+  - Also added `ingest.failOnDegraded` (your call: make the 429 outcome configurable)
 - [ ] Allow me to specify an image for the main user
   - [ ] When importing from github or some other forge, give the option to import the profile picture as well, and store it
   - [ ] In the web version also allow users to upload an image to be the profile image
@@ -49,6 +52,13 @@ This section is for me to keep track of what I need to manually review, feel fre
   both declare a `typescript` peer range of `^5.0.0 || ^6.0.0`, so we stay on 6.0.3.
   Revisit when the Astro toolchain widens its peers — nothing in our code is known to
   block it; we simply didn't fight the ecosystem (your call, 2026-08-31).
+- [ ] **The 72-repo live build is unverified.** Phases 4 and 5 (per-origin 429 backoff,
+  misses-first ordering, cooldown, same-hash skip) are covered by unit tests with an
+  injected clock and a real local `git ls-remote`, but the Checkpoint 2 manual item — a real
+  `npm run build` against the `frznforge - Copy (3)` corpus — was deliberately NOT run: it
+  clones 72 mirrors over the live network against your own GitHub quota. Worth doing once
+  by hand, ideally with `ingest.reuse.cooldownSeconds` set on the second run to see the
+  `⚠️ … on cooldown` lines.
 - [ ] **Clone popup width** — fixed in CSS by letting the popup size against the viewport
   instead of its button-sized containing block. Worth an eyeball on a real phone; the
   automated check only asserts it is no longer clamped to the button.

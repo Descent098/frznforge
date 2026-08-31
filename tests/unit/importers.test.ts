@@ -2,7 +2,7 @@
  * Provider importer tests. Every request is served from the recorded fixtures in
  * `tests/fixtures/http` through an injected `fetchImpl` — nothing here touches the network.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { fixtureFetch, loadFixture, type FixtureRoute } from '../fixtures/http/index';
 import { Release } from '../../src/lib/data/schema';
 import {
@@ -14,6 +14,7 @@ import {
   createImporter,
 } from '../../src/lib/importers/index';
 import { JsonClient, absoluteUrl, scrubIps, toIsoDate } from '../../src/lib/importers/http';
+import { sharedBackoff } from '../../src/lib/importers/backoff';
 import type {
   ForgejoSourceConfig,
   GiteaSourceConfig,
@@ -24,6 +25,11 @@ import type {
 /* ---- helpers -------------------------------------------------------------- */
 
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+
+// The per-origin rate-limit gate is process-wide by design (an ingest run wants every repo
+// on one forge to share a timer). In a test process that means the rate-limit cases below
+// would block api.github.com for every case after them, so each test starts from a clean gate.
+beforeEach(() => sharedBackoff.reset());
 
 const githubSource: GithubSourceConfig = {
   type: 'github',

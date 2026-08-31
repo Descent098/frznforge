@@ -216,7 +216,7 @@ on the new versions. The checkpoint validates the union either way.
 
 ---
 
-## Phase 3 — Fetch-status recording (run-log v2)
+## Phase 3 — Fetch-status recording (run-log v2) ✅ *(done 2026-08-31)*
 
 Goal: the TODO's "indicate somewhere stored if when building, fetching the data and
 metadata was successful (if you don't already), this will be relevant in a later ask" —
@@ -228,7 +228,7 @@ skip. Today's record is close but too coarse: `last-run.json`
 recorded anywhere outside the artifact.
 
 Ships
-- [ ] **Run-log entry v2.** `RUN_LOG_VERSION` → 2; `RunLogEntry` grows to
+- [x] **Run-log entry v2.** `RUN_LOG_VERSION` → 2; `RunLogEntry` grows to
   `{ fetchedAt, fresh, git: { ok: boolean }, meta: { ok: boolean }, heads?: Record<ref, sha> }`
   (exact field names at implementer's discretion; the contract is: git-fetch success,
   metadata-fetch success, and the mirror's ref heads as of the last *successful* git
@@ -240,34 +240,42 @@ Ships
   `remote-auth-missing` → meta, `remote-cache-stale` → whichever half read stale). A v1
   log on disk is discarded wholesale (the existing `configHash`-mismatch path — cheap,
   correct, and the sidecar is rebuildable by definition).
-- [ ] The `'reused'`-action rule survives: a window-skip or replay keeps the previous
+- [x] The `'reused'`-action rule survives: a window-skip or replay keeps the previous
   stamp verbatim (the "window cannot extend itself" invariant from 0.2.0, and now also
   "a skip cannot launder a failed half into a successful one").
-- [ ] Timestamps stay sidecar-only; the clock stays the injected `PrepareRemoteDeps.now`.
+- [x] Timestamps stay sidecar-only; the clock stays the injected `PrepareRemoteDeps.now`.
   Nothing in this phase touches `forge.json` — byte-identity across runs is unchanged.
 
 Done when
-- [ ] After a run with one rate-limited repo, `last-run.json` shows that repo with
+- [x] After a run with one rate-limited repo, `last-run.json` shows that repo with
   `git.ok: true, meta.ok: false` and everything healthy elsewhere; after a clean run,
   every entry carries the mirror's actual heads.
+  *As built, one deliberate departure from the plan: the halves are **reported by
+  `prepareRemote`** (a new `fetchStatus` on its result) rather than derived from the
+  warning codes as the plan sketched. Writing it the planned way exposed why it cannot
+  work — `remote-cache-stale` is raised BOTH for a mirror that could not be refreshed and
+  for provider metadata served from cache, so the code alone cannot say which half failed.
+  Field names are flat (`gitOk`, `metaOk`, `heads`) rather than nested. `withinFreshWindow`
+  now takes `Pick<RunLogEntry, 'fetchedAt' | 'fresh'>`: it reads only those two, and
+  narrowing it kept every existing caller and test untouched by the v2 widening.*
 
 Tests
-- [ ] Unit: `reuse.test.ts` — v2 shape round-trip, v1-on-disk discarded, per-half
+- [x] Unit: `reuse.test.ts` — v2 shape round-trip, v1-on-disk discarded, per-half
   success derivation from each warning code, heads recorded and *kept* through a
   window-skip, byte-identity of the artifact across a record/skip pair. The existing
   window tests re-run untouched (semantics of `fresh` unchanged).
-- [ ] Data model: none (sidecar only).
+- [x] Data model: none (sidecar only).
 
 ---
 
-## Phase 4 — Rate-limit resilience: misses-first ordering, per-origin backoff
+## Phase 4 — Rate-limit resilience: misses-first ordering, per-origin backoff ✅ *(done 2026-08-31)*
 
 Goal: the TODO's 429 cluster, sized for the real corpus (the `Copy (3)` example config:
 72 GitHub sources — at `ingest.concurrency: 4` with zero retry, a rate-limited run today
 burns its budget on repos that already have cached metadata and then fails the rest).
 
 Ships
-- [ ] **Misses first** (TODO: "If there are repo's that have no metadata, run updates on
+- [x] **Misses first** (TODO: "If there are repo's that have no metadata, run updates on
   them first, since they're most likely to be misses from a previous build"). In
   `ingest()` (`src/lib/ingest/index.ts:101`), before the `pool(...)` at line 141: a cheap
   pre-pass stats each remote source's provider cache file (`providerCachePathFor`,
@@ -277,7 +285,7 @@ Ships
   artifact order — assembly must (and today does) produce output ordered independently
   of completion order; add an explicit test that a reordered run is byte-identical, so
   this stays true.
-- [ ] **Per-origin exponential backoff** (TODO: "keyed to the origin (e.g. github.com
+- [x] **Per-origin exponential backoff** (TODO: "keyed to the origin (e.g. github.com
   should have 1 timeout, codeberg.com a different one)"). In
   `src/lib/importers/http.ts`: today `classifyStatus` (247-259) tags a 429 and
   `parseRetryAfter` (273-291) even computes the server's requested delay — **and nothing
@@ -293,7 +301,7 @@ Ships
   retry already uses for its 500-retry) so tests never sleep. Console-side: the ingest
   reporter (`scripts/ingest.ts:70-78`) notes when an origin is in backoff, so a long
   pause is explained, not silent.
-- [ ] **`ingest.failOnDegraded: boolean`** (default `false`), per the owner decision above.
+- [x] **`ingest.failOnDegraded: boolean`** (default `false`), per the owner decision above.
   `false` = today's behaviour (warn, fall back to cached metadata, finish). `true` = after
   assembly, if any repo carries a `DEGRADED` warning code (the set at
   `src/lib/ingest/index.ts:326`), `scripts/ingest.ts` exits non-zero with a summary of
@@ -301,29 +309,38 @@ Ships
   pick one and document it (recommendation: still write the artifact, then fail — a
   partial artifact plus a red build is more debuggable than neither). Not a
   determinism concern: exit code only, artifact bytes unchanged.
-- [ ] Interplay note, documented in code: the backoff gates the *provider API* half only;
+- [x] Interplay note, documented in code: the backoff gates the *provider API* half only;
   git mirror traffic (`ensureMirrorLocked`, `remote.ts:313-338`) is not API-rate-limited
   and does not queue behind it.
 
 Done when
-- [ ] Against the http fixtures, a 429-then-success sequence succeeds on retry with the
+- [x] *As built, one addition the plan did not anticipate, and it is the part that most
+  helps the 72-repo case: a limit LONGER than the 60s ceiling does not sleep and does not
+  retry — it marks the origin blocked for the stated window, so repos 2..72 on that host
+  fail fast into their cached metadata instead of each burning a full retry ladder. A
+  short limit still waits and retries as planned. Rate-limit retries also carry their own
+  attempt budget rather than consuming the existing 5xx/network one. `OriginBackoff.reset()`
+  exists because the gate is process-wide by design: correct for a build, but in a test
+  process one fixture's 429 would otherwise block that host for every later case (it did —
+  five importer tests caught it).*
+- [x] Against the http fixtures, a 429-then-success sequence succeeds on retry with the
   fixture's `retry-after` honored; two clients on one origin serialize their backoff
   while a second origin proceeds; a cold-cache repo demonstrably fetches before a
   warm-cache one; a full ingest of a mixed config is byte-identical to the same config
   ingested in plain order.
 
 Tests
-- [ ] Unit: `importers.test.ts` / a new `backoff.test.ts` — retry-after honored,
+- [x] Unit: `importers.test.ts` / a new `backoff.test.ts` — retry-after honored,
   exponential progression with fake clock, cap, attempt bound, per-origin isolation,
   queue-behind-timer behavior, final-failure error shape unchanged.
   `ingest.test.ts`/`reuse.test.ts` — misses-first ordering (spy on fetch order),
   reorder byte-identity.
-- [ ] Data model: none. The `remote-rate-limited` warning code and its meaning are
+- [x] Data model: none. The `remote-rate-limited` warning code and its meaning are
   unchanged — retries just make it rarer.
 
 ---
 
-## Phase 5 — Opt-in refetch controls: same-hash skip, cooldown
+## Phase 5 — Opt-in refetch controls: same-hash skip, cooldown ✅ *(done 2026-08-31)*
 
 Goal: the TODO's opt-in build settings. Both consume Phase 3's run-log v2. Both are
 **opt-in, default off** — the TODO is explicit — and both must be byte-neutral: a skipped
@@ -331,11 +348,11 @@ fetch produces the identical artifact the unskipped run would have produced from
 cache (the Phase-2-of-0.2.0 reuse precedent).
 
 Ships
-- [ ] **Config.** New keys under `ingest.reuse` (they are refetch-avoidance knobs, same
+- [x] **Config.** New keys under `ingest.reuse` (they are refetch-avoidance knobs, same
   family as the freshness window): `reuse.skipUnchanged: boolean` (default `false`) and
   `reuse.cooldownSeconds: number | null` (default `null`). Zod: non-negative integer for
   the cooldown. Documented in `configuration.md` with the tradeoff each one buys.
-- [ ] **Same-hash skip** (TODO: "If the commit hash is the same as it was last time for
+- [x] **Same-hash skip** (TODO: "If the commit hash is the same as it was last time for
   that branch, don't fetch that branch"). Design realities, stated up front: mirror
   updates are per-*repo* (`git remote update --prune`, `remote.ts:314`), not per-branch,
   and no pre-fetch SHA source exists today (grep confirms zero `ls-remote` anywhere). So
@@ -349,7 +366,7 @@ Ships
   (`'always'` is an explicit ask; `'never'` never fetches anyway). The skip records
   action `'fetched'`-equivalent freshness only if it can prove heads matched — reuse
   semantics: skip work, never change bytes.
-- [ ] **Cooldown** (TODO: "If the cooldown period has not elapsed since last
+- [x] **Cooldown** (TODO: "If the cooldown period has not elapsed since last
   **successful** fetch, skip the repo … with a message 'this repo is on cooldown' with
   the usual warning emoji"). In the pre-`prepareRemote` window logic
   (`index.ts:190-193`, beside the existing `skipFetch`): if `cooldownSeconds` is set and
@@ -362,32 +379,54 @@ Ships
   (reported via `RemoteStatus`/`onRemote` — add a `cooldown: boolean` or a new
   `MirrorAction`-adjacent field to the reporting-only struct at `index.ts:50-57`; it
   never enters the artifact).
-- [ ] Precedence, documented and tested: `fetch` mode > freshness window (an in-window
+- [x] Precedence, documented and tested: `fetch` mode > freshness window (an in-window
   repo never reaches the cooldown check — it's already skipped) > cooldown >
   same-hash skip (cheapest last: the probe only runs when nothing else already decided
   to skip).
 
 Done when
-- [ ] With `skipUnchanged: true`, a second ingest against unchanged remotes performs zero
+- [x] *As built: the skip returns a new `MirrorAction` — `'current'` — rather than reusing
+  `'cached'`. That mattered: `'cached'` means "the update FAILED and the old mirror was
+  used" and raises `remote-cache-stale`, which would have made every successful skip look
+  like a degradation, poisoned `gitOk`, and then blocked the cooldown. `'current'` counts
+  as a healthy git half. The tests assert on that action rather than spying on git argv —
+  only the ls-remote-matched path can produce it, so it is the stronger signal.*
+- [x] With `skipUnchanged: true`, a second ingest against unchanged remotes performs zero
   `remote update` calls and emits a byte-identical artifact; pushing a commit to the
   fixture remote un-skips exactly that repo.
-- [ ] With a 60s cooldown and an injected clock, a re-run inside the window prints the
+- [x] With a 60s cooldown and an injected clock, a re-run inside the window prints the
   ⚠️ cooldown line and skips; a repo whose last run was rate-limited is fetched anyway;
   advancing the clock past the window fetches everything.
 
 Tests
-- [ ] Unit: `reuse.test.ts`/`remote.test.ts` — heads-match skip, single-ref mismatch
+- [x] Unit: `reuse.test.ts`/`remote.test.ts` — heads-match skip, single-ref mismatch
   fetches, `ls-remote` failure fails open, cooldown honored/expired/degraded-bypass,
   precedence order, defaults-off means zero behavior change, byte-identity for every
   skip path, config validation. Fixture remotes are local bare repos (the existing
   fixture-repo helper), so `ls-remote` runs against real git without network.
-- [ ] UI: none (build-time only). The e2e build runs with both knobs off — explicitly
+- [x] UI: none (build-time only). The e2e build runs with both knobs off — explicitly
   assert the defaults in `config-knobs.test.ts` so the suite proves the off state.
-- [ ] Data model: none. Sidecar and console only.
+- [x] Data model: none. Sidecar and console only.
 
 ---
 
-### ✅ CHECKPOINT 2 — after Phases 3–5
+### ✅ CHECKPOINT 2 — after Phases 3–5 — *PASSED 2026-08-31*
+
+*Result: `npm test` 634 passed / 1 skipped (40 files, up from 598 — a new `backoff.test.ts`
+plus 21 more in `reuse.test.ts`/`config-knobs.test.ts`), `npm run test:e2e` 181 passed /
+1 skipped, `npm run check` 0 errors, `npm run build` clean with 0 warnings, and
+`forge.json` byte-identical across a warm run AND across a `--no-cache` run in between.*
+
+*Run sequentially, not as parallel subagents: Phase 3 and Phase 4 both edit the same
+regions of `src/lib/ingest/index.ts` (the run-log stamp, the pool call, the RemoteStatus
+shape) and Phase 5 consumes Phase 3's output, so the stated merge point would have cost
+more coordination than the parallelism was worth at this size.*
+
+*The plan's manual item — a real `npm run build` against the 72-remote `Copy (3)` corpus —
+is **carried over, not done**: it clones 72 mirrors over the live network against the
+owner's own GitHub quota, which is not something to trigger unattended. It is listed in the
+TODO's **For human** section. Everything it would exercise is covered at unit level with an
+injected clock and a real local `ls-remote`.*
 
 Full suite green, plus one manual: a real `npm run build` against a config with several
 live GitHub repos (the `Copy (3)` config is the reference corpus) completes without 429

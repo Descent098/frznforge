@@ -77,7 +77,7 @@ async function writeJson(file: string, value: unknown): Promise<void> {
 
 /* ---- run log (freshness window) ------------------------------------------ */
 
-const RUN_LOG_VERSION = 1;
+const RUN_LOG_VERSION = 2;
 const RUN_LOG_FILENAME = 'last-run.json';
 
 export interface RunLogEntry {
@@ -85,6 +85,25 @@ export interface RunLogEntry {
   fetchedAt: string;
   /** True when that fetch was fully fresh: mirror updated, no `remote-*` warnings. */
   fresh: boolean;
+  /**
+   * The two halves of a remote fetch, recorded separately (v2). `fresh` above is the AND of
+   * them plus "the repo was not skipped", and keeps its exact 0.2.0 meaning so the freshness
+   * window is unaffected; these say *which* half failed, which is what the cooldown needs
+   * ("since the last **successful** fetch") and what a build report can show.
+   *
+   * They are reported by `prepareRemote`, not inferred from warning codes, because
+   * `remote-cache-stale` is raised for a stale mirror AND for stale provider metadata — the
+   * code alone cannot tell the halves apart.
+   */
+  gitOk: boolean;
+  metaOk: boolean;
+  /**
+   * The mirror's refs (`refs/heads/*` and `refs/tags/*` → object id) as they stood at the
+   * end of this run, or null when they could not be read. This is the baseline the
+   * same-commit-hash skip compares a `git ls-remote` against: all refs equal means the
+   * mirror is already current and `git remote update` has nothing to do.
+   */
+  heads: Record<string, string> | null;
 }
 
 export interface RunLog {
@@ -99,6 +118,11 @@ export function runLogPathFor(cacheDir: string): string {
   return path.join(cacheDir, RUN_LOG_FILENAME);
 }
 
+/**
+ * Read the run log. A log written by an older version is discarded wholesale rather than
+ * migrated: it is a rebuildable cache by definition, and the cost of discarding it is one
+ * un-skipped fetch cycle.
+ */
 export async function readRunLog(cacheDir: string): Promise<RunLog | null> {
   const raw = (await readJson(runLogPathFor(cacheDir))) as Partial<RunLog> | null;
   if (!raw || raw.version !== RUN_LOG_VERSION) return null;
@@ -110,9 +134,60 @@ export async function writeRunLog(cacheDir: string, log: Omit<RunLog, 'version'>
   await writeJson(runLogPathFor(cacheDir), { version: RUN_LOG_VERSION, ...log });
 }
 
+/**
+ * The mirror's branch and tag refs as `{ 'refs/heads/main': '<sha>', ... }`, or null when
+ * the path is not a git repository or git failed. Used to stamp `RunLogEntry.heads` and,
+ * on the next run, to compare against `git ls-remote` before paying for a fetch.
+ */
+export async function readRefHeads(absPath: string): Promise<Record<string, string> | null> {
+  if (!(await isGitRepo(absPath))) return null;
+  let out: string;
+  try {
+    out = await git(absPath, ['for-each-ref', '--format=%(refname)%00%(objectname)', 'refs/heads', 'refs/tags']);
+  } catch {
+    return null;
+  }
+  return parseRefLines(out);
+}
+
+/**
+ * Parse `for-each-ref`/`ls-remote` style output into `{ ref: sha }`.
+ *
+ * `ls-remote` emits `<sha>\t<ref>`; `for-each-ref` here emits `<ref>\0<sha>`. Both are
+ * normalised so the two sides of the comparison are directly comparable.
+ */
+export function parseRefLines(text: string): Record<string, string> {
+  const refs: Record<string, string> = {};
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let ref: string | undefined;
+    let sha: string | undefined;
+    if (line.includes('\0')) [ref, sha] = line.split('\0');
+    else {
+      const [a, b] = line.split(/\s+/);
+      [sha, ref] = [a, b];
+    }
+    if (!ref || !sha) continue;
+    // `^{}` entries are the peeled targets of annotated tags; the tag object id is what
+    // both sides already agree on, so keeping them would only add noise.
+    if (ref.endsWith('^{}')) continue;
+    refs[ref] = sha;
+  }
+  return refs;
+}
+
+/** True when two ref maps name exactly the same refs at exactly the same object ids. */
+export function refsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => b[k] === a[k]);
+}
+
 /** True when `entry` records a fully fresh fetch inside the window ending at `now`. */
 export function withinFreshWindow(
-  entry: RunLogEntry | undefined,
+  // Only the two fields it actually reads: the window's meaning did not change in v2,
+  // and callers (tests included) should not fabricate heads to ask a time question.
+  entry: Pick<RunLogEntry, 'fetchedAt' | 'fresh'> | undefined,
   now: Date,
   maxAgeMinutes: number,
 ): boolean {
@@ -121,6 +196,29 @@ export function withinFreshWindow(
   if (!Number.isFinite(at)) return false;
   const age = now.getTime() - at;
   return age >= 0 && age <= maxAgeMinutes * 60_000;
+}
+
+/**
+ * True when `entry` records a **fully successful** fetch (both halves) inside a cooldown of
+ * `seconds` ending at `now`.
+ *
+ * Deliberately stricter than {@link withinFreshWindow}: a repo whose provider metadata was
+ * rate-limited must never be held back by the cooldown, or a long cooldown would freeze the
+ * gap in place for hours. That is the same self-healing rule the freshness window follows,
+ * and it composes with the misses-first ordering — the repos in trouble go first and are
+ * always retried.
+ */
+export function withinCooldown(
+  entry: Pick<RunLogEntry, 'fetchedAt' | 'gitOk' | 'metaOk'> | undefined,
+  now: Date,
+  seconds: number | null,
+): boolean {
+  if (seconds === null || !entry) return false;
+  if (!entry.gitOk || !entry.metaOk) return false;
+  const at = Date.parse(entry.fetchedAt);
+  if (!Number.isFinite(at)) return false;
+  const age = now.getTime() - at;
+  return age >= 0 && age <= seconds * 1000;
 }
 
 /* ---- scan cache ---------------------------------------------------------- */

@@ -71,9 +71,12 @@ export default defineConfig({
     archives: true,          // zip source archives (git archive) for default branch + tags
     cacheDir: './.frznforge-cache',  // mirror clones of remote repos (gitignored)
     fetch: 'auto',           // 'auto' | 'never' (offline, cache only) | 'always'
+    failOnDegraded: false,   // true = exit non-zero if any repo fell back to cached metadata
     reuse: {                 // cross-run reuse (see the note below)
       enabled: true,
       maxAgeMinutes: 2,      // don't re-fetch a remote fetched fresh this recently
+      skipUnchanged: false,  // opt-in: ask ls-remote first, skip the fetch if nothing moved
+      cooldownSeconds: null, // opt-in: don't re-fetch within N seconds of a successful fetch
     },
     insights: {              // per-repo /insights/ page
       enabled: true,
@@ -157,6 +160,33 @@ Notes
   The highlight half is bypassed with `FRZNFORGE_NO_HL_CACHE=1` (it runs during
   `astro build`, not during ingest). Deleting `cacheDir` is always safe: everything in it is
   rebuilt on demand.
+- **`reuse.skipUnchanged` and `reuse.cooldownSeconds` are the two opt-in refetch controls**,
+  both off by default because they trade a guarantee of freshness for speed:
+  - `skipUnchanged: true` runs one `git ls-remote` per remote repo and skips `git remote
+    update` when the mirror already holds **every** ref the remote does, at the same object
+    ids. Mirrors fetch per repository rather than per branch, so whole-repo is the only
+    honest granularity: any difference at all — a moved branch, a new tag, a deleted ref —
+    falls through to a normal fetch, as does any failure of the probe itself. It pays off on
+    a large corpus of mostly-idle repos and costs one cheap round-trip otherwise.
+  - `cooldownSeconds: 3600` skips a repo entirely when its last **fully successful** fetch
+    was less than an hour ago (the freshness window above is the same idea sized in minutes;
+    this one is for hours). "Successful" means both halves — git *and* provider metadata —
+    so a repo whose metadata was rate-limited is never held back and is retried on the next
+    run. Skipped repos are reported during the build as `⚠️ <repo>: this repo is on cooldown`.
+- **Rate limits back off per origin.** A 429 (or GitHub's 403-with-no-quota-left) is retried
+  with exponential backoff keyed to the *host*, so all the repos being ingested in parallel
+  from one forge wait behind a single timer instead of each hammering the window, while a
+  different forge is unaffected. The provider's own `Retry-After` is honoured when it sends
+  one. If a forge asks for longer than a minute, the build stops calling it altogether for
+  that period and the remaining repos on that host fall back to their cached metadata
+  immediately rather than each burning a full retry ladder. Repos with **no** cached
+  metadata are also fetched first, so a run that does hit a limit spends its budget on the
+  repos that have nothing to fall back on.
+- `failOnDegraded: true` makes `npm run ingest` exit non-zero when any repo ended the run
+  published from cached or missing provider data (a `remote-fetch-failed`,
+  `remote-rate-limited`, `remote-auth-missing` or `remote-cache-stale` warning). The artifact
+  is still written and the warnings still print — only the exit code changes. For CI that
+  would rather fail than quietly publish stale metadata after a rate limit.
 - `insights` controls the `/repos/<slug>/insights/` page. Monthly commits and contributors are
   exact — they come from the commit list already in the artifact. Code size over time is
   **sampled**: at most `samples` monthly checkpoints (always including the first and last),

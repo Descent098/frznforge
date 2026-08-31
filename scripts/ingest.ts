@@ -3,10 +3,13 @@
  * `npm run ingest` — scan the repos in frznforge.config.ts and write the JSON artifact
  * (+ blob store) that `astro build` reads. Exit code is 0 even when warnings are emitted:
  * empty repos, empty trees, an unreachable forge, etc. are reported but never fail the
- * build. Exit code 1 only for hard failures (bad config, unwritable outDir, git missing).
+ * build. Exit code 1 only for hard failures (bad config, unwritable outDir, git missing) —
+ * and, when `ingest.failOnDegraded` is set, for a run that published any source from cached
+ * or missing provider data. The artifact is written either way: a partial artifact plus a
+ * red build is easier to debug than neither.
  */
 import { loadConfig } from '../src/lib/config/index';
-import { ingest, parseIngestArgs, writeArtifact } from '../src/lib/ingest';
+import { degradedRepos, ingest, parseIngestArgs, writeArtifact } from '../src/lib/ingest';
 
 let args;
 try {
@@ -41,7 +44,12 @@ const { data, blobs, archives, remotes } = await ingest(
   config,
   {
     onRepoStart: (slug) => console.log(`  ▸ ${slug}`),
-    onRemote: ({ slug, provider, action }) => console.log(`    ⇄ ${slug} (${provider}: ${action})`),
+    onRemote: ({ slug, provider, action, cooldown }) =>
+      console.log(
+        cooldown
+          ? `    ⚠️ ${slug}: this repo is on cooldown`
+          : `    ⇄ ${slug} (${provider}: ${action})`,
+      ),
     onRepoDone: (repo) =>
       console.log(
         `    ✓ ${repo.slug}: ${repo.commitCount} commits, ${repo.branches.length} branches, ` +
@@ -75,6 +83,19 @@ if (cached.length > 0 || skipped.length > 0) {
     skipped.length > 0 ? `${skipped.length} skipped (${skipped.map((r) => r.slug).join(', ')})` : null,
   ].filter(Boolean);
   console.log(`  ! remote sources: ${parts.join('; ')} — see the warnings above; the build continued.`);
+}
+
+// `ingest.failOnDegraded`: the artifact is already written and the warnings are already
+// printed, so this only decides the exit code. Opt-in, for CI that would rather fail than
+// publish stale metadata after a rate limit.
+const degraded = degradedRepos(data);
+if (config.ingest.failOnDegraded && degraded.length > 0) {
+  console.error(
+    `frznforge ingest: ${degraded.length} source(s) ended the run degraded ` +
+      `(${degraded.join(', ')}); failing because ingest.failOnDegraded is set. ` +
+      'The artifact was still written.',
+  );
+  process.exit(1);
 }
 
 const ms = Math.round(performance.now() - started);

@@ -5,11 +5,17 @@
 * **Licenses link to their canonical page.** A recognised SPDX id on the repo header badge and in the About panel now links to choosealicense.com, or to creativecommons.org for Creative Commons licenses. Unrecognised ids (and the `Custom` placeholder) stay plain text rather than guessing a URL.
 * **Hosted sites are linked from the repo they come from.** A repo published through `hosting.sites` now shows a "Hosted site" row in its About panel linking to the served site. Previously the hosting binding existed in the artifact but nothing in the UI pointed at it.
 
+* **Opt-in refetch controls.** `ingest.reuse.skipUnchanged` runs one `git ls-remote` per remote repo and skips the fetch when the mirror already holds every ref the remote does; any difference, or any failure of the probe, falls through to a normal fetch. `ingest.reuse.cooldownSeconds` skips a repo whose last *fully successful* fetch (both the git and metadata halves) was within the cooldown, reporting it during the build. Both are off by default, and both are byte-neutral: a skipped run emits the identical artifact.
+
+* **Rate limits back off per origin.** A 429 — or GitHub's 403-with-no-quota-left — is now retried with exponential backoff keyed to the host, so every repo being ingested in parallel from one forge waits behind a single timer while other forges are unaffected. The provider's `Retry-After` is honoured; a limit longer than a minute blocks that host for the stated period so the remaining repos fall back to cached metadata immediately instead of each burning a retry ladder. Repos with no cached metadata are fetched first, so a limited run spends its budget where there is nothing to fall back on. `ingest.failOnDegraded` (default off) makes such a run exit non-zero instead of quietly publishing stale metadata.
+
 ## Bug Fixes
 
 * **The clone popup was squeezed to the width of its button.** Its `max-width: 100%` resolved against the shrink-wrapped `<details>` that contains it, clamping the panel to the "Clone" button and pushing its contents outside. The panel now sizes against the viewport, and is 400px so a typical GitHub clone URL fits without truncation. Below 900px — where the toolbar drops its `margin-left: auto` and the button is no longer at the right edge — the panel anchors to the toolbar instead, so it can no longer hang off the side of a phone screen.
 
 ## Other
+
+* **Per-half fetch status is recorded.** The ingest run log (`<cacheDir>/last-run.json`) is now version 2: beside the existing timestamp and freshness flag, each remote source records whether the *git mirror* fetch and the *provider metadata* fetch each succeeded, plus the mirror's refs at the end of the run. The halves are reported by the fetch code rather than inferred from warning codes, because `remote-cache-stale` is raised for both a stale mirror and stale metadata. A version 1 log on disk is discarded and rebuilt, which costs one un-skipped fetch cycle.
 
 * **Insights lead with lines of code.** The code-size tile now shows the line count as the headline number and the approximate byte size beneath it, with the label following suit. A checkpoint that went over the ingest read budget cannot count lines, so it keeps bytes as the headline and says why.
 

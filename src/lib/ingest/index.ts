@@ -19,14 +19,16 @@ import { resolveHosting } from './hosting';
 import { slugFor, slugify } from './meta';
 import { collectNotes } from './notes';
 import { resolveOrganizations, type OrgRepoInput } from './orgs';
-import { prepareRemote, type MirrorAction, type PrepareRemoteDeps } from './remote';
+import { prepareRemote, providerCachePathFor, type MirrorAction, type PrepareRemoteDeps } from './remote';
 import {
   configHashFor,
   readRunLog,
   readScanCache,
   rehydrateScan,
   scanCachePathFor,
+  readRefHeads,
   scanInputDigest,
+  withinCooldown,
   withinFreshWindow,
   writeRunLog,
   writeScanCache,
@@ -38,7 +40,17 @@ export { scanRepo } from './scan';
 export type { ScanOptions, ScanResult, ScanSource } from './scan';
 export { ensureMirror, prepareRemote } from './remote';
 export type { EnsureMirrorOptions, EnsureMirrorResult, GitRunner, MirrorAction, PrepareRemoteDeps, PrepareRemoteOptions } from './remote';
-export { parseIngestArgs, readRunLog, runLogPathFor, scanCachePathFor, withinFreshWindow } from './reuse';
+export {
+  parseIngestArgs,
+  parseRefLines,
+  readRefHeads,
+  readRunLog,
+  refsEqual,
+  runLogPathFor,
+  scanCachePathFor,
+  withinCooldown,
+  withinFreshWindow,
+} from './reuse';
 export type { IngestArgs, RunLog, RunLogEntry } from './reuse';
 export { HOSTED_BRANCH_FALLBACKS, resolveHostedBranch, resolveHosting } from './hosting';
 export type { ResolveHostingResult } from './hosting';
@@ -47,6 +59,27 @@ export type { CollectNotesOptions, CollectNotesResult } from './notes';
 export { resolveOrganizations } from './orgs';
 export type { OrgRepoInput, ResolveOrganizationsResult } from './orgs';
 
+/**
+ * Warning codes that mean a remote source was published from cached or missing provider
+ * data rather than a clean fetch. Shared by the run log (which records `fresh: false` for
+ * them) and by `ingest.failOnDegraded` (which turns them into a non-zero exit).
+ */
+export const DEGRADED_WARNING_CODES: ReadonlySet<Warning['code']> = new Set([
+  'remote-fetch-failed',
+  'remote-rate-limited',
+  'remote-auth-missing',
+  'remote-cache-stale',
+] as Warning['code'][]);
+
+/** Repo slugs that ended the run degraded, in artifact-warning order, de-duplicated. */
+export function degradedRepos(data: ForgeData): string[] {
+  const out: string[] = [];
+  for (const w of data.warnings) {
+    if (w.repo && DEGRADED_WARNING_CODES.has(w.code) && !out.includes(w.repo)) out.push(w.repo);
+  }
+  return out;
+}
+
 /** What ingest did with one remote source. Reporting only — never enters the artifact. */
 export interface RemoteStatus {
   slug: string;
@@ -54,6 +87,12 @@ export interface RemoteStatus {
   action: MirrorAction;
   /** True when there was no mirror to scan and the repo was left out of the artifact. */
   skipped: boolean;
+  /**
+   * True when `ingest.reuse.cooldownSeconds` is why the network was skipped (as opposed to
+   * the freshness window, which produces the same `'reused'` action). Reporting only — the
+   * build prints it so a fast run is never mistaken for a broken one.
+   */
+  cooldown: boolean;
 }
 
 export interface IngestHooks {
@@ -92,6 +131,31 @@ async function pool<T, R>(items: T[], limit: number, fn: (item: T, index: number
 
 function cmpStr(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * `config.repos`, stably partitioned so remote sources with no cached provider metadata run
+ * first. Local sources never touch the network and keep their place in the tail group.
+ *
+ * `--no-cache` reads nothing from the provider cache, so with it every remote is a "miss"
+ * and the original order stands.
+ */
+async function orderMissesFirst(config: ResolvedConfig, noCache: boolean): Promise<ResolvedConfig['repos']> {
+  if (noCache) return config.repos;
+  const misses: ResolvedConfig['repos'] = [];
+  const rest: ResolvedConfig['repos'] = [];
+  for (const src of config.repos) {
+    if (!isRemoteSourceConfig(src)) {
+      rest.push(src);
+      continue;
+    }
+    const cached = await fs
+      .stat(providerCachePathFor(src.absPath))
+      .then((st) => st.isFile())
+      .catch(() => false);
+    (cached ? rest : misses).push(src);
+  }
+  return misses.length > 0 ? [...misses, ...rest] : config.repos;
 }
 
 /**
@@ -138,7 +202,18 @@ export async function ingest(
   const fetchMode = noCache ? ('always' as const) : config.ingest.fetch;
   const remoteConfig = fetchMode === config.ingest.fetch ? config : { ...config, ingest: { ...config.ingest, fetch: fetchMode } };
 
-  const results = await pool(config.repos, config.ingest.concurrency, async (src) => {
+  // Misses first: a remote source with no cached provider metadata is either new or a
+  // failure from a previous run, and it is the one most likely to need the network. Giving
+  // those the head of the queue means a run that hits a rate limit spends its budget on the
+  // repos that have nothing to fall back on, rather than on repos that would have been fine
+  // serving cache. Config order is preserved WITHIN each group (a stable partition).
+  //
+  // This reorders *processing*, never output: assembly sorts by slug and the run log is
+  // keyed by path, so the artifact is byte-identical whatever order the pool runs in — the
+  // "byte-identical under a reordered run" test pins that.
+  const order = await orderMissesFirst(config, noCache);
+
+  const results = await pool(order, config.ingest.concurrency, async (src) => {
     // Must match what prepareRemote/scanRepo will settle on, or the warnings raised before
     // the scan get stamped with a slug no repo has. For a remote source that means the
     // configured name, never the mirror directory (which carries the cache-key digest).
@@ -171,6 +246,9 @@ export async function ingest(
     // the same as scanner warnings and follow the repo through a slug-collision rename.
     let remoteWarnings: Warning[] = [];
     let remote: RemoteStatus | null = null;
+    // Run-log v2: which half of the fetch worked, and the mirror's refs afterwards.
+    let fetchStatus: { git: boolean; meta: boolean } | null = null;
+    let heads: Record<string, string> | null = null;
 
     const skipRemote = (message: string) => ({
       result: {
@@ -180,6 +258,8 @@ export async function ingest(
       remoteWarnings,
       remote,
       remoteAbsPath: src.absPath,
+      fetchStatus,
+      heads,
       org,
     });
 
@@ -187,24 +267,45 @@ export async function ingest(
       // Freshness window: only for `'auto'` — `'always'` is an explicit ask to fetch, and
       // `'never'` must keep emitting its stale-cache warnings (a window-skip suppressing
       // them would make the same commits produce different bytes depending on timing).
-      const skipFetch =
+      // Precedence, cheapest decision first: `fetch` mode has already been settled above;
+      // then the freshness window (minutes, on by default), then the cooldown (hours,
+      // opt-in). Both mean the same thing to prepareRemote — "use the cache, touch no
+      // network" — so they share one flag and differ only in what gets reported.
+      const prevEntry = prevRemotes?.[src.absPath];
+      const inWindow =
+        fetchMode === 'auto' && prevRemotes !== null && withinFreshWindow(prevEntry, now(), reuse.maxAgeMinutes);
+      const inCooldown =
         fetchMode === 'auto' &&
         prevRemotes !== null &&
-        withinFreshWindow(prevRemotes[src.absPath], now(), reuse.maxAgeMinutes);
+        !inWindow &&
+        withinCooldown(prevEntry, now(), reuse.cooldownSeconds);
+      const skipFetch = inWindow || inCooldown;
 
       // One unreachable forge must never take the build down: prepareRemote turns every
       // failure into a warning, and anything unexpected is caught here as one too.
       let prepared;
       try {
-        prepared = await prepareRemote(src, remoteConfig, options.remote ?? {}, { skipFetch, noCacheReads: noCache });
+        prepared = await prepareRemote(src, remoteConfig, options.remote ?? {}, {
+          skipFetch,
+          noCacheReads: noCache,
+          // Same-commit skip: only meaningful with a baseline from a previous run, and only
+          // when reuse reads are on at all (`--no-cache` means fetch everything).
+          ...(reuseReads && reuse.skipUnchanged ? { skipUnchanged: true } : {}),
+          ...(reuseReads && prevEntry?.heads ? { knownHeads: prevEntry.heads } : {}),
+        });
       } catch (e) {
-        remote = { slug, provider: src.type, action: 'missing', skipped: true };
+        remote = { slug, provider: src.type, action: 'missing', skipped: true, cooldown: false };
+        fetchStatus = { git: false, meta: false };
         hooks.onRemote?.(remote);
         return skipRemote(`${src.type} import failed (${e instanceof Error ? e.message : String(e)}); repo skipped`);
       }
       remoteWarnings = prepared.warnings.map((w) => ({ ...w, repo: slug }));
-      remote = { slug, provider: src.type, action: prepared.action, skipped: !prepared.ready };
+      remote = { slug, provider: src.type, action: prepared.action, skipped: !prepared.ready, cooldown: inCooldown };
+      fetchStatus = prepared.fetchStatus;
       hooks.onRemote?.(remote);
+      // The mirror's refs as they now stand — the baseline the next run's same-hash check
+      // compares a `git ls-remote` against. Read only when the run log will be written.
+      if (reuse.enabled && prepared.ready) heads = await readRefHeads(prepared.scanSource.absPath);
       if (!prepared.ready) return skipRemote(`no usable mirror for ${src.type} repo '${slug}'; repo skipped`);
       scanSource = { ...prepared.scanSource, ...(hostedRequests.length > 0 ? { hostedRequests } : {}) };
     }
@@ -228,7 +329,15 @@ export async function ingest(
       await writeScanCache(scanCacheFile, digest, r);
     }
     if (!('skipped' in r)) hooks.onRepoDone?.(r.repo);
-    return { result: r, remoteWarnings, remote, remoteAbsPath: isRemoteSourceConfig(src) ? src.absPath : null, org };
+    return {
+      result: r,
+      remoteWarnings,
+      remote,
+      remoteAbsPath: isRemoteSourceConfig(src) ? src.absPath : null,
+      fetchStatus,
+      heads,
+      org,
+    };
   });
 
   const scanned: Array<{
@@ -238,11 +347,25 @@ export async function ingest(
     org: string | null;
   }> = [];
   const remotes: RemoteStatus[] = [];
-  const remoteRuns: Array<{ absPath: string; action: MirrorAction; skipped: boolean; warnings: Warning[] }> = [];
-  for (const { result, remoteWarnings, remote, remoteAbsPath, org } of results) {
+  const remoteRuns: Array<{
+    absPath: string;
+    action: MirrorAction;
+    skipped: boolean;
+    warnings: Warning[];
+    fetchStatus: { git: boolean; meta: boolean } | null;
+    heads: Record<string, string> | null;
+  }> = [];
+  for (const { result, remoteWarnings, remote, remoteAbsPath, fetchStatus, heads, org } of results) {
     if (remote) remotes.push(remote);
     if (remote && remoteAbsPath) {
-      remoteRuns.push({ absPath: remoteAbsPath, action: remote.action, skipped: remote.skipped, warnings: remoteWarnings });
+      remoteRuns.push({
+        absPath: remoteAbsPath,
+        action: remote.action,
+        skipped: remote.skipped,
+        warnings: remoteWarnings,
+        fetchStatus,
+        heads,
+      });
     }
     const r: ScanResult = result;
     if ('skipped' in r) {
@@ -323,7 +446,6 @@ export async function ingest(
   // previous stamp — the window must not extend itself, or a build every minute would never
   // refresh anything. A degraded fetch records `fresh: false`, so it is always re-attempted.
   if (reuse.enabled) {
-    const DEGRADED = new Set(['remote-fetch-failed', 'remote-rate-limited', 'remote-auth-missing', 'remote-cache-stale']);
     const entries: Record<string, RunLogEntry> = {};
     for (const run of remoteRuns) {
       if (run.action === 'reused') {
@@ -331,9 +453,18 @@ export async function ingest(
         if (prev) entries[run.absPath] = prev;
         continue;
       }
+      const prev = prevRemotes?.[run.absPath];
       entries[run.absPath] = {
         fetchedAt: now().toISOString(),
-        fresh: !run.skipped && !run.warnings.some((w) => DEGRADED.has(w.code)),
+        fresh: !run.skipped && !run.warnings.some((w) => DEGRADED_WARNING_CODES.has(w.code)),
+        // v2: the halves, straight from prepareRemote. A run that never got that far
+        // (an unexpected throw) reports both failed rather than guessing.
+        gitOk: run.fetchStatus?.git ?? false,
+        metaOk: run.fetchStatus?.meta ?? false,
+        // Heads describe the mirror as it now stands. When they could not be read, keep the
+        // previous baseline rather than erasing it: a forgotten baseline only costs one
+        // un-skipped fetch, whereas a WRONG one could skip a fetch that was needed.
+        heads: run.heads ?? prev?.heads ?? null,
       };
     }
     await writeRunLog(config.cacheDir, { configHash: cfgHash, remotes: entries });

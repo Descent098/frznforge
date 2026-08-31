@@ -40,15 +40,43 @@ describe('theme.heat', () => {
 });
 
 describe('ingest.reuse', () => {
-  it('defaults to enabled with a 2-minute window', () => {
-    expect(FrznforgeConfigSchema.parse(base).ingest.reuse).toEqual({ enabled: true, maxAgeMinutes: 2 });
+  it('defaults to enabled with a 2-minute window, and both 0.3.0 skips OFF', () => {
+    // skipUnchanged and cooldownSeconds are opt-in by design: they trade a guarantee of
+    // freshness for speed, which is the user's call, not a default.
+    expect(FrznforgeConfigSchema.parse(base).ingest.reuse).toEqual({
+      enabled: true,
+      maxAgeMinutes: 2,
+      skipUnchanged: false,
+      cooldownSeconds: null,
+    });
   });
 
   it('accepts overrides and rejects a non-positive window', () => {
     expect(
       FrznforgeConfigSchema.parse({ ...base, ingest: { reuse: { enabled: false, maxAgeMinutes: 10 } } }).ingest.reuse,
-    ).toEqual({ enabled: false, maxAgeMinutes: 10 });
+    ).toMatchObject({ enabled: false, maxAgeMinutes: 10 });
     expect(() => FrznforgeConfigSchema.parse({ ...base, ingest: { reuse: { maxAgeMinutes: 0 } } })).toThrow();
+  });
+
+  it('validates the 0.3.0 refetch knobs', () => {
+    const reuse = (r: unknown) => FrznforgeConfigSchema.parse({ ...base, ingest: { reuse: r } }).ingest.reuse;
+    expect(reuse({ skipUnchanged: true, cooldownSeconds: 3600 })).toMatchObject({
+      skipUnchanged: true,
+      cooldownSeconds: 3600,
+    });
+    expect(reuse({ cooldownSeconds: 0 }).cooldownSeconds).toBe(0); // "no cooldown", explicitly
+    expect(reuse({ cooldownSeconds: null }).cooldownSeconds).toBeNull();
+    expect(() => reuse({ cooldownSeconds: -1 })).toThrow();
+    expect(() => reuse({ cooldownSeconds: 1.5 })).toThrow();
+    expect(() => reuse({ skipUnchanged: 'yes' })).toThrow();
+  });
+});
+
+describe('ingest.failOnDegraded', () => {
+  it('defaults to off, so a rate-limited build still succeeds', () => {
+    expect(FrznforgeConfigSchema.parse(base).ingest.failOnDegraded).toBe(false);
+    expect(FrznforgeConfigSchema.parse({ ...base, ingest: { failOnDegraded: true } }).ingest.failOnDegraded).toBe(true);
+    expect(() => FrznforgeConfigSchema.parse({ ...base, ingest: { failOnDegraded: 'yes' } })).toThrow();
   });
 });
 

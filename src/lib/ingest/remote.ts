@@ -48,6 +48,7 @@ import { Release as ReleaseSchema, RepoMetaInput as RepoMetaInputSchema } from '
 import type { Release, RepoLinks, RepoMetaInput, RepoSource, Warning } from '../data/schema';
 import { isGitRepo } from './git';
 import { MAX_DESCRIPTION, isDescriptionTooLong, slugify, truncateDescription } from './meta';
+import { parseRefLines, refsEqual } from './reuse';
 import type { ScanSource } from './scan';
 
 /** Hard ceiling on a single network git invocation. */
@@ -58,7 +59,7 @@ export const DEFAULT_GIT_TIMEOUT_MS = 300_000;
  * (`ingest.reuse`, 0.2.0): the last successful fetch was recent enough that neither the
  * provider API nor the mirror was touched — deliberately fresh, not stale.
  */
-export type MirrorAction = 'cloned' | 'fetched' | 'cached' | 'missing' | 'reused';
+export type MirrorAction = 'cloned' | 'fetched' | 'cached' | 'missing' | 'reused' | 'current';
 
 export interface GitRunResult {
   code: number | null;
@@ -89,6 +90,17 @@ export interface EnsureMirrorOptions {
   timeoutMs?: number;
   /** Injectable git runner (tests). */
   run?: GitRunner;
+  /**
+   * `ingest.reuse.skipUnchanged`: ask the remote what refs it has (one `git ls-remote`) and
+   * skip `git remote update` entirely when the mirror already matches. Requires
+   * {@link knownHeads}; without a baseline there is nothing to compare against.
+   */
+  skipUnchanged?: boolean;
+  /**
+   * The mirror's refs at the end of the previous run (`RunLogEntry.heads`). Compared against
+   * the remote's; ALL refs equal means the fetch has nothing to do.
+   */
+  knownHeads?: Record<string, string> | null;
 }
 
 export interface EnsureMirrorResult {
@@ -311,6 +323,19 @@ async function ensureMirrorLocked(
   };
 
   if (exists) {
+    // Same-commit skip: one cheap ls-remote against the remote's ref advertisement, versus
+    // the refs this mirror ended the last run with. Mirrors fetch per REPOSITORY, so the
+    // only honest granularity is "every ref matches" — then `remote update` provably has
+    // nothing to do. Any difference, or any failure of the probe, falls through to a normal
+    // update: the skip may never be the reason a change is missed.
+    if (opts.skipUnchanged && opts.knownHeads && Object.keys(opts.knownHeads).length > 0) {
+      const probe = await attempt(['ls-remote', '--heads', '--tags', '--', opts.cloneUrl], cachePath);
+      if (!(probe instanceof Error) && probe.code === 0) {
+        if (refsEqual(parseRefLines(probe.stdout), opts.knownHeads)) {
+          return { path: cachePath, action: 'current' };
+        }
+      }
+    }
     const r = await attempt(['-C', cachePath, 'remote', 'update', '--prune'], cachePath);
     if (r instanceof Error) return { path: cachePath, action: 'cached', error: r };
     if (r.code === 0) return { path: cachePath, action: 'fetched' };
@@ -423,6 +448,16 @@ export interface PrepareRemoteResult {
   action: MirrorAction;
   /** False when there is no mirror to scan; the caller must skip the repo. */
   ready: boolean;
+  /**
+   * How each half of the fetch went, for the run log (`RunLogEntry.gitOk`/`metaOk`).
+   * `null` means no fetch was attempted at all — the freshness window skipped it — and the
+   * caller keeps the previous run's record rather than inventing one.
+   *
+   * Reported here rather than inferred from the warning codes because `remote-cache-stale`
+   * is raised both for a mirror that could not be refreshed and for provider metadata
+   * served from cache: the code alone cannot tell the two halves apart.
+   */
+  fetchStatus: { git: boolean; meta: boolean } | null;
 }
 
 /** A configured remote source, optionally carrying the resolved cache path from the config. */
@@ -439,6 +474,12 @@ export interface PrepareRemoteOptions {
   skipFetch?: boolean;
   /** `--no-cache`: never read the provider `.meta.json` (failures then degrade harder). */
   noCacheReads?: boolean;
+  /**
+   * `ingest.reuse.skipUnchanged` plus the baseline it needs: the mirror's refs at the end of
+   * the previous run. Together they let `ensureMirror` prove a fetch is unnecessary.
+   */
+  skipUnchanged?: boolean;
+  knownHeads?: Record<string, string> | null;
 }
 
 function warn(code: Warning['code'], message: string): Warning {
@@ -618,6 +659,7 @@ export async function prepareRemote(
       warnings,
       action: 'reused',
       ready: true,
+      fetchStatus: null, // nothing was attempted; the caller carries the previous stamp
     };
   }
 
@@ -693,6 +735,8 @@ export async function prepareRemote(
     fetch: cfg.ingest.fetch,
     cloneUrl,
     token,
+    ...(opts.skipUnchanged ? { skipUnchanged: true } : {}),
+    ...(opts.knownHeads ? { knownHeads: opts.knownHeads } : {}),
     ...(deps.timeoutMs !== undefined ? { timeoutMs: deps.timeoutMs } : {}),
     ...(deps.git ? { run: deps.git } : {}),
   });
@@ -726,5 +770,15 @@ export async function prepareRemote(
     warnings,
     action: result.action,
     ready: result.action !== 'missing',
+    fetchStatus: {
+      // 'fetched'/'cloned' mean git actually talked to the remote this run, and 'current'
+      // means it asked and was told there was nothing to fetch — all three leave the mirror
+      // provably up to date. 'cached' means the update FAILED and the old mirror was used;
+      // 'missing' means there is no mirror at all.
+      git: result.action === 'fetched' || result.action === 'cloned' || result.action === 'current',
+      // Metadata is healthy only when every call we wanted actually succeeded — a releases
+      // failure that fell back to cache is still a failed metadata fetch.
+      meta: freshMeta && (!wantProviderReleases || freshReleases),
+    },
   };
 }

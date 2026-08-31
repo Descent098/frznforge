@@ -22,7 +22,10 @@ import {
   ensureMirror,
   ingest,
   parseIngestArgs,
+  parseRefLines,
   readRunLog,
+  refsEqual,
+  runLogPathFor,
   scanCachePathFor,
   serializeForgeData,
   withinFreshWindow,
@@ -315,7 +318,11 @@ describe('freshness window (remote sources)', () => {
     expect(run1.remotes[0]!.action).toBe('cloned');
 
     const log = await readRunLog(s.cfg.cacheDir);
-    expect(log?.remotes[s.cfg.repos[0]!.absPath]).toEqual({ fetchedAt: '2026-01-01T00:00:00.000Z', fresh: true });
+    const entry = log?.remotes[s.cfg.repos[0]!.absPath];
+    // run-log v2: the timestamp and `fresh` keep their 0.2.0 meaning, and both halves of
+    // the fetch plus the mirror's refs are now recorded beside them.
+    expect(entry).toMatchObject({ fetchedAt: '2026-01-01T00:00:00.000Z', fresh: true, gitOk: true, metaOk: true });
+    expect(Object.keys(entry!.heads!)).toEqual(['refs/heads/main']);
 
     s.setClock('2026-01-01T00:01:00Z'); // inside the 2-minute default window
     const run2 = await ingest(s.cfg, {}, { remote: s.deps });
@@ -424,5 +431,392 @@ describe('freshness window (remote sources)', () => {
     s.setClock('2026-01-01T00:10:00Z');
     const run2 = await ingest(s.cfg, {}, { remote: s.deps });
     expect(run2.data.repos[0]!.description).toBe('rewritten on the forge');
+  });
+  it('records which HALF of the fetch failed, not just that something did', async () => {
+    // A rate-limited provider with a healthy mirror is the case the cooldown has to read
+    // correctly: git is fine, metadata is not. `fresh` alone cannot say that.
+    const s = remoteSetup();
+    await ingest(s.cfg, {}, { remote: s.deps });
+
+    s.setFail(new ImporterError('rate-limit', 'slow down', { status: 429 }));
+    s.setClock('2026-01-01T00:10:00Z');
+    await ingest(s.cfg, {}, { remote: s.deps });
+
+    const entry = (await readRunLog(s.cfg.cacheDir))!.remotes[s.cfg.repos[0]!.absPath]!;
+    expect(entry.gitOk).toBe(true);   // the mirror updated fine
+    expect(entry.metaOk).toBe(false); // the API did not
+    expect(entry.fresh).toBe(false);  // and the run as a whole is degraded, as before
+    expect(entry.heads).not.toBeNull();
+  });
+
+  it('keeps the recorded heads through a window-skip rather than erasing them', async () => {
+    const s = remoteSetup();
+    await ingest(s.cfg, {}, { remote: s.deps });
+    const first = (await readRunLog(s.cfg.cacheDir))!.remotes[s.cfg.repos[0]!.absPath]!;
+    expect(first.heads).toBeTruthy();
+
+    s.setClock('2026-01-01T00:01:00Z'); // inside the window: action 'reused'
+    const run2 = await ingest(s.cfg, {}, { remote: s.deps });
+    expect(run2.remotes[0]!.action).toBe('reused');
+
+    const second = (await readRunLog(s.cfg.cacheDir))!.remotes[s.cfg.repos[0]!.absPath]!;
+    expect(second).toEqual(first); // the whole stamp carries over, heads included
+  });
+
+  it('discards a run log written by an older version instead of half-reading it', async () => {
+    const s = remoteSetup();
+    await ingest(s.cfg, {}, { remote: s.deps });
+    const file = runLogPathFor(s.cfg.cacheDir);
+    const v1 = { version: 1, configHash: 'whatever', remotes: { '/some/path': { fetchedAt: '2026-01-01T00:00:00.000Z', fresh: true } } };
+    fs.writeFileSync(file, JSON.stringify(v1));
+    expect(await readRunLog(s.cfg.cacheDir)).toBeNull();
+  });
+});
+
+describe('ref parsing', () => {
+  // Built from character codes rather than escapes so the fixtures are unambiguous about
+  // which byte separates the columns: for-each-ref is NUL-separated, ls-remote is TAB.
+  const NUL = String.fromCharCode(0);
+  const TAB = String.fromCharCode(9);
+  const lines = (...rows: string[]) => rows.join('\n') + '\n';
+
+  it('reads both for-each-ref and ls-remote output into the same shape', () => {
+    const forEachRef = lines(`refs/heads/main${NUL}aaa`, `refs/tags/v1${NUL}bbb`);
+    const lsRemote = lines(`aaa${TAB}refs/heads/main`, `bbb${TAB}refs/tags/v1`);
+    const expected = { 'refs/heads/main': 'aaa', 'refs/tags/v1': 'bbb' };
+    expect(parseRefLines(forEachRef)).toEqual(expected);
+    expect(parseRefLines(lsRemote)).toEqual(expected);
+    expect(refsEqual(parseRefLines(forEachRef), parseRefLines(lsRemote))).toBe(true);
+  });
+
+  it('drops the peeled `^{}` rows ls-remote adds for annotated tags', () => {
+    // Both sides already agree on the tag OBJECT id; keeping the peeled row would make an
+    // ls-remote listing look different from a for-each-ref one and defeat every skip.
+    const lsRemote = lines(
+      `aaa${TAB}refs/heads/main`,
+      `bbb${TAB}refs/tags/v1`,
+      `ccc${TAB}refs/tags/v1^{}`,
+    );
+    expect(parseRefLines(lsRemote)).toEqual({ 'refs/heads/main': 'aaa', 'refs/tags/v1': 'bbb' });
+  });
+
+  it('tolerates blank lines and CRLF, which git output carries on Windows', () => {
+    const CR = String.fromCharCode(13);
+    const lsRemote = `aaa${TAB}refs/heads/main${CR}\n\nbbb${TAB}refs/tags/v1${CR}\n`;
+    expect(parseRefLines(lsRemote)).toEqual({ 'refs/heads/main': 'aaa', 'refs/tags/v1': 'bbb' });
+  });
+
+  it('spots any difference: a moved ref, a new ref, a deleted ref', () => {
+    const base = { 'refs/heads/main': 'aaa' };
+    expect(refsEqual(base, { 'refs/heads/main': 'aaa' })).toBe(true);
+    expect(refsEqual(base, { 'refs/heads/main': 'zzz' })).toBe(false);
+    expect(refsEqual(base, { 'refs/heads/main': 'aaa', 'refs/tags/v1': 'bbb' })).toBe(false);
+    expect(refsEqual(base, {})).toBe(false);
+    // same size, different names — the length check alone must not pass this
+    expect(refsEqual(base, { 'refs/heads/other': 'aaa' })).toBe(false);
+  });
+});
+
+describe('opt-in refetch controls (0.3.0)', () => {
+  /**
+   * A remote fixture whose "remote" is a real local repo, so the `git ls-remote` probe runs
+   * for real against real refs — the skip is proven end to end, not against a stub.
+   *
+   * Assertions key on `RemoteStatus.action`, which is the honest signal: `'current'` is
+   * produced ONLY by the ls-remote-matched path, `'fetched'` only by a real `remote update`.
+   */
+  function setup(reuseOver: Record<string, unknown> = {}) {
+    const root = tempDir('refetch-root');
+    const origin = newFixture('origin');
+    origin.writeAndCommit({ 'README.md': '# Widget\n' }, 'first', { date: at(0) });
+
+    const cfg = makeConfig(root, [{ type: 'gitea', host: 'https://gitea.example.com', owner: 'acme', repo: 'widget' }], {
+      reuse: { maxAgeMinutes: 2, ...reuseOver },
+    });
+
+    let clock = new Date('2026-01-01T00:00:00Z');
+    const calls: string[] = [];
+    let failWith: Error | null = null;
+    const meta: ImportedRepoMeta = {
+      name: null,
+      description: 'from the provider',
+      homepage: null,
+      topics: [],
+      license: null,
+      defaultBranch: 'main',
+      webUrl: 'https://gitea.example.com/acme/widget',
+      cloneUrl: 'https://gitea.example.com/acme/widget.git',
+      issuesUrl: null,
+      template: false,
+      archived: false,
+    };
+    const importer: Importer = {
+      provider: 'gitea',
+      async fetchMeta() {
+        calls.push('meta');
+        if (failWith) throw failWith;
+        return meta;
+      },
+      async fetchReleases() {
+        calls.push('releases');
+        if (failWith) throw failWith;
+        return { releases: [] as Release[], truncated: false };
+      },
+    };
+    const deps: PrepareRemoteDeps = {
+      env: {},
+      createImporter: () => importer,
+      ensureMirror: (source, cachePath, opts) =>
+        ensureMirror(source, cachePath, { ...opts, cloneUrl: origin.dir.replace(/\\/g, '/') }),
+      now: () => clock,
+    };
+    return {
+      cfg,
+      origin,
+      calls,
+      deps,
+      setClock: (iso: string) => (clock = new Date(iso)),
+      setFail: (e: Error | null) => (failWith = e),
+    };
+  }
+
+  describe('skipUnchanged', () => {
+    it('skips the fetch when ls-remote shows every ref already matches', async () => {
+      const s = setup({ skipUnchanged: true });
+      await ingest(s.cfg, {}, { remote: s.deps }); // clone
+      s.setClock('2026-01-01T01:00:00Z'); // well outside the freshness window
+
+      const run2 = await ingest(s.cfg, {}, { remote: s.deps });
+      expect(run2.remotes[0]!.action).toBe('current'); // probe matched; no `remote update`
+      // ...and the mirror still counts as healthy, so nothing degrades over a deliberate skip
+      expect(run2.data.warnings.filter((w) => w.code.startsWith('remote-'))).toEqual([]);
+    });
+
+    it('fetches normally as soon as any ref moves', async () => {
+      const s = setup({ skipUnchanged: true });
+      await ingest(s.cfg, {}, { remote: s.deps });
+
+      s.origin.writeAndCommit({ 'NEW.md': 'new\n' }, 'second', { date: at(10) });
+      s.setClock('2026-01-01T01:00:00Z');
+
+      const run2 = await ingest(s.cfg, {}, { remote: s.deps });
+      expect(run2.remotes[0]!.action).toBe('fetched');
+      expect(run2.data.repos[0]!.commitCount).toBe(2); // the new commit actually landed
+    });
+
+    it('picks up a new tag, not just a moved branch', async () => {
+      // `ls-remote --heads --tags` and the recorded baseline both cover tags; a tags-only
+      // change must not look like "nothing to do".
+      const s = setup({ skipUnchanged: true });
+      await ingest(s.cfg, {}, { remote: s.deps });
+
+      s.origin.tag('v1.0.0');
+      s.setClock('2026-01-01T01:00:00Z');
+
+      const run2 = await ingest(s.cfg, {}, { remote: s.deps });
+      expect(run2.remotes[0]!.action).toBe('fetched');
+      expect(run2.data.repos[0]!.gitTags.map((t) => t.name)).toContain('v1.0.0');
+    });
+
+    it('is off by default: always a real update', async () => {
+      const s = setup();
+      await ingest(s.cfg, {}, { remote: s.deps });
+      s.setClock('2026-01-01T01:00:00Z');
+      expect((await ingest(s.cfg, {}, { remote: s.deps })).remotes[0]!.action).toBe('fetched');
+    });
+
+    it('produces byte-identical output whether it skipped or fetched', async () => {
+      // The whole safety argument: a skip must be invisible in the artifact.
+      const plain = setup();
+      const run1 = await ingest(plain.cfg, {}, { remote: plain.deps });
+      await writeArtifact(run1.data, run1.blobs, run1.archives, plain.cfg.outDir);
+      plain.setClock('2026-01-01T01:00:00Z');
+      const fetched = await ingest(plain.cfg, {}, { remote: plain.deps });
+
+      const skipping = setup({ skipUnchanged: true });
+      const first = await ingest(skipping.cfg, {}, { remote: skipping.deps });
+      await writeArtifact(first.data, first.blobs, first.archives, skipping.cfg.outDir);
+      skipping.setClock('2026-01-01T01:00:00Z');
+      const skipped = await ingest(skipping.cfg, {}, { remote: skipping.deps });
+
+      expect(skipped.remotes[0]!.action).toBe('current');
+      expect(fetched.remotes[0]!.action).toBe('fetched');
+      expect(serializeForgeData(skipped.data)).toBe(serializeForgeData(fetched.data));
+    });
+  });
+
+  describe('cooldownSeconds', () => {
+    it('skips a repo whose last fetch fully succeeded inside the cooldown', async () => {
+      const s = setup({ cooldownSeconds: 3600 });
+      await ingest(s.cfg, {}, { remote: s.deps });
+      expect(s.calls).toEqual(['meta', 'releases']);
+
+      s.setClock('2026-01-01T00:30:00Z'); // outside the 2-min window, inside the hour
+      const run2 = await ingest(s.cfg, {}, { remote: s.deps });
+      expect(s.calls).toEqual(['meta', 'releases']); // no new provider calls
+      expect(run2.remotes[0]!.action).toBe('reused');
+      expect(run2.remotes[0]!.cooldown).toBe(true); // reported, so the build can say so
+    });
+
+    it('fetches again once the cooldown has elapsed', async () => {
+      const s = setup({ cooldownSeconds: 3600 });
+      await ingest(s.cfg, {}, { remote: s.deps });
+      s.setClock('2026-01-01T02:00:00Z');
+      const run2 = await ingest(s.cfg, {}, { remote: s.deps });
+      expect(s.calls.length).toBe(4);
+      expect(run2.remotes[0]!.cooldown).toBe(false);
+    });
+
+    it('never holds back a repo whose last fetch was degraded', async () => {
+      // The self-healing rule: a rate-limited repo must be retried on the very next run,
+      // or a long cooldown would freeze the gap in place for hours.
+      const s = setup({ cooldownSeconds: 3600 });
+      await ingest(s.cfg, {}, { remote: s.deps }); // clean run
+
+      // The failing run has to be OUTSIDE run 1's cooldown, or the cooldown would skip it
+      // and there would be no degraded state to test against.
+      s.setFail(new ImporterError('rate-limit', 'slow down', { status: 429 }));
+      s.setClock('2026-01-01T02:00:00Z');
+      await ingest(s.cfg, {}, { remote: s.deps }); // degraded: metaOk false, stamped 02:00
+
+      s.setFail(null);
+      s.setClock('2026-01-01T02:10:00Z'); // deep inside the cooldown that 02:00 started
+      const before = s.calls.length;
+      const run3 = await ingest(s.cfg, {}, { remote: s.deps });
+      expect(s.calls.length).toBeGreaterThan(before); // it fetched anyway
+      expect(run3.remotes[0]!.cooldown).toBe(false);
+    });
+
+    it('is off by default', async () => {
+      const s = setup();
+      await ingest(s.cfg, {}, { remote: s.deps });
+      s.setClock('2026-01-01T00:30:00Z');
+      const run2 = await ingest(s.cfg, {}, { remote: s.deps });
+      expect(run2.remotes[0]!.cooldown).toBe(false);
+      expect(s.calls.length).toBe(4); // fetched again
+    });
+
+    it('yields the same bytes as the run it skipped', async () => {
+      const s = setup({ cooldownSeconds: 3600 });
+      const run1 = await ingest(s.cfg, {}, { remote: s.deps });
+      await writeArtifact(run1.data, run1.blobs, run1.archives, s.cfg.outDir);
+      s.setClock('2026-01-01T00:30:00Z');
+      const run2 = await ingest(s.cfg, {}, { remote: s.deps });
+      expect(serializeForgeData(run2.data)).toBe(serializeForgeData(run1.data));
+    });
+  });
+
+  describe('precedence', () => {
+    it('the freshness window wins over the cooldown, so a window skip is not mislabelled', async () => {
+      const s = setup({ cooldownSeconds: 3600 });
+      await ingest(s.cfg, {}, { remote: s.deps });
+      s.setClock('2026-01-01T00:01:00Z'); // inside BOTH
+      const run2 = await ingest(s.cfg, {}, { remote: s.deps });
+      expect(run2.remotes[0]!.action).toBe('reused');
+      expect(run2.remotes[0]!.cooldown).toBe(false); // attributed to the window, not the cooldown
+    });
+
+    it('--no-cache overrides both skips', async () => {
+      const s = setup({ cooldownSeconds: 3600, skipUnchanged: true });
+      await ingest(s.cfg, {}, { remote: s.deps });
+      s.setClock('2026-01-01T00:05:00Z');
+      const before = s.calls.length;
+
+      const run2 = await ingest(s.cfg, {}, { remote: s.deps, noCache: true });
+      expect(s.calls.length).toBeGreaterThan(before); // the provider was called
+      expect(run2.remotes[0]!.action).toBe('fetched'); // a real update, not a probe-skip
+      expect(run2.remotes[0]!.cooldown).toBe(false);
+    });
+  });
+});
+
+describe('misses-first ordering (0.3.0)', () => {
+  it('runs remotes with no cached metadata before those that have some', async () => {
+    // A rate-limited run should spend its budget on the repos that have nothing to fall
+    // back on. Order is observed through the onRepoStart hook.
+    const root = tempDir('order-root');
+    const a = newFixture('alpha');
+    a.writeAndCommit({ 'a.txt': 'a\n' }, 'a', { date: at(0) });
+    const b = newFixture('bravo');
+    b.writeAndCommit({ 'b.txt': 'b\n' }, 'b', { date: at(0) });
+
+    const mkMeta = (name: string): ImportedRepoMeta => ({
+      name: null,
+      description: `${name} from the provider`,
+      homepage: null,
+      topics: [],
+      license: null,
+      defaultBranch: 'main',
+      webUrl: `https://gitea.example.com/acme/${name}`,
+      cloneUrl: `https://gitea.example.com/acme/${name}.git`,
+      issuesUrl: null,
+      template: false,
+      archived: false,
+    });
+    const origins: Record<string, FixtureRepo> = { alpha: a, bravo: b };
+    const deps = (): PrepareRemoteDeps => ({
+      env: {},
+      createImporter: (source) => {
+        const name = (source as { repo: string }).repo;
+        return {
+          provider: 'gitea',
+          async fetchMeta() {
+            return mkMeta(name);
+          },
+          async fetchReleases() {
+            return { releases: [] as Release[], truncated: false };
+          },
+        };
+      },
+      ensureMirror: (source, cachePath, opts) =>
+        ensureMirror(source, cachePath, {
+          ...opts,
+          cloneUrl: origins[(source as { repo: string }).repo]!.dir.replace(/\\/g, '/'),
+        }),
+    });
+
+    const cfg = makeConfig(root, [
+      { type: 'gitea', host: 'https://gitea.example.com', owner: 'acme', repo: 'alpha' },
+      { type: 'gitea', host: 'https://gitea.example.com', owner: 'acme', repo: 'bravo' },
+    ], { concurrency: 1 });
+
+    // Warm only alpha's provider cache, by ingesting a config that contains alpha alone.
+    const alphaOnly = makeConfig(root, [
+      { type: 'gitea', host: 'https://gitea.example.com', owner: 'acme', repo: 'alpha' },
+    ], { concurrency: 1 });
+    await ingest(alphaOnly, {}, { remote: deps() });
+
+    const started: string[] = [];
+    const run = await ingest(cfg, { onRepoStart: (slug) => started.push(slug) }, { remote: deps() });
+    // bravo has no `.meta.json` yet, so it goes first despite being second in the config
+    expect(started).toEqual(['bravo', 'alpha']);
+    // ...and the ARTIFACT is unaffected by that: repos stay in slug order
+    expect(run.data.repos.map((r) => r.slug)).toEqual(['alpha', 'bravo']);
+  });
+
+  it('processing order never changes the artifact bytes', async () => {
+    // The determinism guard for the reordering above: same repos, opposite config order.
+    const build = async (names: string[]) => {
+      const root = tempDir('order-bytes');
+      const repos: Record<string, FixtureRepo> = {};
+      for (const n of names) {
+        const r = newFixture(n);
+        r.writeAndCommit({ [`${n}.txt`]: `${n}\n` }, n, { date: at(0) });
+        repos[n] = r;
+      }
+      const cfg = makeConfig(
+        root,
+        names.map((n) => ({ type: 'local' as const, path: repos[n]!.dir })),
+      );
+      const run = await ingest(cfg);
+      return serializeForgeData(run.data);
+    };
+    const forward = await build(['alpha', 'bravo']);
+    const reversed = await build(['bravo', 'alpha']);
+    // Slugs and paths differ per temp dir, so compare the repo ORDER, which is what the
+    // pool could have disturbed.
+    const slugs = (json: string) => (JSON.parse(json) as { repos: Array<{ slug: string }> }).repos.map((r) => r.slug);
+    expect(slugs(forward)).toEqual(['alpha', 'bravo']);
+    expect(slugs(reversed)).toEqual(['alpha', 'bravo']);
   });
 });

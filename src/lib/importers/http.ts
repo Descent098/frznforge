@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Release, ReleaseAsset } from '../data/schema';
+import { OriginBackoff, originOf, sharedBackoff } from './backoff';
 import { DEFAULT_USER_AGENT, ImporterError, redactToken } from './types';
 
 /* ---- client ------------------------------------------------------------- */
@@ -55,6 +56,12 @@ export interface JsonClientOptions {
   /** Backoff before the retry. Tests pass 0 to keep the suite fast. */
   retryDelayMs?: number;
   maxPages?: number;
+  /**
+   * Per-origin rate-limit gate. Defaults to the process-wide {@link sharedBackoff} so that
+   * every concurrently-ingested repo on one forge queues behind a single timer; tests pass
+   * their own instance with an injected clock and sleep.
+   */
+  backoff?: OriginBackoff;
 }
 
 /** One paginated `getAll` walk: the items, and whether the page cap cut it short. */
@@ -83,6 +90,7 @@ export class JsonClient {
   private readonly timeoutMs: number;
   private readonly retryDelayMs: number;
   private readonly maxPages: number;
+  private readonly backoff: OriginBackoff;
 
   constructor(options: JsonClientOptions) {
     this.auth = options.auth;
@@ -93,6 +101,7 @@ export class JsonClient {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
     this.maxPages = options.maxPages ?? DEFAULT_MAX_PAGES;
+    this.backoff = options.backoff ?? sharedBackoff;
   }
 
   /** Fetch one JSON document. */
@@ -145,18 +154,42 @@ export class JsonClient {
   }
 
   /**
-   * One request with a timeout and a single retry on a network error or a 5xx. A 5xx that
-   * survives the retry is returned and classified as `network` by {@link this.readJson}: from
-   * the build's point of view a broken forge and an unreachable one are the same thing.
+   * One request with a timeout, a single retry on a network error or a 5xx, and per-origin
+   * exponential backoff on rate limits. A 5xx that survives the retry is returned and
+   * classified as `network` by {@link this.readJson}: from the build's point of view a
+   * broken forge and an unreachable one are the same thing.
+   *
+   * Rate limits are handled differently from 5xx because they are a property of the *host*,
+   * not of this request: the gate is keyed on the origin and shared across every client, so
+   * parallel repos on one forge wait together rather than each hammering the window. See
+   * {@link OriginBackoff}.
    */
   private async request(url: string): Promise<Response> {
+    const origin = originOf(url);
     let cause: unknown;
+    // Rate-limit retries are counted separately from the 5xx/network retry: they have their
+    // own budget and their own (much longer, host-wide) delays.
+    let rateLimitAttempt = 0;
     for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
       try {
+        // Throws a `rate-limit` ImporterError when this origin is hard-blocked, which the
+        // caller already turns into a warning plus the cached-metadata fallback.
+        await this.backoff.beforeRequest(origin, describe(url, this.token));
         const response = await this.send(url);
+        if (isRateLimitResponse(response)) {
+          rateLimitAttempt += 1;
+          const retryAfter = parseRetryAfter(response.headers);
+          if (await this.backoff.noteRateLimit(origin, retryAfter, rateLimitAttempt)) {
+            attempt -= 1; // a rate-limit retry must not consume the 5xx/network budget
+            continue;
+          }
+          return response; // out of retries (or blocked): let readJson classify it
+        }
+        this.backoff.noteSuccess(origin);
         if (response.status < 500 || attempt === ATTEMPTS) return response;
         cause = new Error(`HTTP ${response.status}`);
       } catch (err) {
+        if (err instanceof ImporterError && err.kind === 'rate-limit') throw err;
         cause = err;
       }
       if (attempt < ATTEMPTS && this.retryDelayMs > 0) await sleep(this.retryDelayMs);
@@ -256,6 +289,19 @@ export function classifyStatus(
   }
   if (status >= 500) return 'network';
   return 'bad-response';
+}
+
+/**
+ * True when a response is a rate limit, judged from status and headers alone.
+ *
+ * Deliberately header-only: this runs in `request()`, before the body has been read, and a
+ * 403 from GitHub is a rate limit or a bad token depending entirely on the headers.
+ * `classifyStatus` later gets the body too and has the final say on the error kind.
+ */
+export function isRateLimitResponse(response: Response): boolean {
+  if (response.status === 429) return true;
+  if (response.status !== 403 && response.status !== 401) return false;
+  return isRateLimited(response.headers, '');
 }
 
 /** True when the response carries a rate-limit signal rather than an auth failure. */

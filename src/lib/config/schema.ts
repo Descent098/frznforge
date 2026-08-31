@@ -365,6 +365,22 @@ export const FrznforgeConfigSchema = z.object({
      */
     fetch: z.enum(['auto', 'never', 'always']).default('auto'),
     /**
+     * What a *degraded* remote source does to the build's exit code.
+     *
+     * A source is degraded when it ends the run carrying a `remote-fetch-failed`,
+     * `remote-rate-limited`, `remote-auth-missing` or `remote-cache-stale` warning — i.e.
+     * it was published from cached (or missing) provider data rather than a clean fetch.
+     *
+     *  - `false` (default) — warn and carry on. The artifact is written, the site builds,
+     *    and the next run always re-attempts the degraded sources.
+     *  - `true` — write the artifact as usual, then exit non-zero. For CI, where a
+     *    rate-limited build quietly publishing stale metadata is worse than a red build.
+     *
+     * The artifact is identical either way: this only decides whether `npm run ingest`
+     * reports success.
+     */
+    failOnDegraded: z.boolean().default(false),
+    /**
      * Cross-run reuse of ingest work, all of it living in `ingest.cacheDir` sidecars so the
      * artifact itself stays clock-free and byte-identical:
      *
@@ -377,6 +393,12 @@ export const FrznforgeConfigSchema = z.object({
      *  - the **scan cache**: a repo whose refs, metadata inputs and scan options are
      *    unchanged since the last run skips the scan entirely and replays the recorded
      *    result (bytes come back from the content-addressed stores).
+     *  - the **cooldown** (`cooldownSeconds`, opt-in): a source fetched successfully less
+     *    than N seconds ago is not fetched again. Unlike the freshness window this is meant
+     *    for long periods (hours), which is why it is off by default.
+     *  - the **same-commit skip** (`skipUnchanged`, opt-in): one `git ls-remote` decides
+     *    whether the mirror already has every ref the remote has, and skips the fetch when
+     *    it does.
      *
      * Reuse never changes what is built — it only skips work that would have produced the
      * identical artifact. `npm run ingest -- --no-cache` bypasses all of it for one run.
@@ -384,6 +406,27 @@ export const FrznforgeConfigSchema = z.object({
     reuse: z.object({
       enabled: z.boolean().default(true),
       maxAgeMinutes: z.number().positive().default(2),
+      /**
+       * Skip a repo's `git remote update` when a single `git ls-remote` shows the mirror
+       * already holds every ref the remote does, at the same object ids.
+       *
+       * Mirrors fetch per repository, not per branch, so "don't re-fetch on the same commit
+       * hash" can only be honoured at whole-repo granularity: ALL refs equal means there is
+       * nothing to fetch. Any difference — a moved branch, a new tag, a deleted ref — or any
+       * failure of the probe itself falls through to a normal fetch, so the skip can never
+       * hide a change. Off by default: it trades one cheap round-trip for a possible saved
+       * fetch, which only pays off on a large corpus of mostly-idle repos.
+       */
+      skipUnchanged: z.boolean().default(false),
+      /**
+       * Seconds since the last **fully successful** fetch during which a source is not
+       * fetched again; `null` (default) disables it.
+       *
+       * "Successful" means both halves — the git mirror and the provider metadata — so a
+       * repo whose metadata was rate-limited is never held back by the cooldown and is
+       * retried on the next run. Skipped repos are reported during the build.
+       */
+      cooldownSeconds: z.number().int().nonnegative().nullable().default(null),
     }).prefault({}),
     /**
      * Per-repo insights (schema v5): monthly commits/contributors plus a sampled code-size
