@@ -1,4 +1,4 @@
-# Version 0.2.1 plans
+# Version 0.3.0 plans
 
 Before beginning make sure the VERSION is up to date, and create a file called `docs/dev/plans/version-<version number>-phased.md` which is a phased plan for implementing the features, then stop after creating it. If that file exists, the that means the version has been started and you're taking over from where another agent left off. If it doesn't then create the file making sure to also create "checkpoints" which are points after a few phases where the full test suite is ran, and must pass before proceeding. You don't need to run the full tests on every phase because it's going to be too slow. For each checkpoint, if it's not going to trample one another, feel free to use subagents, in fact ideally you should.
 
@@ -12,6 +12,31 @@ Additional things to keep in mind:
 
 ## Features & fixes
 
+- [ ] Design
+  - [ ] The drop-down for cloning is really skinny. It looks like it's tying the width to the size of the button, which is making things poke out of the popup
+  - [ ] In the insights tab, make the lines of code the larger text, and the approximate size the smaller text in the `code size` section
+  - [ ] For the license, if it's a common one, link the license badge to the https://choosealicense.com/ or https://creativecommons.org/licenses/ url
+- [ ] Indicate somewhere stored if when building, fetching the data and metadata was successful (if you don't already), this will be relevant in a later ask
+- [ ] Document, with diagrams the process the build pipeline takes, with mermaid diagrams and code references to a document in `docs/dev/build-steps.md`
+- [ ] Give the options for users to opt-in to build settings for
+  - [ ] Do not re-fetch on same commit hash
+    - [ ] If the commit hash is the same as it was last time for that branch, don't fetch that branch
+  - [ ] Re-fetch cooldown (time in seconds)
+    - [ ] If the cooldown period has not elapsed since last **successful** fetch, skip the repo
+    - [ ] Indicate this during the build with a message "this repo is on cooldown" With the usual warning emoji
+- [ ] `npm run dev` in it's current form seems mostly useless, probably best to find some way to make it show a message that the information displayed is taken from the most recent build, and that it doesn't build itself, then run `astro preview`
+- [ ] I'm hitting a bunch of 429 rate limits on builds and want to make some changes when building
+  - [ ] If there are repo's that have no metadata, run updates on them first, since they're most likely to be misses from a previous build
+  - [ ] Add some exponential backoff retry logic on rate limits, keyed to the origin (e.g. github.com should have 1 timeout, codeberg.com a different one, etc.)
+- [ ] Allow me to specify an image for the main user
+  - [ ] When importing from github or some other forge, give the option to import the profile picture as well, and store it
+  - [ ] In the web version also allow users to upload an image to be the profile image
+- [ ] Allow me to specify information about other contributors and organizations
+  - [ ] For organizations let me specify images
+    - [ ] Allow me to upload them in the web init UI
+  - [ ] Give me a similar behaviour for contributors, which allow the same fields as organizations, including the avatar
+  - [ ] Allow me in the web view to edit the information once entered, not just remove
+- [ ] If a repo has site(s) associated with it that are being hosted, show them in the about section
 - [ ] Hitting `done` in the web UI should also save/apply all current changes
 
 
@@ -28,11 +53,13 @@ Required guidence to follow per change
 - Check off changes as you go
   - Make sure the TODO is kept up to date so that if a usage limit is hit I'm not left in the dark
 - if data model is updated
-    - There are no migration issues/regressions with the changes
+    - There are no migration issues/regressions with the changes, if there are, make sure migration guide is documented in the changelog
     - There are adequete tests for the system to ensure no synchronization issues, and that the system works both from the UI and has unit tests
 - Add Changes to the CHANGELOG.md
     - If a version exists and does not have a release date yet, keep adding to it, if there's no versions without a release date, then bump version (e.g. `v0.1.0 -> v0.2.0`) in the version file, and add a new main heading to CHANGELOG.md for it (e.g. `v0.2.0 (unreleased)`) and add the changes under there.
     - Be brief, 2-4 setnences per change, and if you need more, prompt for approval from the user
+      - When writing about **new features** do not include small changes as separate items
+        - For example if you added a feature to show a checkbox for `Add all` then later I decide (within the same version) the UI should be a toggle switch. The changelog only needs the notice about the new feature, not the UI update since that's covered by the new feature bullet point. Do include change messages for existing features from other versions. 
     - Add all changes under the following categories as sub-headings:
       - Features
       - Bug Fixes
