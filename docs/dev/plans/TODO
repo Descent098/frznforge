@@ -1,14 +1,38 @@
-- [x] Review `version-2.md`
-  - [x] Write a file called `version-2-phased.md` which phases out the delivery of the version
+# Version 0.3.0 plans
 
-Ensure for each change:
+Before beginning make sure the VERSION is up to date, and create a file called `docs/dev/plans/version-<version number>-phased.md` which is a phased plan for implementing the features, then stop after creating it. If that file exists, the that means the version has been started and you're taking over from where another agent left off. If it doesn't then create the file making sure to also create "checkpoints" which are points after a few phases where the full test suite is ran, and must pass before proceeding. You don't need to run the full tests on every phase because it's going to be too slow. For each checkpoint, if it's not going to trample one another, feel free to use subagents, in fact ideally you should.
 
+Additional things to keep in mind:
+- Usability takes priority over accessibilty when the two collide. This app is a personal app, primarily used by me, not one being shared with people who have accessibility needs. It's nice for it to be usable, but not at the cost of functionality or performance.
+- When documenting features, in the `dev` docs be sure to include mermaid diagrams, and code references to make it clear and simple for people to find what they need to understand.
+
+## Maintenance
+
+- [ ] Check all dependencies and do updates
+
+## Features & fixes
+
+- [ ]
+
+
+## For human
+
+This section is for me to keep track of what I need to manually review, feel free to add to this
+
+- [ ]
+
+## Per change
+
+Required guidence to follow per change
+
+- Check off changes as you go
+  - Make sure the TODO is kept up to date so that if a usage limit is hit I'm not left in the dark
 - if data model is updated
-    - There are no sync issues/regressions with the changes
+    - There are no migration issues/regressions with the changes
     - There are adequete tests for the system to ensure no synchronization issues, and that the system works both from the UI and has unit tests
-    - Features that touch frontend and backend have testing and validation for both peices
 - Add Changes to the CHANGELOG.md
     - If a version exists and does not have a release date yet, keep adding to it, if there's no versions without a release date, then bump version (e.g. `v0.1.0 -> v0.2.0`) in the version file, and add a new main heading to CHANGELOG.md for it (e.g. `v0.2.0 (unreleased)`) and add the changes under there.
+    - Be brief, 2-4 setnences per change, and if you need more, prompt for approval from the user
     - Add all changes under the following categories as sub-headings:
       - Features
       - Bug Fixes
