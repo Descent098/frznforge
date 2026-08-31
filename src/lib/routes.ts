@@ -376,6 +376,20 @@ export function hostedFiles(data: ForgeData): HostedFileRoute[] {
   return out;
 }
 
+/**
+ * The root URL of a hosted site. The site's `index.html` is emitted at
+ * `<slug>/index.html`, so the directory URL resolves through the same directory-index
+ * handling every static host does — this is the link to hand a human.
+ */
+export function hostedUrl(slug: string): string {
+  return withBase(`/${slug}/`);
+}
+
+/** The hosted sites served from a repo, in artifact order (by slug). */
+export function hostedSitesFor(data: ForgeData, repoSlug: string): HostedSite[] {
+  return data.hosting.filter((h) => h.repo === repoSlug);
+}
+
 /** Every static URL the hosted sites emit (one per served file). */
 export function hostedRoutes(data: ForgeData): string[] {
   return hostedFiles(data).map((f) => f.url);

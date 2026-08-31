@@ -132,6 +132,56 @@ test.describe('repo overview', () => {
     await expect(page.locator('.hf-commit-bar')).toContainText('bump the answer');
   });
 
+  test('a recognised license links to its canonical page, in the header and the About panel', async ({ page }) => {
+    await page.goto('/repos/alpha/');
+    const href = 'https://choosealicense.com/licenses/mit/';
+    await expect(page.locator('.hf-badges a.hf-badge', { hasText: 'MIT' })).toHaveAttribute('href', href);
+    await expect(page.locator('.hf-about-meta a', { hasText: 'MIT' })).toHaveAttribute('href', href);
+  });
+
+  test('a provider-supplied license id links too, not just a detected one', async ({ page }) => {
+    // charlie's Apache-2.0 comes from the provider metadata layer, alpha's MIT from
+    // reading the LICENSE file — both reach the same badge, so both must link.
+    await page.goto('/repos/charlie/');
+    await expect(page.locator('.hf-badges a.hf-badge', { hasText: 'Apache-2.0' })).toHaveAttribute(
+      'href',
+      'https://choosealicense.com/licenses/apache-2.0/',
+    );
+  });
+
+  test('the clone popup is sized by its content, not squeezed to the button', async ({ page }) => {
+    // Regression: `.hf-clone-pop`'s `max-width: 100%` resolved against the shrink-wrapped
+    // <details>, clamping the 360px panel to the button width and spilling its contents.
+    await page.goto('/repos/alpha/');
+    await page.locator('.hf-clone summary').click();
+    const pop = page.locator('.hf-clone-pop');
+    await expect(pop).toBeVisible();
+    const popBox = (await pop.boundingBox())!;
+    const btnBox = (await page.locator('.hf-clone summary').boundingBox())!;
+    expect(popBox.width).toBeGreaterThan(btnBox.width + 100);
+    // and its content sits inside it
+    const urlBox = (await page.locator('.hf-clone-url').boundingBox())!;
+    expect(urlBox.x).toBeGreaterThanOrEqual(popBox.x - 1);
+    expect(urlBox.x + urlBox.width).toBeLessThanOrEqual(popBox.x + popBox.width + 1);
+  });
+
+  test('the clone popup stays inside a phone viewport without collapsing to the button', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto('/repos/alpha/');
+    await page.locator('.hf-clone summary').click();
+    const box = (await page.locator('.hf-clone-pop').boundingBox())!;
+    const btn = (await page.locator('.hf-clone summary').boundingBox())!;
+    // inside both edges...
+    expect(box.x).toBeGreaterThanOrEqual(-1);
+    expect(box.x + box.width).toBeLessThanOrEqual(375 + 1);
+    // ...and still a real panel. Containment alone passed while the popup was squeezed to
+    // the button, which is the very bug this pair of tests exists to catch.
+    expect(box.width).toBeGreaterThan(btn.width + 100);
+    // the page itself must not gain a sideways scroll because of it
+    const docScrolls = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    expect(docScrolls).toBe(false);
+  });
+
   test('template repo shows the template banner', async ({ page }) => {
     await page.goto('/repos/bravo/');
     await expect(page.locator('.hf-banner--template')).toContainText('template repository');

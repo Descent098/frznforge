@@ -84,6 +84,11 @@ const sizePoints: Array<{ month: string; value: number }> = codePoints.map((p) =
 
 const only = (n: number, one: string, many = `${one}s`) => `${formatInt(n)} ${n === 1 ? one : many}`;
 
+/* The KPI tile leads with lines when the LATEST checkpoint counted them (the headline is
+ * about that one point, unlike `hasLines`/`sizeLabel`, which govern the whole series and
+ * so stay stricter). When it didn't, bytes keep the headline and the sub-line says why. */
+const latestLines = latestSize && latestSize.lines !== null ? latestSize.lines : null;
+
 /* ---- honesty notes -------------------------------------------------------- */
 const sizeNotes: string[] = [];
 if (!hasLines && codePoints.length > 0) {
@@ -157,12 +162,12 @@ const rangeText = firstMonth && lastMonth ? (firstMonth === lastMonth ? firstMon
               <span class="hf-kpi-sub">{activeMonths < months ? `${formatInt(activeMonths)} with commits` : rangeText}</span>
             </div>
             <div class="hf-kpi">
-              <span class="hf-kpi-label"><svg class="hf-i" aria-hidden="true"><use href="#i-code" /></svg> Code size</span>
-              <span class="hf-kpi-value">{latestSize ? formatBytes(latestSize.bytes) : '—'}</span>
+              <span class="hf-kpi-label"><svg class="hf-i" aria-hidden="true"><use href="#i-code" /></svg> {latestLines !== null ? 'Lines of code' : 'Code size'}</span>
+              <span class="hf-kpi-value">{latestLines !== null ? formatInt(latestLines) : latestSize ? formatBytes(latestSize.bytes) : '—'}</span>
               <span class="hf-kpi-sub">
                 {latestSize
-                  ? latestSize.lines !== null
-                    ? <>{only(latestSize.lines, 'line')} at {latestSize.month}</>
+                  ? latestLines !== null
+                    ? <>≈{formatBytes(latestSize.bytes)} at {latestSize.month}</>
                     : <>at {latestSize.month} — over the read budget, may include binaries</>
                   : 'not sampled'}
               </span>

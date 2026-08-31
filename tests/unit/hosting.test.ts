@@ -13,7 +13,7 @@ import { FrznforgeConfigSchema } from '../../src/lib/config/schema';
 import type { FrznforgeConfigInput } from '../../src/lib/config/schema';
 import { ingest, resolveHostedBranch, serializeForgeData, writeArtifact } from '../../src/lib/ingest/index';
 import { readBlobBuffer } from '../../src/lib/data/load';
-import { allRoutes, hostedFiles, hostedRoutes } from '../../src/lib/routes';
+import { allRoutes, hostedFiles, hostedRoutes, hostedSitesFor, hostedUrl } from '../../src/lib/routes';
 import { FixtureRepo, at } from './helpers/fixture-repo';
 
 const OWNER = { owner: { name: 'Test Owner', handle: 'test' } };
@@ -149,6 +149,11 @@ describe('hosting end to end (ingest → artifact → routes)', () => {
     const all = new Set(allRoutes(run.data));
     for (const url of hostedRoutes(run.data)) expect(all.has(url)).toBe(true);
     expect(hostedRoutes(run.data)).toHaveLength(3);
+    // the repo → site lookup the About section links through (0.3.0)
+    expect(hostedSitesFor(run.data, 'hostee')).toEqual([{ slug: 'mysite', repo: 'hostee', ref: 'gh-pages' }]);
+    expect(hostedSitesFor(run.data, 'hostee').map((s) => hostedUrl(s.slug))).toEqual(['/mysite/']);
+    expect(hostedSitesFor(run.data, 'not-a-repo')).toEqual([]);
+
     // determinism: a second run emits identical bytes
     const again = await ingest(cfg);
     expect(serializeForgeData(again.data)).toBe(serializeForgeData(run.data));

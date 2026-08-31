@@ -194,6 +194,45 @@ export function initials(name: string): string {
   return (s || name.slice(0, 2)).toUpperCase();
 }
 
+/**
+ * SPDX ids that choosealicense.com publishes a page for, keyed by their URL slug.
+ *
+ * The slug is the SPDX id lowercased *after* dropping the GNU disambiguation suffix —
+ * our own detector emits `GPL-3.0-only` / `AGPL-3.0-only` / `LGPL-2.1-only`
+ * (see `src/lib/ingest/license.ts`), while choosealicense serves `/licenses/gpl-3.0/`.
+ * Lowercasing alone would link every GNU license to a 404.
+ */
+const CHOOSEALICENSE_SLUGS = new Set([
+  '0bsd', 'afl-3.0', 'agpl-3.0', 'apache-2.0', 'artistic-2.0', 'bsd-2-clause',
+  'bsd-3-clause', 'bsd-3-clause-clear', 'bsd-4-clause', 'bsl-1.0', 'cecill-2.1',
+  'ecl-2.0', 'epl-1.0', 'epl-2.0', 'eupl-1.1', 'eupl-1.2', 'gfdl-1.3', 'gpl-2.0',
+  'gpl-3.0', 'isc', 'lgpl-2.1', 'lgpl-3.0', 'lppl-1.3c', 'mit', 'mit-0', 'mpl-2.0',
+  'ms-pl', 'ms-rl', 'mulanpsl-2.0', 'ncsa', 'odbl-1.0', 'ofl-1.1', 'osl-3.0',
+  'postgresql', 'unlicense', 'upl-1.0', 'vim', 'wtfpl', 'zlib',
+]);
+
+/**
+ * The canonical human-readable page for a license, or null when we don't recognise it.
+ *
+ * Creative Commons licenses go to creativecommons.org (the canonical deed); everything
+ * else that has a page goes to choosealicense.com. An unknown id — including a
+ * provider's passed-through oddity and the `Custom` placeholder we render for a license
+ * file with no detected id — returns null, and the caller renders plain text.
+ */
+export function licenseUrl(spdx: string | null | undefined): string | null {
+  if (!spdx) return null;
+  // GPL-3.0-only / GPL-3.0-or-later both describe the same license document.
+  const key = spdx.trim().toLowerCase().replace(/-(only|or-later)$/, '');
+  if (!key) return null;
+
+  if (key === 'cc0-1.0') return 'https://creativecommons.org/publicdomain/zero/1.0/';
+  const cc = /^cc-(by(?:-nc)?(?:-sa|-nd)?)-(\d+\.\d+)$/.exec(key);
+  if (cc) return `https://creativecommons.org/licenses/${cc[1]}/${cc[2]}/`;
+
+  if (CHOOSEALICENSE_SLUGS.has(key)) return `https://choosealicense.com/licenses/${key}/`;
+  return null;
+}
+
 /** Display a URL without protocol / trailing slash: "https://kieranwood.ca/" → "kieranwood.ca". */
 export function prettyUrl(url: string): string {
   return url.replace(/^[a-z]+:\/\//i, '').replace(/\/$/, '');

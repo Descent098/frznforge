@@ -964,7 +964,10 @@ code, kbd, pre { font-family: var(--hf-mono); }
 .hf-clone-pop {
   position: relative;
   align-self: flex-end;
-  width: 360px; max-width: 100%;
+  /* 400px so a typical `https://github.com/<owner>/<repo>.git` fits without ellipsis —
+     reading that URL is what the panel is for. Longer ones still truncate; the copy
+     button is the escape hatch. */
+  width: 400px; max-width: 100%;
   margin-top: -4px;
   border-radius: 14px;
   border: 1px solid var(--hf-border-strong);
@@ -1131,6 +1134,9 @@ code, kbd, pre { font-family: var(--hf-mono); }
   .hf-repo-head { padding: 18px 18px 0; }
   .hf-crumb { font-size: 18px; }
   .hf-toolbar .hf-toolbar-right { margin-left: 0; }
+  /* (the Clone popup's matching mobile rules live beside the popup block below — they must
+     come AFTER `.hf-clone { position: relative }`, which would otherwise win on source
+     order: a media query adds no specificity.) */
   .hf-files .hf-fmsg { display: none; }
   .hf-readme, .hf-readme-card .hf-card-body { padding-left: 18px; padding-right: 18px; }
 }
@@ -1244,8 +1250,26 @@ code, kbd, pre { font-family: var(--hf-mono); }
 .hf-clone summary { list-style: none; cursor: pointer; }
 .hf-clone summary::-webkit-details-marker { display: none; }
 .hf-clone[open] summary .hf-caret { transform: rotate(180deg); }
-.hf-clone .hf-clone-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 5; }
+/* The popup's containing block is `.hf-clone` — the <details>, which shrink-wraps to its
+   summary button — so the base rule's `max-width: 100%` resolves against the BUTTON's
+   width and squeezes the 360px panel down to it (content then spills out). Clamp against
+   the viewport instead; `right: 0` keeps it anchored to the button either way. */
+.hf-clone .hf-clone-pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 5;
+  max-width: min(400px, calc(100vw - 32px));
+}
 .hf-clone-url button.is-copied { color: var(--hf-ember); }
+/* Below 900px `.hf-toolbar-right` loses its `margin-left: auto`, so the Clone button is no
+   longer at the right edge and anchoring the panel to it (`right: 0` on a shrink-wrapped
+   `.hf-clone`) hangs the panel off the LEFT of the screen. Anchor to `.hf-toolbar` instead
+   — already `position: relative` — so the panel spans the content width and clears both
+   edges. This block must stay AFTER the two rules above: equal specificity, so source
+   order decides and a media query adds none. */
+@media (max-width: 900px) {
+  .hf-clone { position: static; }
+  .hf-clone .hf-clone-pop { left: 0; right: 0; width: auto; max-width: none; }
+  .hf-clone-pop::before { display: none; } /* the arrow pointed at a button that has moved */
+}
 
 .hf-footer {
   display: flex; gap: 16px; flex-wrap: wrap; align-items: center;

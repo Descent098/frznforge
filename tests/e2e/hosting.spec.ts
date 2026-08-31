@@ -28,6 +28,20 @@ test.describe('hosted static sites', () => {
     expect(js.headers()['content-type']).toContain('javascript');
   });
 
+  test('the repo overview links to the site it is hosted as (0.3.0)', async ({ page }) => {
+    await page.goto('/repos/alpha/');
+    const link = page.locator('.hf-about-links li', { hasText: 'Hosted site' }).locator('a');
+    await expect(link).toHaveAttribute('href', '/alpha-site/');
+    // and it actually goes there
+    await link.click();
+    await expect(page).toHaveTitle(/alpha site/);
+  });
+
+  test('a repo that hosts nothing shows no hosted-site row', async ({ page }) => {
+    await page.goto('/repos/bravo/');
+    await expect(page.locator('.hf-about-links li', { hasText: 'Hosted site' })).toHaveCount(0);
+  });
+
   test('the forge view of the same repo coexists, gh-pages browsable', async ({ page }) => {
     await page.goto('/repos/alpha/');
     await expect(page.getByRole('heading', { level: 1, name: 'alpha' })).toBeVisible();

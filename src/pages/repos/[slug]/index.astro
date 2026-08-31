@@ -3,20 +3,23 @@ import Base from '../../../layouts/Base.astro';
 import RepoHeader from '../../../components/RepoHeader.astro';
 import RefSwitcher from '../../../components/RefSwitcher.astro';
 import FileTable from '../../../components/FileTable.astro';
-import { archiveUrl, browsableRefs, commitUrl, commitsUrl, getRepoRoutes } from '../../../lib/routes';
+import { archiveUrl, browsableRefs, commitUrl, commitsUrl, getRepoRoutes, hostedSitesFor, hostedUrl } from '../../../lib/routes';
 import MermaidRenderer from '../../../components/MermaidRenderer.astro';
 import { withBase } from '../../../lib/base';
 import { containsMermaid, isMarkdownPath, isTrustedSource, renderMarkdown } from '../../../lib/markdown';
-import { formatBytes, formatInt, getConfig, getData, heatFor, initials, prettyUrl, relativeTime } from '../../../lib/site';
-import type { Repo } from '../../../lib/data/schema';
+import { formatBytes, formatInt, getConfig, getData, heatFor, initials, licenseUrl, prettyUrl, relativeTime } from '../../../lib/site';
+import type { HostedSite, Repo } from '../../../lib/data/schema';
 
 export async function getStaticPaths() {
   const data = await getData();
-  return getRepoRoutes(data).map(({ slug, repo }) => ({ params: { slug }, props: { repo } }));
+  return getRepoRoutes(data).map(({ slug, repo }) => ({
+    params: { slug },
+    props: { repo, hostedSites: hostedSitesFor(data, slug) },
+  }));
 }
 
-interface Props { repo: Repo }
-const { repo } = Astro.props;
+interface Props { repo: Repo; hostedSites: HostedSite[] }
+const { repo, hostedSites } = Astro.props;
 const cfg = await getConfig();
 const now = new Date();
 
@@ -38,7 +41,14 @@ const readmeHtml = repo.readme
     : `<pre tabindex="0">${repo.readme.content.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)}</pre>`
   : null;
 
-const links: Array<{ key: string; label: string; icon: string; url: string }> = [];
+/** `text` overrides the displayed link text; hosted sites are internal, so `prettyUrl`
+ *  (which strips a protocol these URLs don't have) is not the right rendering for them. */
+const links: Array<{ key: string; label: string; icon: string; url: string; text?: string }> = [];
+/* Sites this repo is published as — the hosting binding lives on the artifact root, not
+ * on the repo, so it arrives as a prop from getStaticPaths. */
+for (const site of hostedSites) {
+  links.push({ key: `hosted-${site.slug}`, label: 'Hosted site', icon: '#i-globe', url: hostedUrl(site.slug), text: `/${site.slug}/` });
+}
 if (repo.links.homepage) links.push({ key: 'homepage', label: 'Homepage', icon: '#i-globe', url: repo.links.homepage });
 if (repo.links.issues) links.push({ key: 'issues', label: 'Issue tracker', icon: '#i-bolt', url: repo.links.issues });
 if (repo.links.donations) links.push({ key: 'donations', label: 'Donations', icon: '#i-heart', url: repo.links.donations });
@@ -134,7 +144,7 @@ const heat = heatFor(repo.updatedAt, now, cfg.theme.heat);
             {links.length > 0 && (
               <ul class="hf-about-links">
                 {links.map((l) => (
-                  <li><svg class="hf-i"><use href={l.icon} /></svg><span class="hf-lbl">{l.label}</span><a href={l.url} rel="noopener">{prettyUrl(l.url)}</a></li>
+                  <li><svg class="hf-i"><use href={l.icon} /></svg><span class="hf-lbl">{l.label}</span><a href={l.url} rel="noopener">{l.text ?? prettyUrl(l.url)}</a></li>
                 ))}
               </ul>
             )}
@@ -149,7 +159,14 @@ const heat = heatFor(repo.updatedAt, now, cfg.theme.heat);
           )}
           <section class="hf-about-section">
             <ul class="hf-about-meta">
-              {repo.license && <li><svg class="hf-i"><use href="#i-scale" /></svg> <b>{repo.license.spdx ?? 'Custom'}</b>&nbsp;license{repo.license.file && <span class="hf-muted">&nbsp;· {repo.license.file}</span>}</li>}
+              {repo.license && (
+                <li>
+                  <svg class="hf-i"><use href="#i-scale" /></svg>{' '}
+                  {licenseUrl(repo.license.spdx)
+                    ? <a href={licenseUrl(repo.license.spdx)!} rel="noopener"><b>{repo.license.spdx}</b></a>
+                    : <b>{repo.license.spdx ?? 'Custom'}</b>}&nbsp;license{repo.license.file && <span class="hf-muted">&nbsp;· {repo.license.file}</span>}
+                </li>
+              )}
               <li><svg class="hf-i"><use href="#i-pulse" /></svg> <b>{formatInt(repo.commitCount)}</b>&nbsp;commits · last <span class={`hf-age t-${heat}`}>{relativeTime(repo.updatedAt, now)}</span></li>
               {latestTag && <li><svg class="hf-i"><use href="#i-tag" /></svg> <b>{repo.gitTags.length}</b>&nbsp;tags · latest <code>{latestTag.name}</code></li>}
               {repo.createdAt && <li><svg class="hf-i"><use href="#i-history" /></svg> created <span class="hf-age t-cold" title={repo.createdAt}>{relativeTime(repo.createdAt, now)}</span></li>}

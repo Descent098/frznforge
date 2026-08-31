@@ -36,6 +36,23 @@ Conventions used below:
   migration guide goes in the changelog entry itself. Exactly one bump is planned
   (Phase 7, v7 → v8); no other phase may open one while it is in flight.
 
+**Owner decisions (2026-08-31)** — asked before Phase 1, binding on the phases named:
+
+- *Phase 1, TypeScript 7*: try it; if `@astrojs/check`/astro aren't ready, **pin at 6.x**
+  and record the deferral (changelog **Other** + the TODO's **For human**). Don't fight it.
+- *Phase 5, same-hash skip*: **all-refs-match skips the repo's fetch** — one `git ls-remote`
+  probe, any changed ref means a normal full fetch. Confirmed as the intended semantic
+  given that mirrors have no per-branch fetch.
+- *Phase 7, avatars*: **`public/images/` with a public-relative path in config** — not the
+  ingest blob store.
+- *Phase 4/5, persistent 429s*: **make it configurable** (deviation from the plan's
+  original "always continue"). Add `ingest.failOnDegraded: boolean`, default `false` =
+  today's behaviour (warn, use cached metadata, finish the build); `true` exits non-zero
+  when any repo ends the run degraded, so a rate-limited build can be made to fail loudly
+  in CI rather than publish stale metadata. The knob lands in Phase 4 beside the backoff,
+  is documented in `configuration.md`, and is exposed by the Phase 8 wizard like every
+  other 0.3.0 setting.
+
 Standing constraints every phase inherits: the build stays fully static; `src/lib/format.ts`
 and `src/lib/listing.ts` stay browser-safe; ingest stays deterministic (no wall-clock
 values in `forge.json`, ever — timestamps live in `ingest.cacheDir` sidecars only;
@@ -45,7 +62,7 @@ personal site; keep things usable, don't spend functionality or performance on a
 
 ---
 
-## Phase 1 — Maintenance: dependency updates, open 0.3.0
+## Phase 1 — Maintenance: dependency updates, open 0.3.0 ✅ *(done 2026-08-31)*
 
 Goal: the TODO's maintenance item, done first so every later phase builds and tests on
 the updated toolchain, and so the version bookkeeping opens.
@@ -56,35 +73,41 @@ svelte 5.56.10 → 5.57.0, marked 18.0.10 → 18.0.11, tsx 4.23.12 → 4.23.13,
 else (mermaid, @astrojs/svelte, @astrojs/check, vitest, @playwright/test) is current.
 
 Ships
-- [ ] `npm update` for the five in-range packages; lockfile committed.
-- [ ] TypeScript 7 evaluated *separately, second*: bump, run `npm run check` + `npm test`
+- [x] `npm update` for the five in-range packages; lockfile committed.
+- [x] TypeScript 7 evaluated *separately, second*: bump, run `npm run check` + `npm test`
   + a build. Gate on `@astrojs/check`/astro declaring TS 7 support (check their peer
   ranges and release notes before bumping). If anything breaks or the ecosystem hasn't
   caught up, stay on 6.x and record the deferral in the changelog under **Other** — a
   pinned known-good major beats a fought-for broken one.
-- [ ] `VERSION` + `package.json` → `0.3.0`; `CHANGELOG.md` gains `# 0.3.0 (unreleased)`
+  *As built: **deferred, without installing it** — the planned gate answered the question
+  on its own. Both `@astrojs/check` and `@astrojs/svelte` declare a `typescript` peer
+  range of `^5.0.0 || ^6.0.0`, so 7.x is out of range for the toolchain that has to
+  consume it; installing it to watch `astro check` fail would have proven nothing the
+  peer ranges did not already say. Pinned at 6.0.3, recorded in the changelog and in the
+  TODO's **For human**.*
+- [x] `VERSION` + `package.json` → `0.3.0`; `CHANGELOG.md` gains `# 0.3.0 (unreleased)`
   with the dependency work under **Other**.
 
 Done when
-- [ ] Full gates green on the updated deps (this phase's verification *is* Checkpoint 1's
+- [x] Full gates green on the updated deps (this phase's verification *is* Checkpoint 1's
   first half — see below).
 
 Tests
-- [ ] None new — the deliverable is the existing suites passing on new versions. Watch
+- [x] None new — the deliverable is the existing suites passing on new versions. Watch
   specifically: `markdown.test.ts` (marked), `mermaid.spec.ts` (mermaid untouched but
   renders through astro/vite), the wizard e2e (svelte islands untouched, page is vanilla —
   low risk), and `astro check` (typescript).
 
 ---
 
-## Phase 2 — Repo-page UI: clone popup, insights KPI, license links, hosted sites in About
+## Phase 2 — Repo-page UI: clone popup, insights KPI, license links, hosted sites in About ✅ *(done 2026-08-31)*
 
 Goal: the three Design items plus "show hosted site(s) in the about section" — all four
 live on the repo overview/insights pages, all four are site-side only, none touch the
 artifact.
 
 Ships
-- [ ] **Clone popup width** (`docs/dev/plans/TODO` "really skinny … tying the width to the
+- [x] **Clone popup width** (`docs/dev/plans/TODO` "really skinny … tying the width to the
   size of the button"). Root cause, confirmed: the popup `.hf-clone-pop` declares
   `width: 360px; max-width: 100%` (`src/styles/global.css:964-975`), but the absolute
   override (`global.css:1247`) positions it inside `.hf-clone` (`position: relative`,
@@ -96,7 +119,21 @@ Ships
   at small viewports; it stays right-anchored via the existing `right: 0`). Check the
   `::before` arrow offset (`global.css:976-983`) still points at the button, and check
   both palettes and mobile widths.
-- [ ] **Insights code-size KPI swap** (TODO: "make the lines of code the larger text, and
+  *As built, with one thing the plan got wrong: the desktop half is exactly as designed
+  (`max-width: min(400px, calc(100vw - 32px))` on the popup-mode rule) — but **400px, not
+  360px**, because at 360 a plain `https://github.com/<owner>/<repo>.git` still lost its
+  last 16px to the ellipsis, and reading that URL is the panel's whole purpose. The plan's
+  assumption that `right: 0` keeps it on-screen at small viewports is **false**: below
+  900px `.hf-toolbar-right` drops its `margin-left: auto` (`global.css:1133`), so the
+  button sits mid-row and a right-anchored panel hangs ~117px off the left of a 375px
+  screen. Mobile therefore anchors to `.hf-toolbar` instead (already `position: relative`)
+  via `left: 0; right: 0` with `.hf-clone` made `position: static`, and the arrow — which
+  points at a button that has moved — is hidden. That override block **must sit after**
+  `.hf-clone { position: relative }` in source order: a media query adds no specificity,
+  and the first attempt silently lost to the later rule. It also passed the first
+  containment-only mobile test while rendering 105px wide, so that test now asserts the
+  panel is genuinely wider than the button as well.*
+- [x] **Insights code-size KPI swap** (TODO: "make the lines of code the larger text, and
   the approximate size the smaller text"). In the fourth KPI tile,
   `src/pages/repos/[slug]/insights/index.astro:159-169`: today `hf-kpi-value` holds
   `formatBytes(latestSize.bytes)` and `hf-kpi-sub` holds the line count. Swap them —
@@ -105,11 +142,17 @@ Ships
   false (the over-budget / binaries case, locals at lines 77-100), bytes stays the big
   number and the existing caveat text stays the sub — don't render a dash as the hero
   number when a real value exists one line down.
-- [ ] **License badge links** (TODO: link common licenses to choosealicense.com /
+- [x] **License badge links** (TODO: link common licenses to choosealicense.com /
   creativecommons.org). New pure helper `licenseUrl(spdx: string): string | null` in
   `src/lib/format.ts` (browser-safe, no config): a small explicit map — SPDX ids that
   choosealicense.com hosts (MIT, Apache-2.0, GPL-2.0/3.0, LGPL, AGPL-3.0, MPL-2.0,
   BSD-2/3-Clause, Unlicense, BSL-1.0, EPL-2.0, 0BSD …) →
+  *As built: one detail the plan's "lowercased-id" shorthand would have got wrong — our own
+  detector emits the GNU disambiguation suffix (`GPL-3.0-only`, `AGPL-3.0-only`,
+  `LGPL-2.1-only`; `src/lib/ingest/license.ts:49-53`), while choosealicense serves
+  `/licenses/gpl-3.0/`. `licenseUrl` strips a trailing `-only` / `-or-later` before
+  matching, and a test walks every id `detectSpdx` can return to keep the map honest as it
+  grows.*
   `https://choosealicense.com/licenses/<lowercased-id>/`; `CC-BY*`/`CC0` family →
   the matching `https://creativecommons.org/licenses/...` (CC0 →
   `/publicdomain/zero/1.0/`). Unknown / null / `Custom` → `null`, render unchanged.
@@ -118,7 +161,7 @@ Ships
   match existing badge hover/focus styling) and the About sidebar meta row
   (`src/pages/repos/[slug]/index.astro:152`). External link semantics
   (`rel="noopener"`, same treatment other external links get).
-- [ ] **Hosted site(s) in About** (TODO: "If a repo has site(s) associated with it that
+- [x] **Hosted site(s) in About** (TODO: "If a repo has site(s) associated with it that
   are being hosted, show them in the about section"). The binding already lives in the
   artifact: `ForgeData.hosting: HostedSite[]` (`{ slug, repo, ref }`,
   `src/lib/data/schema.ts:667-686`) — but nothing in the UI reads it today. Add a
@@ -132,29 +175,38 @@ Ships
   `prettyUrl` host-stripping weirdness — show the site slug or path).
 
 Done when
-- [ ] The clone popup opens at its full intended width from a narrow button, nothing
+- [x] The clone popup opens at its full intended width from a narrow button, nothing
   pokes out, on desktop and mobile widths in both palettes.
-- [ ] The code-size tile leads with lines; a fixture repo over the read budget still
+- [x] The code-size tile leads with lines; a fixture repo over the read budget still
   shows bytes big with the caveat.
-- [ ] An MIT repo's badge links to choosealicense; a repo with no SPDX renders exactly
+- [x] An MIT repo's badge links to choosealicense; a repo with no SPDX renders exactly
   today's markup.
-- [ ] The hosting fixture repo's overview shows a working link to its hosted site
+- [x] The hosting fixture repo's overview shows a working link to its hosted site
   (including under the base-path build); a non-hosted repo's About is unchanged.
 
 Tests
-- [ ] Unit: `format.test.ts` — `licenseUrl` map hits, CC family, null/unknown/Custom.
+- [x] Unit: `format.test.ts` — `licenseUrl` map hits, CC family, null/unknown/Custom.
   `site-sync.test.ts`/route suites — `hostedUrl` under default and mocked base.
-- [ ] UI (e2e): `site.spec.ts` — license badge is a link with the right href on the
+- [x] UI (e2e): `site.spec.ts` — license badge is a link with the right href on the
   licensed fixture, plain span otherwise; `insights.spec.ts` — the KPI value/sub swap;
   `hosting.spec.ts` — the About row links to the hosted site and it loads;
   `base-path.spec.ts` inherits the leak scan (the new internal link must be
   base-prefixed). Clone popup: a viewport-width assertion in `site.spec.ts` (popup
   bounding box ≥ its intended width or viewport-clamped, not button-clamped).
-- [ ] Data model: none — all four are render-side.
+- [x] Data model: none — all four are render-side.
 
 ---
 
-### ✅ CHECKPOINT 1 — after Phases 1–2
+### ✅ CHECKPOINT 1 — after Phases 1–2 — *PASSED 2026-08-31*
+
+*Result: `npm test` 598 passed / 1 skipped (39 files, up from 592 — 6 new unit tests),
+`npm run test:e2e` 181 passed / 1 skipped (up from 175 — 6 new specs), `npm run check`
+0 errors 0 warnings 4 hints (the 4 pre-date this version), `npm run build` clean at 616
+pages. Also verified by hand in a real browser at 1200px and 375px, both the desktop and
+the mobile clone-popup paths, plus the license links and the insights tile — which is how
+the mobile source-order bug above was caught after the automated check had gone green.
+Run sequentially rather than as parallel subagents: Phase 1 finished in three commands,
+so the coordination would have cost more than it saved.*
 
 Full suite (`npm test`, `npm run test:e2e`, `npm run check`, `npm run build`) green.
 Subagent note: Phase 1 (package.json / lockfile / possibly tsconfig) and Phase 2
@@ -241,6 +293,14 @@ Ships
   retry already uses for its 500-retry) so tests never sleep. Console-side: the ingest
   reporter (`scripts/ingest.ts:70-78`) notes when an origin is in backoff, so a long
   pause is explained, not silent.
+- [ ] **`ingest.failOnDegraded: boolean`** (default `false`), per the owner decision above.
+  `false` = today's behaviour (warn, fall back to cached metadata, finish). `true` = after
+  assembly, if any repo carries a `DEGRADED` warning code (the set at
+  `src/lib/ingest/index.ts:326`), `scripts/ingest.ts` exits non-zero with a summary of
+  which repos and why — after writing nothing, or after writing and saying so plainly;
+  pick one and document it (recommendation: still write the artifact, then fail — a
+  partial artifact plus a red build is more debuggable than neither). Not a
+  determinism concern: exit code only, artifact bytes unchanged.
 - [ ] Interplay note, documented in code: the backoff gates the *provider API* half only;
   git mirror traffic (`ensureMirrorLocked`, `remote.ts:313-338`) is not API-rate-limited
   and does not queue behind it.

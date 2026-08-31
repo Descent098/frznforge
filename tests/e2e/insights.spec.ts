@@ -160,8 +160,20 @@ test.describe('repo insights', () => {
     await expect(tiles.nth(1).locator('.hf-kpi-value')).toHaveText(en(repo.contributors.length));
     await expect(tiles.nth(2).locator('.hf-kpi-value')).toHaveText(en(ins.commits.length));
 
+    // 0.3.0: the code-size tile leads with LINES when the latest checkpoint counted them,
+    // and demotes the approximate byte size to the sub-line. A checkpoint that went over
+    // the read budget (lines === null) keeps bytes as the headline — there is nothing else
+    // honest to show — and the label follows whichever it is.
     const latest = ins.codeSize.length ? ins.codeSize[ins.codeSize.length - 1]! : null;
-    await expect(tiles.nth(3).locator('.hf-kpi-value')).toHaveText(latest ? formatBytes(latest.bytes) : '—');
+    const sizeTile = tiles.nth(3);
+    if (latest && latest.lines !== null) {
+      await expect(sizeTile.locator('.hf-kpi-label')).toContainText('Lines of code');
+      await expect(sizeTile.locator('.hf-kpi-value')).toHaveText(en(latest.lines));
+      await expect(sizeTile.locator('.hf-kpi-sub')).toContainText(formatBytes(latest.bytes));
+    } else {
+      await expect(sizeTile.locator('.hf-kpi-label')).toContainText('Code size');
+      await expect(sizeTile.locator('.hf-kpi-value')).toHaveText(latest ? formatBytes(latest.bytes) : '—');
+    }
 
     // plausibility, independent of the fixture's exact numbers
     expect(totalCommits).toBeGreaterThan(0);

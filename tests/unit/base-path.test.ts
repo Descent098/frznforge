@@ -14,6 +14,7 @@ import {
   archiveUrl,
   blobUrl,
   commitUrl,
+  hostedUrl,
   notesIndexUrl,
   noteRawUrl,
   orgReposUrl,
@@ -65,6 +66,12 @@ describe('URL builders under a base', () => {
   it('defaults to no prefix outside a based build', () => {
     expect(siteBase()).toBe('');
     expect(repoUrl('x')).toBe('/repos/x/');
+    expect(hostedUrl('my-site')).toBe('/my-site/');
+  });
+
+  it('prefixes the hosted-site root link (0.3.0: the About section links to it)', () => {
+    setSiteBase('/mysite');
+    expect(hostedUrl('my-site')).toBe('/mysite/my-site/');
   });
 
   it('prefixes every builder', () => {

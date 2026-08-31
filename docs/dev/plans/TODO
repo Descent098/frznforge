@@ -8,14 +8,15 @@ Additional things to keep in mind:
 
 ## Maintenance
 
-- [ ] Check all dependencies and do updates
+- [x] Check all dependencies and do updates
+  - astro, svelte, marked, tsx, @types/node updated; TypeScript 7 deferred (see For human)
 
 ## Features & fixes
 
-- [ ] Design
-  - [ ] The drop-down for cloning is really skinny. It looks like it's tying the width to the size of the button, which is making things poke out of the popup
-  - [ ] In the insights tab, make the lines of code the larger text, and the approximate size the smaller text in the `code size` section
-  - [ ] For the license, if it's a common one, link the license badge to the https://choosealicense.com/ or https://creativecommons.org/licenses/ url
+- [x] Design
+  - [x] The drop-down for cloning is really skinny. It looks like it's tying the width to the size of the button, which is making things poke out of the popup
+  - [x] In the insights tab, make the lines of code the larger text, and the approximate size the smaller text in the `code size` section
+  - [x] For the license, if it's a common one, link the license badge to the https://choosealicense.com/ or https://creativecommons.org/licenses/ url
 - [ ] Indicate somewhere stored if when building, fetching the data and metadata was successful (if you don't already), this will be relevant in a later ask
 - [ ] Document, with diagrams the process the build pipeline takes, with mermaid diagrams and code references to a document in `docs/dev/build-steps.md`
 - [ ] Give the options for users to opt-in to build settings for
@@ -36,7 +37,7 @@ Additional things to keep in mind:
     - [ ] Allow me to upload them in the web init UI
   - [ ] Give me a similar behaviour for contributors, which allow the same fields as organizations, including the avatar
   - [ ] Allow me in the web view to edit the information once entered, not just remove
-- [ ] If a repo has site(s) associated with it that are being hosted, show them in the about section
+- [x] If a repo has site(s) associated with it that are being hosted, show them in the about section
 - [ ] Hitting `done` in the web UI should also save/apply all current changes
 
 
@@ -44,6 +45,13 @@ Additional things to keep in mind:
 
 This section is for me to keep track of what I need to manually review, feel free to add to this
 
+- [ ] **TypeScript 7 is deferred.** 7.0.2 is out, but `@astrojs/check` and `@astrojs/svelte`
+  both declare a `typescript` peer range of `^5.0.0 || ^6.0.0`, so we stay on 6.0.3.
+  Revisit when the Astro toolchain widens its peers — nothing in our code is known to
+  block it; we simply didn't fight the ecosystem (your call, 2026-08-31).
+- [ ] **Clone popup width** — fixed in CSS by letting the popup size against the viewport
+  instead of its button-sized containing block. Worth an eyeball on a real phone; the
+  automated check only asserts it is no longer clamped to the button.
 - [ ]
 
 ## Per change

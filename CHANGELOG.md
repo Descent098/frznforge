@@ -1,3 +1,20 @@
+# 0.3.0 (unreleased)
+
+## Features
+
+* **Licenses link to their canonical page.** A recognised SPDX id on the repo header badge and in the About panel now links to choosealicense.com, or to creativecommons.org for Creative Commons licenses. Unrecognised ids (and the `Custom` placeholder) stay plain text rather than guessing a URL.
+* **Hosted sites are linked from the repo they come from.** A repo published through `hosting.sites` now shows a "Hosted site" row in its About panel linking to the served site. Previously the hosting binding existed in the artifact but nothing in the UI pointed at it.
+
+## Bug Fixes
+
+* **The clone popup was squeezed to the width of its button.** Its `max-width: 100%` resolved against the shrink-wrapped `<details>` that contains it, clamping the panel to the "Clone" button and pushing its contents outside. The panel now sizes against the viewport, and is 400px so a typical GitHub clone URL fits without truncation. Below 900px — where the toolbar drops its `margin-left: auto` and the button is no longer at the right edge — the panel anchors to the toolbar instead, so it can no longer hang off the side of a phone screen.
+
+## Other
+
+* **Insights lead with lines of code.** The code-size tile now shows the line count as the headline number and the approximate byte size beneath it, with the label following suit. A checkpoint that went over the ingest read budget cannot count lines, so it keeps bytes as the headline and says why.
+
+* **Dependency updates.** Updated Astro (7.2.4 → 7.2.9), Svelte (5.56.10 → 5.57.0), marked (18.0.10 → 18.0.11), tsx (4.23.12 → 4.23.13), and `@types/node` (26.2.0 → 26.4.0). TypeScript 7.0.2 is available but deliberately deferred: `@astrojs/check` and `@astrojs/svelte` both declare a `typescript` peer range of `^5.0.0 || ^6.0.0`, so the project stays pinned on 6.0.3 until the Astro toolchain supports 7.
+
 # 0.2.0 (2026-08-30)
 
 ## Features
