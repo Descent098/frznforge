@@ -10,9 +10,18 @@ import fs from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { insertRepos, type Io } from '../../scripts/cli';
-import { hostAllowed, hostTrustedForToken, originAllowed, runWebInit, type WebInitOptions } from '../../scripts/lib/web-init';
+import {
+  SET_PATHS,
+  UNSET_PATHS,
+  hostAllowed,
+  hostTrustedForToken,
+  originAllowed,
+  runWebInit,
+  type WebInitOptions,
+} from '../../scripts/lib/web-init';
 
 /* ------------------------------------------------------------------ fixtures */
 
@@ -222,6 +231,52 @@ async function writeBrokenConfig(): Promise<string> {
 }
 
 const SELECT_ALL = { provider: 'github', host: 'https://api.github.com', account: 'me', releases: 'provider', select: ['me/ezcv', 'me/sdu', 'me/attic'] };
+
+/* ------------------------------------------------------------------ page ↔ server contract */
+
+/**
+ * The page offers a field, the server decides whether it may be written — and the two are
+ * separate files, so they can drift. They did: the Settings card shipped a "Repos per page"
+ * input for `listing.pageSize` that the allow-list did not carry, so touching it failed the
+ * whole save with a 400. Every editable field the page renders is checked against the
+ * allow-list here, which is the only place that drift is visible without opening a browser.
+ */
+describe('the settings page and the server allow-list agree', () => {
+  const PAGE = fileURLToPath(new URL('../../scripts/lib/web-init-page.html', import.meta.url));
+
+  /** The `{ path: '…' }` entries of the page's GROUPS table, with their `unset` flag. */
+  function pageFields(source: string): Array<{ path: string; unset: boolean }> {
+    const start = source.indexOf('var GROUPS = [');
+    expect(start).toBeGreaterThan(-1);
+    const end = source.indexOf('\n  ];', start);
+    expect(end).toBeGreaterThan(start);
+    const block = source.slice(start, end);
+    return [...block.matchAll(/\{\s*path:\s*'([^']+)'([^}]*)\}/g)].map((m) => ({
+      path: m[1]!,
+      unset: /unset:\s*true/.test(m[2] ?? ''),
+    }));
+  }
+
+  it('offers no field the server would refuse', async () => {
+    const fields = pageFields(await fs.readFile(PAGE, 'utf8'));
+    expect(fields.length).toBeGreaterThan(20); // the table is really being read
+    const unsettable = fields.filter((f) => !SET_PATHS.has(f.path)).map((f) => f.path);
+    expect(unsettable).toEqual([]);
+    const unclearable = fields.filter((f) => f.unset && !UNSET_PATHS.has(f.path)).map((f) => f.path);
+    expect(unclearable).toEqual([]);
+  });
+
+  it('covers every setting 0.2.0 added', () => {
+    // The phase's own acceptance bar: the wizard exposes every new key.
+    for (const key of [
+      'theme.heat.hot', 'theme.heat.warm', 'theme.heat.neutral', 'theme.heat.cool',
+      'ingest.maxCommitAgeDays', 'ingest.reuse.enabled', 'ingest.reuse.maxAgeMinutes',
+      'site.base', 'hosting.maxFileBytes', 'markdown.mermaid',
+    ]) {
+      expect(SET_PATHS.has(key), `${key} should be editable by the wizard`).toBe(true);
+    }
+  });
+});
 
 /* ------------------------------------------------------------------ guards */
 

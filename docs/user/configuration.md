@@ -22,6 +22,7 @@ export default defineConfig({
   site: {
     title: 'frznforge',
     url: 'https://forge.example.com',
+    // description: 'Kieran’s frozen forge',  // meta description, if profile.md has no bio
     // base: '/mysite',      // serve from a sub-path (e.g. a GitHub Pages project site)
   },
   owner: { name: 'Kieran Wood', handle: 'kieran', profile: './content/profile.md' },
@@ -88,6 +89,8 @@ Notes
 - `site.url` is **display only** today: it is rendered as the host label under the site title
   in the sidebar and nowhere else. Leaving it out changes no URL — it is reserved for
   absolute links and feeds later.
+- `site.description` is the home page's `<meta name="description">`, used only when
+  `content/profile.md` has no `bio` in its frontmatter — the profile's own bio wins.
 - `site.base` serves the whole site from a sub-path: with `base: '/mysite'`, every link the
   site emits — pages, raw files, archives, the favicon, the command palette's search
   index — is prefixed with `/mysite`, which is what a GitHub Pages *project* site (or any
@@ -133,18 +136,27 @@ Notes
   including the case they *don't* help, which is a repo that vendors its dependencies.
 - `archives: false` skips zip generation entirely (no download links on the site). Source zips
   are usually the largest single thing in `dist/`.
-- `reuse` makes repeat builds cheap without changing a byte of output. Two things happen
+- `reuse` makes repeat builds cheap without changing a byte of output. Three things happen
   under it: with `fetch: 'auto'`, a remote repo whose last fetch fully succeeded less than
   `maxAgeMinutes` ago is not re-fetched (its cached provider answers and mirror are used
   as-is; `'always'` always fetches, `'never'` never does, and a repo whose last fetch
-  failed or was rate-limited is *always* retried), and a repo whose branches, tags and
+  failed or was rate-limited is *always* retried); a repo whose branches, tags and
   metadata are unchanged since the last run skips re-scanning entirely and replays the
-  recorded result. All the bookkeeping lives in `cacheDir`; the artifact stays deterministic
-  and timestamp-free. Bypass everything once with:
+  recorded result; and **syntax highlighting is remembered between builds** — the single
+  biggest cost in rendering the site, measured at 84% of it, so a rebuild of unchanged
+  content is roughly **three times faster** (see
+  [performance.md](../dev/performance.md#measured-the-highlight-memo-020)). All the
+  bookkeeping lives in `cacheDir`; the artifact stays deterministic and timestamp-free, and
+  a cached highlight is byte-for-byte what a fresh one would have produced. Bypass the
+  ingest half once with:
 
   ```bash
   npm run ingest -- --no-cache
   ```
+
+  The highlight half is bypassed with `FRZNFORGE_NO_HL_CACHE=1` (it runs during
+  `astro build`, not during ingest). Deleting `cacheDir` is always safe: everything in it is
+  rebuilt on demand.
 - `insights` controls the `/repos/<slug>/insights/` page. Monthly commits and contributors are
   exact — they come from the commit list already in the artifact. Code size over time is
   **sampled**: at most `samples` monthly checkpoints (always including the first and last),
@@ -165,8 +177,8 @@ Notes
   past the `branchTrees` cap) and its files are stored up to `hosting.maxFileBytes`
   instead of `maxBlobBytes`, since built sites carry bundles bigger than 512 kB. Slugs the
   build itself owns (`repos`, `notes`, `orgs`, `_astro`, …) or that collide with a file in
-  `public/` are hard errors; a mistyped `repo` or missing branch is a warning and the site
-  is simply not served. Every hosted file becomes a page, so hosting a large site grows
+  `public/` are hard errors; a mistyped `repo` (`hosting-unknown-repo`) or a branch that does
+  not exist (`hosting-branch-missing`) is a warning and the site is simply not served. Every hosted file becomes a page, so hosting a large site grows
   the build the way `branchTrees` does — `npm run measure` shows the count.
 - The env var `FRZNFORGE_OUT_DIR` overrides `ingest.outDir`, `FRZNFORGE_CACHE_DIR`
   overrides `ingest.cacheDir`, and `FRZNFORGE_BASE` overrides `site.base` (all used by the
@@ -346,6 +358,9 @@ frznforge never fails a build because of a repo's state; it emits a warning and 
 | More tags than `ingest.tagTrees` | Older tags lose their file browser and archive (`tag-trees-capped`) |
 | More non-default branches than `ingest.branchTrees` | Older branches lose their file browser (`branch-trees-capped`) |
 | A code-size checkpoint exceeded `insights.maxBytesPerSample` | That point reports bytes but no line count, and that byte total may include binaries (`insights-approximate`) |
+| `hosting.sites[].repo` names a slug no ingested repo has | That entry is dropped, the site is not served (`hosting-unknown-repo`) |
+| A hosted repo has no branch to serve — the configured `branch` does not exist, or none was configured and none of `gh-pages`/`main`/`master` exist | That entry is dropped, the site is not served (`hosting-branch-missing`) |
+| A file on a hosted branch has `#` or `%` in its path | The rest of the site is still served; those files get no URL and are missing from it (`hosting-file-unservable`) |
 
 Warnings are printed by `npm run ingest` and counted in the site footer.
 

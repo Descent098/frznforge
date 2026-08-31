@@ -259,12 +259,13 @@ function asEntry(value: unknown): RepoEntry {
  * hosting slugs, or a bad `site.base` are refused with the schema's own message before a
  * byte of the file moves.
  */
-const SET_PATHS = new Set([
+export const SET_PATHS = new Set([
   'site.title', 'site.url', 'site.description', 'site.base',
   'owner.name', 'owner.handle', 'owner.profile',
   'theme.palette', 'theme.heat.hot', 'theme.heat.warm', 'theme.heat.neutral', 'theme.heat.cool',
   'markdown.mermaid',
   'content.orgs',
+  'listing.pageSize',
   'notes.dir', 'notes.useMtime', 'notes.maxFileBytes',
   'hosting.maxFileBytes',
   'ingest.outDir', 'ingest.maxBlobBytes', 'ingest.maxCommits', 'ingest.maxCommitAgeDays',
@@ -279,7 +280,7 @@ const SET_PATHS = new Set([
  * schema treats exactly like an absent key — there is no textual "delete this line" operation,
  * because deleting lines is how a comment beside the field gets destroyed.
  */
-const UNSET_PATHS = new Set(['site.url', 'site.description', 'site.base', 'notes.maxFileBytes']);
+export const UNSET_PATHS = new Set(['site.url', 'site.description', 'site.base', 'notes.maxFileBytes']);
 
 interface ArrayItemSpec {
   required: string[];

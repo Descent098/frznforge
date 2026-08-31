@@ -614,37 +614,78 @@ Tests
   port (no fixed port to collide with, no webServer entry needed) — 7 tests: tokenless
   403, values shown from the file, setting saved with comments kept, org added, source
   removed, profile body saved under an untouched frontmatter block, Done.
-- [x] Data model: none — the wizard edits config and content files, never the artifact.
+- [x] Data model: none — the wizard edits config and content files, never the artifact.g
 
 ---
 
-## Phase 9 — Docs, checklist, cut 0.2.0
+## Phase 9 — Docs, checklist, cut 0.2.0 ✅ *(done 2026-08-30)*
 
 Goal: everything a stranger needs, then the release.
 
 Ships
-- [ ] Docs sweep: `configuration.md` documents every key 0.2.0 added (`theme.heat`,
+- [x] Docs sweep: `configuration.md` documents every key 0.2.0 added (`theme.heat`,
   `ingest.maxCommitAgeDays`, `ingest.reuse`, `site.base`, `hosting`, `markdown.mermaid`,
   the ingest CLI flags); `data-model.md` reflects the final 0.2.0 schema version and the
   new warnings;
   `performance.md` carries the Phase 2/3 measurements and decisions; `deploying.md` covers
   sub-path deploys; `importing.md`/`quick-start.md` transcripts re-verified (the
   release-checklist trigger: the ingest summary and repo pages changed).
-- [ ] `docs/dev/release-checklist.md` run and extended with the 0.2.0 items that cannot be
+  *As built:* run as a 5-lens doc-vs-code audit with an independent verify pass —
+  **24 confirmed mismatches, all fixed**. The serious ones were not omissions but
+  *contradictions*: `deploying.md` still told readers a sub-path deploy was impossible
+  (twice, in the section that already carried the `site.base` recipe), the README still
+  advertised 0.1.0/schema v5 and the same no-base-path limitation, and `data-model.md`
+  asserted two things about insights that the code contradicts (code-size `bytes` shares
+  the `languages` population — it is deliberately wider; byte counts survive the sampling
+  budget — they lose their binary filter). Also swept: `site.description` was undocumented,
+  the hosting warning codes were missing from the warning table, the scan-cache filename was
+  described as the input digest (it is a hash of the repo path; `inputDigest` is a field
+  inside), and `quick-start.md` claimed every re-run fetches (reuse prints `reused`).
+- [x] `docs/dev/release-checklist.md` run and extended with the 0.2.0 items that cannot be
   verified from inside the repo: click through a hosted site and a base-path deploy by
   hand, in both themes.
-- [ ] `CHANGELOG.md`'s `0.2.0 (unreleased)` heading gains its release date; `VERSION`,
-  `package.json` and the heading agree.
+  *As built:* both 0.1.0 blocking items are now **resolved and ticked** — the documented
+  clone URL answers `git ls-remote`, and `VERSION`/`package.json`/the changelog heading all
+  read 0.2.0. Five new 0.2.0 items are listed **unticked**, because they need a real browser
+  against a real deploy and cannot be honestly ticked from here: hosted site, sub-path
+  deploy, mermaid in both themes, the wizard end-to-end, and the rebuild claim. One stale
+  route (`/insights/`, which has never existed at the top level) fixed.
+- [x] `CHANGELOG.md`'s `0.2.0 (unreleased)` heading gains its release date; `VERSION`,
+  `package.json` and the heading agree. *All three read 0.2.0; heading dated 2026-08-30.*
+
+Also shipped, because the phase's own goal demanded it (see "Done when"):
+- [x] **The rebuild got materially faster.** Profiling found syntax highlighting was 84% of
+  the render (21.4 s of a 25.5 s static-route phase); it is now memoized across builds in
+  `<ingest.cacheDir>/highlight/`. A no-change `npm run build` drops **23.1 s → 7.9 s
+  (−66%, 2.9×)**. Deliberately *not* the rejected skip-unchanged-pages: no page is skipped,
+  only a pure function is memoized, and hit ≡ miss is proven by building the site both ways
+  and hashing all 1,153 files (none of the 423 highlighted pages differed). Write-up in
+  performance.md; `tests/unit/highlight-cache.test.ts` holds the contract. An adversarial
+  review of the memo caught two ways it could have shipped stale bytes — keying on the
+  *requested* rather than the effective language (a transient grammar-load failure would have
+  frozen unhighlighted output under the real language's key) and a canary too weak to notice a
+  theme's token colours changing — both closed before release.
+- [x] **Bug found by the docs audit:** the wizard rendered a `listing.pageSize` field the
+  server's allow-list refused, so touching it failed the whole settings save with a 400.
+  Fixed, plus a test that cross-checks *every* field the page offers against the allow-list
+  so page↔server drift cannot recur silently.
 
 Done when
-- [ ] All three gates green (`npm test`, `npm run test:e2e`, `npm run check`),
+- [x] All three gates green (`npm test`, `npm run test:e2e`, `npm run check`),
   `npm run build` clean, ingest byte-identical across runs, and the checklist's manual
   items ticked or explicitly carried over with a reason (the 0.1.0 precedent: honest
   annotations beat silent ticks).
+  *Final: 588 unit passed / 1 skipped, 175 e2e passed / 1 skipped, astro check 0 errors
+  0 warnings, `npm run build` clean, `forge.json` byte-identical across runs (including
+  across a `--no-cache` run in between). The five manual browser items are carried over
+  unticked with the reason stated above.*
 
 Tests
-- [ ] None new — the deliverable is the docs sweep, the checklist run, and the three gates
+- [x] None new — the deliverable is the docs sweep, the checklist run, and the three gates
   staying green over everything the earlier phases shipped.
+  *Deviation: two suites were added anyway, because the phase shipped code —
+  `tests/unit/highlight-cache.test.ts` (10 tests: hit ≡ miss, invalidation, corrupt-entry
+  fallback, concurrency) and the page↔allow-list drift guard in `web-init.test.ts`.*
 
 ---
 

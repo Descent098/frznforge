@@ -166,6 +166,11 @@ only fetch it:
 done: 2 repo(s), 493 blob(s), 14 archive(s), 0 warning(s) in 16443ms
 ```
 
+Re-run it straight away and it will not even fetch: `ingest.reuse` skips the network for a
+source fetched successfully in the last two minutes, and skips the whole scan for a repo whose
+refs have not moved, so the line reads `(github: reused)` and the run finishes in a fraction of
+the time. `npm run ingest -- --no-cache` forces the long way round.
+
 **Ingest never fails a build because of a repository.** An empty repo, a missing path, a forge
 that is down — each of those is a warning, printed as `⚠ [code] repo: message` and counted in
 the site footer. Exit code 1 is reserved for a bad config, an unwritable output directory, or

@@ -60,6 +60,8 @@ git-ignored) and the ordinary local scanner then runs on that bare mirror:
 ├── last-run.json                          run log for the freshness window (0.2.0)
 ├── scan/
 │   └── <digest>.json                      per-repo scan cache (0.2.0)
+├── highlight/
+│   └── <key>.gz                           memoized Shiki output (0.2.0, written at render)
 └── <provider>/                            github | gitlab | gitea | forgejo
     └── <host-slug>/                       api.github.com, gitea.example.com-3000, …
         ├── <owner>/<repo>-<digest>.git    bare mirror (GitLab: the namespace nests)
@@ -93,7 +95,7 @@ git-ignored) and the ordinary local scanner then runs on that bare mirror:
 
 ### Cross-run reuse sidecars (`ingest.reuse`, 0.2.0)
 
-Two more cacheDir files exist so repeat builds can skip work **without changing a byte of
+Three more cacheDir entries exist so repeat builds can skip work **without changing a byte of
 output** — wall-clock timestamps are allowed here precisely because this directory never
 feeds the artifact:
 
@@ -107,20 +109,35 @@ feeds the artifact:
   stamp (the window cannot extend itself), and a config-hash mismatch invalidates the whole
   log. `'never'` and `'always'` are unaffected — `'never'` must keep its stale-cache
   warnings, and `'always'` is an explicit ask.
-- `scan/<digest>.json` — the **scan cache**: one repo's complete `scanRepo` output, keyed
-  by a digest over every input the scan reads — HEAD, every branch/tag ref with its object
-  id, the scan source (slug, overrides, **provider metadata layer and releases** — those
-  change with no ref change, and omitting them would replay stale releases) and the
-  `ScanOptions`. A hit skips the scan and replays the recorded `Repo`, reading blob and
+- `scan/<digest>.json` — the **scan cache**: one repo's complete `scanRepo` output. Two
+  different digests are in play here. The **filename** is a hash of the repo's absolute path,
+  so each repo owns exactly one entry (and the file is machine-local — an absolute path is
+  not portable). Inside it, `inputDigest` covers every input the scan reads — HEAD, every
+  branch/tag ref with its object id, the scan source (slug, overrides, **provider metadata
+  layer and releases** — those change with no ref change, and omitting them would replay
+  stale releases) and the `ScanOptions` — and it is the one compared on read. A hit skips the
+  scan and replays the recorded `Repo`, reading blob and
   archive bytes back from `<outDir>/blobs/` and `<outDir>/archives/` so `writeArtifact`'s
   mirror-and-prune pass sees full maps; anything missing or invalid falls back to a real
   scan, silently. The cached entry is validated against the `Repo` schema on read — a
   corrupt cache degrades to a re-scan, never to a failed build.
+- `highlight/<key>.gz` — the **highlight memo**, and the only one of the three written during
+  `astro build` rather than ingest. Syntax highlighting is 84% of this site's render, and
+  `highlightToHtml` is a pure function, so its output is remembered: one gzipped entry per
+  distinct (source, language, line-id prefix, highlighter identity). "Highlighter identity" is
+  Shiki's package version plus a hash of one canary render, so a dependency upgrade or a theme
+  change invalidates every entry rather than serving the previous version's colours. A corrupt
+  or truncated entry is a miss, never an error. This is emphatically *not* the rejected
+  skip-unchanged-pages idea (see [performance.md](./performance.md)): no page is skipped or
+  copied forward — every page renders in full, every build, and a cached highlight is
+  byte-for-byte what a fresh one produces.
 
-`npm run ingest -- --no-cache` reads none of this (nor the provider `.meta.json`) for one
-run, but still records its fresh results for the next one. Neither file is locked: two
-ingests racing on one cacheDir can lose a run-log update, which costs a redundant fetch,
-never correctness.
+`npm run ingest -- --no-cache` reads none of the ingest-side caches (nor the provider
+`.meta.json`) for one run, but still records its fresh results for the next one;
+`FRZNFORGE_NO_HL_CACHE=1` does the same for the highlight memo, which lives on the render
+side. Nothing here is locked: two ingests racing on one cacheDir can lose a run-log update,
+which costs a redundant fetch, never correctness — and two renders writing the same highlight
+entry each write a temp file and rename, so a reader never sees a half-written one.
 
 ## Guarantees
 
@@ -360,10 +377,14 @@ the commit's **author** date; `commits` is the number of commits in it; `contrib
 number of distinct lower-cased author emails active that month (activity per month, not a
 running total, so the series can go down).
 
-**`CodeSizePoint`** — `{ month, bytes, lines }`. `bytes` is the summed size of the checkpoint
-tree's non-binary, non-vendored blobs — the same population as `languages`, so the two agree.
-`lines` is the newline count over those blobs, or `null` when that checkpoint hit the byte
-budget (see below).
+**`CodeSizePoint`** — `{ month, bytes, lines }`. `month` is a UTC `YYYY-MM` bucket of the
+checkpoint commit's **commit** date — deliberately a different bucket from `CommitPoint.month`,
+which uses the author date. `bytes` is the summed size of the checkpoint tree's non-binary,
+non-vendored blobs: a **wider** population than `languages`, which additionally drops prose
+files and files with no detected language. `bytes` is therefore normally larger than
+`sum(languages[].bytes)` — on frznforge itself by about a third — and **the two must never be
+presented as equal**. `lines` is the newline count over those blobs, or `null` when that
+checkpoint hit the byte budget (see below).
 
 #### Sampling and its bounds
 
@@ -373,13 +394,16 @@ line counts cost blob content — so it is **sampled**, and the sampling is what
 bounded no matter how long the history is:
 
 - At most `ingest.insights.samples` checkpoints per repo (default 24), chosen as monthly
-  checkpoints spread evenly across the history, **always including the first and the last**
-  month so the endpoints of the chart are real measurements rather than interpolations.
+  checkpoints spread evenly across the history, **including the first and the last** month so
+  the endpoints of the chart are real measurements rather than interpolations. (`samples: 1`
+  is the one case that cannot honour both: it keeps the newest.)
 - Each checkpoint is one `git ls-tree -r -l <commit>`; blob sizes come straight from it.
 - Line counting streams that checkpoint's text blobs through `cat-file --batch` and stops the
   moment the checkpoint's cumulative text bytes exceed `ingest.insights.maxBytesPerSample`
-  (default 20 MiB). Such a point keeps its `bytes` and reports `lines: null`; the series is
-  marked `approximate` and the repo gets one `insights-approximate` warning naming the reason.
+  (default 20 MiB). Such a point reports `lines: null`, and its `bytes` **loses the binary
+  filter**: the blobs past the budget were never read, so they could not be classified, and
+  their `ls-tree` sizes are counted whatever they are. The series is marked `approximate` and
+  the repo gets one `insights-approximate` warning naming the reason.
 
 So the worst case per repo is `samples` tree listings plus `samples × maxBytesPerSample` bytes
 of blob reads — bounded by config, never by history length.
@@ -388,8 +412,12 @@ of blob reads — bounded by config, never by history length.
 
 Insights obey the same rule as everything else in the artifact: **checkpoints are derived from
 the commit list, never from a clock**. Months come from commit dates already in the artifact,
-the checkpoint for a month is that month's newest commit on the default branch, and the
-thinning to `samples` is a pure function of that list. Nothing consults `Date.now()`, the
+the checkpoint for a month is picked by **position in history** — the commit closest to the
+branch head within that month, not the one with the latest date, so a clock-skewed commit
+cannot reorder the series — and the thinning to `samples` is a pure function of that list. A
+month whose pick is not strictly older in history than the next kept month's pick is dropped
+rather than emitted out of order, so a month with commits can legitimately have no checkpoint.
+Nothing consults `Date.now()`, the
 filesystem or the scan order, so the same repo at the same commits picks the same checkpoints
 and emits the same bytes. (A consequence worth knowing: raising `ingest.maxCommits` changes
 the history insights can see, and therefore the series.)
@@ -479,7 +507,7 @@ annotated-tag derivation, newest first either way. `SiteRelease.source` (`'provi
 | `commits-aged-out`          | repo  | Commits older than `ingest.maxCommitAgeDays` (measured from the repo's newest commit date, never the clock) were left out. Every branch keeps its head commit. Suppressed when `ingest.maxCommits` truncated first (`commits-capped` is reported instead). |
 | `tag-trees-capped`          | repo  | More tags than `ingest.tagTrees`; only the newest N have browsable trees / archives ("N of M tags have browsable trees"). |
 | `branch-trees-capped`       | repo  | More non-default branches than `ingest.branchTrees`; only the most recently updated N have browsable trees ("N of M branches have browsable trees" — N counts the default branch, which is always browsable). Skipped branches still list on the branches page. |
-| `insights-approximate`      | repo  | At least one code-size checkpoint exceeded `ingest.insights.maxBytesPerSample`, so it reports `lines: null` and `RepoInsights.approximate` is `true`. Byte counts are unaffected. |
+| `insights-approximate`      | repo  | At least one code-size checkpoint exceeded `ingest.insights.maxBytesPerSample`, so it reports `lines: null` and `RepoInsights.approximate` is `true`. That checkpoint's byte total also loses its binary filter — unread blobs are counted at their `ls-tree` size whatever they are — so it may be inflated. |
 | `repo-not-found`            | site  | A configured path is not a git repository (or is a path inside one); the entry was skipped. |
 | `slug-collision`            | site  | Two configured repos resolved to the same slug; the later one (config order) was suffixed. `repo` holds the new slug. |
 | `remote-fetch-failed`       | repo  | A provider API call or mirror fetch failed (network error, bad response, unreachable host). The cached mirror was used if there is one, otherwise the repo was skipped. Never contains a token. |

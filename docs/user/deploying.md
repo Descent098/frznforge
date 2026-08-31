@@ -42,7 +42,9 @@ dist/
 │       ├── raw/<ref>/<path>       the bytes, under the file's real name
 │       └── archive/<ref>.zip      source download
 ├── notes/  <slug>/, <slug>/raw/<path>
-└── orgs/   index.html, <slug>/, <slug>/repos/
+├── orgs/   index.html, <slug>/, <slug>/repos/
+└── <hosted-slug>/                 one hosting.sites entry, served verbatim:
+                                   index.html, assets, whatever the branch holds
 ```
 
 Preview the real thing before you ship it:
@@ -53,10 +55,19 @@ npm run preview       # http://localhost:4321/
 
 ## 2. The three things a host must do
 
-**1. Serve the site at the root of a domain.** Every link frznforge emits is root-absolute
-(`/repos/hello-forge/`, `/_astro/Base.*.css`). There is no `base` path support, so a *project*
-URL like `https://you.github.io/my-forge/` will load the profile page with no CSS and every
-link broken. Use a user/org Pages site, a Pages subdomain, or a custom domain.
+**1. Serve the site at the path it was built for.** By default every link frznforge emits is
+absolute from the root (`/repos/hello-forge/`, `/_astro/Base.*.css`), so a site built with the
+default config has to live at a domain root. To serve it from a sub-path instead — a GitHub
+Pages *project* URL like `https://you.github.io/my-forge/` — set `site.base` (0.2.0):
+
+```ts
+site: { base: '/my-forge' },
+```
+
+Every URL the site emits is then prefixed with it, including the command palette's search
+index and the raw/archive routes. The two must agree: a site built with `base: '/my-forge'`
+served at the root is as broken as a root build served under a sub-path. See
+[§5](#5-github-pages) for the Pages recipe.
 
 **2. Resolve directory URLs to `index.html`.** The build uses Astro's default directory
 format, so `/repos/hello-forge/` exists on disk as `repos/hello-forge/index.html`. A host that
@@ -93,6 +104,12 @@ Big. Plan for it before you pick a host.
 
 plus `/`, `/repos/`, `/404`, `/search-index.json`, and the notes and orgs pages.
 
+Hosted sites are counted separately, because they are per `hosting.sites` entry rather than per
+repository — most repos contribute none, and one repo hosted twice under two slugs contributes
+twice. Each entry adds **one file per file on the hosted branch** (emitted at its literal path
+under `/<slug>/`), and, because a hosted branch always gets a browsable file tree, it also adds
+one to that repo's `R` — an increment `ingest.branchTrees: 0` cannot take back.
+
 `R` is the multiplier that hurts. It is **1 (the default branch) + `ingest.branchTrees` other
 branches + `ingest.tagTrees` tags**, capped at what the repo actually has — 36 by default. A
 164-file repository with 16 browsable refs generates 2,624 file pages and 2,624 raw endpoints
@@ -125,6 +142,7 @@ the largest page in a build is usually the largest text file in a repository.
 | `ingest.tagTrees` | `25` | Tags with a file browser **and** a source zip. Also cuts archive size |
 | `ingest.archives` | `true` | `false` removes every `.zip` — that was 40 % of the 403 MB above |
 | `ingest.maxCommits` | `null` | Caps the per-branch commit list, and so the per-commit pages |
+| `ingest.maxCommitAgeDays` | `null` | Drops commits older than N days (anchored to the repo's newest commit, never the clock), cutting the same pages; composes with `maxCommits` |
 | `ingest.maxBlobBytes` | `524288` | Files above this are listed but not stored: no raw endpoint, no highlighted body |
 | `ingest.insights.enabled` | `true` | `false` drops one page per repo and the sampling work at ingest |
 
@@ -282,10 +300,11 @@ jobs:
 
 Notes.
 
-- **URL.** A user or organization site (`you.github.io`) is served at the root and works.
-  A project site (`you.github.io/my-forge/`) is **not** — see [§2](#2-the-three-things-a-host-must-do).
-  Attach a custom domain instead: add the hostname under Settings → Pages and put a `CNAME`
-  file containing that hostname in `public/` so it survives every deploy.
+- **URL.** A user or organization site (`you.github.io`) is served at the root and needs no
+  `site.base`. A project site (`you.github.io/my-forge/`) needs `site.base: '/my-forge'` —
+  the recipe above. If you would rather serve it at a root anyway, attach a custom domain:
+  add the hostname under Settings → Pages and put a `CNAME` file containing that hostname in
+  `public/` so it survives every deploy, and drop `site.base`.
 - **Tokens.** `secrets.GITHUB_TOKEN` is minted per run and scoped to the repository the
   workflow lives in. It raises the API rate limit and is enough if you only publish that one
   repository. Importing anything else — public or private — needs a personal access token in
@@ -340,7 +359,9 @@ Neither runs Jekyll, so `_astro/` is safe.
 
 **Cloudflare's 20,000-file limit is the one that bites.** The two-repository example in
 [§3](#3-how-big-will-my-site-be) already used 6,592 files. If a deploy is rejected for file
-count, set `ingest.archives: false` and `ingest.branchTrees: 0` and rebuild.
+count, set `ingest.archives: false` and `ingest.branchTrees: 0` and rebuild. Note that
+`branchTrees: 0` does *not* drop a hosted branch — hosted sites are exempt from the cap by
+design — so if you host large built sites, the lever there is `hosting.sites` itself.
 
 To deploy an already-built directory instead of building in CI:
 

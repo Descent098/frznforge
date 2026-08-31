@@ -376,11 +376,16 @@ export default async function globalSetup() {
   const { data, blobs, archives } = await ingest({ ...cfg, outDir: DATA }, {}, { remote: remoteDeps });
   await writeArtifact(data, blobs, archives, DATA);
 
+  // `FRZNFORGE_CACHE_DIR` is passed to the *build* too, not just the ingest above: since 0.2.0
+  // the build itself writes a cache (the highlight memo, `<cacheDir>/highlight/`). Without it
+  // these children fall back to the schema default and would read and write the developer's
+  // real `.frznforge-cache`, leaving the suite non-hermetic and dropping fixture entries into
+  // the actual site's cache.
   execFileSync('npx', ['astro', 'build', '--outDir', DIST], {
     cwd: ROOT,
     stdio: 'pipe',
     shell: true,
-    env: { ...process.env, FRZNFORGE_OUT_DIR: DATA },
+    env: { ...process.env, FRZNFORGE_OUT_DIR: DATA, FRZNFORGE_CACHE_DIR: CACHE },
   });
 
   // The same artifact again, deployed under a sub-path: `FRZNFORGE_BASE` flows through
@@ -391,6 +396,6 @@ export default async function globalSetup() {
     cwd: ROOT,
     stdio: 'pipe',
     shell: true,
-    env: { ...process.env, FRZNFORGE_OUT_DIR: DATA, FRZNFORGE_BASE: '/mysite' },
+    env: { ...process.env, FRZNFORGE_OUT_DIR: DATA, FRZNFORGE_CACHE_DIR: CACHE, FRZNFORGE_BASE: '/mysite' },
   });
 }

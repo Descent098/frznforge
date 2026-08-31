@@ -3,6 +3,7 @@
  * driven by the site's `[data-theme]` attribute via shiki's CSS-variable output.
  */
 import { createHighlighter, bundledLanguages, type Highlighter } from 'shiki';
+import { highlightFingerprint, highlightKey, memoizeHighlight } from './highlight-cache';
 
 /** Artifact language name (from ingest's language map) → shiki language id. */
 const LANGUAGE_TO_SHIKI: Record<string, string> = {
@@ -97,6 +98,59 @@ function getHighlighter(): Promise<Highlighter> {
 
 const loaded = new Set<string>();
 
+/** The two themes every render emits, in one place so the fingerprint and the render agree. */
+const THEMES = { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' } as const;
+
+/**
+ * One render of the real code path, hashed into the cache fingerprint (see highlight-cache.ts).
+ *
+ * Rendered through a **real grammar**, not `text`. A `text` render emits a single untokenised
+ * span carrying only each theme's foreground and background, so a theme edit that changed a
+ * keyword, string or comment colour — exactly the edit this file's own history records, and
+ * exactly what a reader would expect the canary to catch — would leave the fingerprint
+ * unmoved and every cached entry serving the old colours. A snippet with a keyword, a string
+ * and a comment exposes those token colours to the hash. Falls back to `text` only if the
+ * grammar will not load, which merely weakens the canary; it never makes it wrong.
+ */
+function canaryHtml(hl: Highlighter): string {
+  const lang = loaded.has(CANARY_LANG) ? CANARY_LANG : 'text';
+  return codeToHtml(hl, "const canary = 'x'; // 1", lang, 'canary-');
+}
+
+/** Grammar the canary renders through; loaded once, before the first fingerprint. */
+const CANARY_LANG = 'typescript';
+
+let canaryReady: Promise<void> | null = null;
+
+/** Load the canary's grammar so the fingerprint sees token colours, not just fg/bg. */
+function prepareCanary(hl: Highlighter): Promise<void> {
+  return (canaryReady ??= (async () => {
+    if (loaded.has(CANARY_LANG)) return;
+    try {
+      await hl.loadLanguage(CANARY_LANG as Parameters<Highlighter['loadLanguage']>[0]);
+      loaded.add(CANARY_LANG);
+    } catch {
+      /* the canary degrades to `text`; it is weaker, never wrong */
+    }
+  })());
+}
+
+/** The single place `codeToHtml` is called, so a cached result and a fresh one cannot diverge. */
+function codeToHtml(hl: Highlighter, source: string, lang: string, idPrefix: string): string {
+  return hl.codeToHtml(source, {
+    lang,
+    themes: THEMES,
+    defaultColor: false,
+    transformers: [
+      {
+        line(node, line) {
+          node.properties['id'] = `${idPrefix}L${line}`;
+        },
+      },
+    ],
+  });
+}
+
 /**
  * Highlight source to HTML: `<pre class="shiki ..."><code><span class="line" id="Ln">…`
  * Both themes are emitted (CSS variables); `.hf-code` CSS picks per theme. Every line gets
@@ -130,18 +184,24 @@ export async function highlightToHtml(
       lang = 'text';
     }
   }
-  return hl.codeToHtml(source, {
-    lang: loaded.has(lang) ? lang : 'text',
-    themes: { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' },
-    defaultColor: false,
-    transformers: [
-      {
-        line(node, line) {
-          node.properties['id'] = `${idPrefix}L${line}`;
-        },
-      },
-    ],
-  });
+  /*
+   * Key on the language actually handed to Shiki, never on the one asked for.
+   *
+   * Loading a grammar can fail for reasons that have nothing to do with the grammar existing
+   * (`shikiLang` already guarantees that): a dynamic import hitting EMFILE while Astro renders
+   * pages concurrently, a half-written chunk in node_modules. The render then falls back to
+   * plain `text` — and if the key still said `typescript`, that unhighlighted output would be
+   * written to disk under the TypeScript key and served by every later build, turning a
+   * transient hiccup into permanently uncoloured code. Keyed on the effective language, the
+   * fallback is stored as what it is — a `text` render under the `text` key — and the next
+   * build, whose grammar loads, misses and highlights properly. The one cost is that a grammar
+   * loads even when every file of that language will hit; that is a few ms per language per
+   * build, and it buys back the load-bearing guarantee.
+   */
+  const effective = loaded.has(lang) ? lang : 'text';
+  await prepareCanary(hl);
+  const key = highlightKey(await highlightFingerprint(() => canaryHtml(hl)), effective, idPrefix, source);
+  return memoizeHighlight(key, () => codeToHtml(hl, source, effective, idPrefix));
 }
 
 /** Count lines the way editors do (trailing newline doesn't add a line). */

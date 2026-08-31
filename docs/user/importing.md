@@ -64,6 +64,7 @@ label your repos correctly.
 | `overrides` | – | Same shape as `.frznforge.json`; wins over everything else |
 | `releases` | `'provider'` (remote) / `'tags'` (local) | Where the releases page gets its content |
 | `tokenEnv` | see [tokens](#2-tokens) | Env var holding the API token — **never the token itself** |
+| `org` | – | Slug of an organization this repo belongs to (see [organizations](configuration.md#organizations-organizations--contentorgsslugmd)). Naming one that is not configured is a warning, not an error |
 
 Metadata precedence, highest first:
 
@@ -207,11 +208,12 @@ When a filter drops anything, `init` says what it dropped before printing the sn
 
 ```
 selected 86 of 118 (excluded 32 forks)
+selected 71 of 118 (excluded 32 forks, 15 archived)
 ```
 
 When two filters would drop the same repository it is counted once, under the first reason in
 the `nf, na, np` order — so the numbers add up to the repositories actually removed
-(`118 − 71 = 47`), not to the account's totals for each flag.
+(`32 + 15 = 47`, and `118 − 71 = 47`), not to the account's totals for each flag.
 
 If a filter drops *everything*, `init` says so and exits `1` instead of writing an empty
 selection:
@@ -334,9 +336,10 @@ session is that one copy. (A file the wizard *creates* had no pre-wizard state, 
   config from `--config` or the nearest `frznforge.config.ts`, the profile from that config's
   own `owner.profile` — and to nothing else. The settings endpoints only accept fields from a
   server-side allow-list, so the page cannot invent an edit the wizard was never meant to make.
-- **The page cannot phone home.** It is served with
-  `Content-Security-Policy: default-src 'none'; connect-src 'self'`, so the browser itself
-  refuses any request to anywhere but the local server. No CDN, no fonts, no analytics.
+- **The page cannot phone home.** It is served with a Content-Security-Policy that starts
+  `default-src 'none'; connect-src 'self'` (and goes on to pin styles, scripts, images,
+  form targets, `base-uri` and framing), so the browser itself refuses any request to
+  anywhere but the local server. No CDN, no fonts, no analytics.
 
 **The provider token never reaches the browser.** The page asks the local process for a
 listing; the process reads `$GITHUB_TOKEN` (or whichever variable applies) and calls the

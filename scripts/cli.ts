@@ -506,9 +506,11 @@ Options (init)
                                              frznforge.config.ts at or above the cwd).
   --print                                    Print the snippet only; never write a file.
   --yes                                      Write without the confirmation prompt.
-  --web                                      Pick the repos in a local browser UI. Interactive:
-                                             it needs a browser, so it is not for CI (and it
-                                             cannot be combined with --print).
+  --web                                      Edit the config in a local browser UI: pick repos,
+                                             plus site/owner/theme/ingest settings, orgs,
+                                             hosted sites and profile.md. Interactive: it needs
+                                             a browser, so it is not for CI (and it cannot be
+                                             combined with --print).
   --port=<n>                                 Port for --web (default: a free one).
   --no-open                                  Do not launch a browser for --web; print the URL.
   --help, -h                                 Show this message.

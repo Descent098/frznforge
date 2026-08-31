@@ -171,14 +171,105 @@ measurably worse. That shape makes sense: the pages' blob reads are synchronous
 and the render is CPU-bound. Adopted as a literal in `astro.config.mjs`; re-measure by
 overriding it there if the page mix ever changes materially.
 
+## Measured: the highlight memo (0.2.0)
+
+The 0.2.0 plan asked for the *rebuild* to get faster, and after `ingest.reuse` the remaining
+cost was all rendering. So the first job was to find out what rendering actually spends its
+time on, rather than assume. Instrumenting `highlightToHtml` on the self-build answered it in
+one line:
+
+```
+[hl] calls=429 ms=21404 bytes=3728368
+```
+
+**21.4 s of a 25.5 s static-route phase — 84% of the render — is Shiki**, tokenizing 3.7 MB of
+source. Everything else in the build (611 pages of layout, markdown, listings, the search
+index, the Vite bundles) shares the other 16%.
+
+That work is also entirely repeated. `highlightToHtml` is a pure function — the same source, in
+the same language, with the same themes and the same line-id prefix, always yields the same
+HTML — and the artifact it reads from only changes when the repository does. So the result is
+now remembered between builds in `<ingest.cacheDir>/highlight/`, keyed by a hash of every input,
+gzipped (Shiki's markup runs ~10× the source and compresses ~15:1).
+
+Two things fall out of the same change: the same file highlighted once per browsable ref is now
+computed once per *build* as well as once per *lifetime*, and a cache hit skips loading the
+Shiki grammar entirely.
+
+Measured on the self-build (612 HTML pages, 423 of them carrying Shiki markup; Windows 11,
+Node 24; medians of repeated runs):
+
+| run                                                | `npm run build` | `astro build` alone |
+| -------------------------------------------------- | --------------- | ------------------- |
+| no memo (`FRZNFORGE_NO_HL_CACHE=1`)                | 23.1 s          | 22.0 s              |
+| memo, cold (first run — computes *and* writes)     | 19.8 s          | 19.5 s              |
+| **memo, warm (nothing changed)**                   | **7.9 s**       | **7.2 s**           |
+| improvement on a no-change rebuild                 | **−66% (2.9×)** | −67% (3.1×)         |
+
+The cold run is *faster* than no memo at all, not slower: writing 321 gzipped entries costs
+about 120 ms, and coalescing the concurrent duplicate renders (the same file highlighted for
+two refs at once) saves more than that on the same run.
+
+The cache is 2.5 MB / 321 entries for this site, and scales with distinct highlighted content
+rather than page count — a file browsable under five refs is one entry. It is **cumulative**:
+nothing prunes it, so an edited file leaves its predecessor behind and a Shiki upgrade orphans
+every entry at once. That is deliberate — tracking liveness across runs is the cross-run
+bookkeeping this design exists to avoid — and the directory is safe to delete at any time,
+which is the intended way to reclaim it.
+
+### Why this is not skip-unchanged-pages
+
+It looks adjacent to the idea rejected below, and it is worth being precise about the
+difference, because the objection to that idea is a correctness objection and it still stands.
+
+Skip-unchanged-pages proposes *not rendering a page* and copying last build's output forward.
+That requires a dependency graph from artifact fields to output pages, and a miss anywhere in it
+ships a stale page in a build that reports success.
+
+This memoizes *one deterministic function call inside a render*. Every page is still rendered in
+full, from the artifact, on every build. A hit returns bytes identical to what a miss computes,
+because the key covers every input to the function: change the source, the language, the line-id
+prefix, the themes, or Shiki itself and the key changes with it. The last of those is the one a
+naive content hash would miss, so the key folds in Shiki's package version *and* a hash of a
+canary render — a dependency upgrade or a theme edit invalidates the whole cache rather than
+serving the previous version's colours. A corrupt or truncated entry is treated as a miss.
+
+That property is tested, not asserted: `tests/unit/highlight-cache.test.ts` pins hit ≡ miss,
+the invalidation rules, the corrupt-entry fallback, and — with a planted entry no render could
+produce — that a disk hit genuinely happens rather than the suite passing on a re-render.
+
+It was also verified end to end by building the site twice, once with the memo and once with
+`FRZNFORGE_NO_HL_CACHE=1` (which disables the memo *entirely*, disk and in-process, so the
+control is a genuinely uncached build), then hashing all 1,153 output files: **not one of the
+423 pages carrying Shiki markup differed**. Eleven files did differ — every one of them a page
+showing relative dates ("2 hours ago"), none containing highlighted code — and a control run of
+two builds that *both* had the memo disabled produced the same drift, which is what identifies
+it as the clock rather than the cache.
+
+Two failure modes found by an adversarial review of this design, and closed, because they are
+the ones worth knowing about:
+
+- **Keying on the requested language rather than the effective one.** A grammar load can fail
+  for reasons unrelated to the grammar existing (a dynamic import hitting EMFILE mid-build).
+  The render then falls back to plain text — and had the key still said `typescript`, that
+  unhighlighted output would have been written under the TypeScript key and served forever.
+  The key uses the language actually handed to Shiki, so a fallback is stored as the `text`
+  render it is, and the next build highlights properly.
+- **A canary that could not see what it claimed to.** Rendered through `text`, the canary
+  carried only each theme's foreground and background, so a theme edit changing a keyword or
+  comment colour would not have moved the fingerprint. It now renders through a real grammar
+  with a keyword, a string and a comment in it.
+
 ## Measured, then rejected again: skip-unchanged-pages (0.2.0)
 
 The 0.2.0 wish list re-floated "if the most recent commit hash matches the one on the page,
-skip rebuilding it in dist". The standing rejection above holds, and 0.2.0 moved its bar
-*further away*: `ingest.reuse` cut the no-change re-ingest from ≈2.0 s to ≈0.22 s on the
-self-build, so rendering now dominates a no-change `npm run build` even harder (the revisit
-bar — "only with a measured build where ingest, not rendering, dominates" — fails by more
-than it did in 0.1.0). Concretely, what a route → input-hash manifest would have to model
+skip rebuilding it in dist". The standing rejection above holds. What changed in 0.2.0 is that
+the *goal* behind the request — a faster rebuild — was met without taking the risk: the
+highlight memo above cut a no-change rebuild by 63% by memoizing a pure function, leaving every
+page rendered and every byte verified. That is the cheap 84% of the problem; skipping pages
+would be chasing the remaining 16% with a mechanism that can be silently wrong.
+
+Concretely, what a route → input-hash manifest would still have to model
 before a single page could be skipped safely: `search-index.json` (any repo/note/org
 change), every listing page and the sidebar counts (any repo added/removed/renamed), the
 footer warning count on every page (any warning anywhere), the profile's contribution

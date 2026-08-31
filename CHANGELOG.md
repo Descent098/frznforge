@@ -1,4 +1,4 @@
-# 0.2.0 (unreleased)
+# 0.2.0 (2026-08-30)
 
 ## Features
 
@@ -14,11 +14,15 @@
 
 * **Preserved file history with ingest limits.** File tables now retain last-commit information even when commit history is capped or age-limited, using artifact schema v6.
 
+* **Wizard could not save the page size.** The init wizard rendered a "Repos per page" field that the server's allow-list rejected, failing the whole settings save with a 400. `listing.pageSize` is now editable, and a test cross-checks every field the page offers against the allow-list.
+
 ## Other
 
 * **New logo.** Replaced the old logo with a lightweight vector anvil design and reduced favicon size substantially.
 
 * **Build performance.** Pages now build concurrently in pairs, improving self-build time by about 8%. Other performance optimizations were measured and rejected where they provided insufficient benefit.
+
+* **Much faster rebuilds.** Syntax highlighting measured as 84% of the render, so its output is now memoized across builds in `<ingest.cacheDir>/highlight/`. A no-change `npm run build` drops from 23.1s to 7.9s (−66%). Highlighting is a pure function, so a cached result is byte-identical to a fresh one — no page is skipped, and the key covers Shiki's version and themes. Verified by building the site with and without the cache and hashing all 1,153 files: none of the 423 highlighted pages differed. Governed by `ingest.reuse.enabled`; `FRZNFORGE_NO_HL_CACHE=1` bypasses it.
 
 # 0.1.0 (2026-08-24)
 

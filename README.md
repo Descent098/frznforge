@@ -6,7 +6,7 @@ browser, history, diffs, branches, tags, releases, insights — as plain HTML.
 
 No server. No database. No accounts, issues, pull requests or stars.
 
-**Status: 0.1.0, released 2026-08-24** — the first usable release. Everything in
+**Status: 0.2.0, released 2026-08-30** — the second release. Everything in
 [CHANGELOG.md](CHANGELOG.md) is implemented and tested, and it builds this project's own site.
 Expect rough edges; the known ones are listed under [Status](#status) below.
 
@@ -48,8 +48,13 @@ plus a content-addressed blob store.
 - Repo overview, file browser for every browsable ref, file view with build-time Shiki
   highlighting and `#L42` anchors, markdown Preview/Source toggle, raw and zip downloads,
   paginated history, single-commit pages, branches, tags, releases, insights.
+- ```` ```mermaid ```` fences render as diagrams, from a locally bundled copy — no CDN, and
+  only on pages that actually hold one. `markdown.mermaid: false` turns them back into code
+  blocks, which is also what a reader without JavaScript sees.
 - **Notes** — a folder of files published gist-style at `/notes/`.
 - **Organizations** — group repos under their own page and listing.
+- **Hosted sites** — serve a repo's built branch (`gh-pages` by default) as a real site at
+  `/<slug>/`, while its forge view stays at `/repos/<slug>/`.
 - Ctrl-K command palette, light/dark with a `t` shortcut, two colour palettes. Every page type
   is checked in **both** themes by `tests/e2e/a11y.spec.ts` — WCAG AA contrast over every
   visible text node, one `<h1>` per page, no skipped heading levels, no duplicate ids, no
@@ -74,8 +79,9 @@ npm run dev        # http://localhost:4321/
 
 Two commands help you fill that config in:
 `npm run frznforge -- new <dir>` scaffolds fresh authoring files, and
-`npm run frznforge -- init` walks a forge account and writes the repo entries for you
-(`--web` does it in a browser).
+`npm run frznforge -- init` walks a forge account and writes the repo entries for you.
+`init --web` opens a local browser editor for the whole config — the repo picker plus site,
+owner, theme, ingest, organizations and hosted sites — and for your `profile.md`.
 
 ## Documentation
 
@@ -110,13 +116,11 @@ Keep all three green. No test may touch the network.
 
 ## Status
 
-**0.1.0**, released 2026-08-24 — the first usable release. Artifact schema v5.
+**0.2.0**, released 2026-08-30 — the second release. Artifact schema v7.
+(0.1.0, released 2026-08-24, was the first usable one, on schema v5.)
 
 Rough edges, honestly:
 
-- **The site must be served from the root of a domain.** There is no `base` path support, so
-  a GitHub Pages *project* URL (`you.github.io/my-forge/`) will not work — use a user/org
-  site or a custom domain.
 - **Builds get large fast.** File pages are generated per browsable ref, so a repository's
   file count is multiplied by its branches and tags. The defaults cap that at 1 default branch
   + 10 branches + 25 tags; see [deploying.md](docs/user/deploying.md#3-how-big-will-my-site-be)

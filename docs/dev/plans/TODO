@@ -1,4 +1,4 @@
-# Version 0.3.0 plans
+# Version 0.2.1 plans
 
 Before beginning make sure the VERSION is up to date, and create a file called `docs/dev/plans/version-<version number>-phased.md` which is a phased plan for implementing the features, then stop after creating it. If that file exists, the that means the version has been started and you're taking over from where another agent left off. If it doesn't then create the file making sure to also create "checkpoints" which are points after a few phases where the full test suite is ran, and must pass before proceeding. You don't need to run the full tests on every phase because it's going to be too slow. For each checkpoint, if it's not going to trample one another, feel free to use subagents, in fact ideally you should.
 
@@ -12,7 +12,7 @@ Additional things to keep in mind:
 
 ## Features & fixes
 
-- [ ]
+- [ ] Hitting `done` in the web UI should also save/apply all current changes
 
 
 ## For human
