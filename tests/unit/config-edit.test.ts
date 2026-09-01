@@ -10,6 +10,7 @@ import {
   quote,
   removeArrayItemAt,
   removeFromArray,
+  setArrayItemField,
   renderValue,
   setObjectField,
 } from '../../scripts/lib/config-edit';
@@ -216,5 +217,69 @@ describe('composition', () => {
     const close = matchBracket(text, open);
     expect(close).toBeGreaterThan(open);
     expect(text.slice(close)).toContain('});');
+  });
+});
+
+describe('setArrayItemField (edit in place)', () => {
+  const cfg = `import { defineConfig } from './x';
+
+export default defineConfig({
+  organizations: [
+    // the first one matters
+    { slug: 'acme', name: 'Acme', repos: ['a'] },  // trailing note
+    { slug: 'beta', name: 'Beta Co' },
+  ],
+  ingest: { maxBlobBytes: 512 * 1024 },
+});
+`;
+
+  it('replaces one field and touches nothing else in the file', () => {
+    const out = setArrayItemField(cfg, ['organizations'], 0, 'name', quote('Acme Renamed'))!;
+    expect(out.changed).toBe(true);
+    expect(out.text).toContain("{ slug: 'acme', name: 'Acme Renamed', repos: ['a'] },  // trailing note");
+    // every other byte survives: the comment above, the sibling entry, the expression below
+    expect(out.text).toContain('// the first one matters');
+    expect(out.text).toContain("{ slug: 'beta', name: 'Beta Co' },");
+    expect(out.text).toContain('maxBlobBytes: 512 * 1024');
+    // and the diff really is only that field
+    expect(out.text.replace("'Acme Renamed'", "'Acme'")).toBe(cfg);
+  });
+
+  it('adds a field the entry did not have', () => {
+    const out = setArrayItemField(cfg, ['organizations'], 1, 'avatar', quote('images/beta.png'))!;
+    expect(out.text).toContain("{ slug: 'beta', name: 'Beta Co', avatar: 'images/beta.png' },");
+  });
+
+  it('is a no-op when the value already matches', () => {
+    const out = setArrayItemField(cfg, ['organizations'], 0, 'name', quote('Acme'))!;
+    expect(out.changed).toBe(false);
+    expect(out.text).toBe(cfg);
+  });
+
+  it('refuses an out-of-range index instead of guessing', () => {
+    expect(setArrayItemField(cfg, ['organizations'], 2, 'name', quote('x'))).toBeNull();
+    expect(setArrayItemField(cfg, ['organizations'], -1, 'name', quote('x'))).toBeNull();
+  });
+
+  it('refuses when `expect` does not match the element at that index', () => {
+    // The index selects; expect is the safety net that catches a page working from a stale list.
+    expect(setArrayItemField(cfg, ['organizations'], 0, 'name', quote('x'), { slug: 'beta' })).toBeNull();
+    expect(setArrayItemField(cfg, ['organizations'], 0, 'name', quote('x'), { slug: 'acme' })).not.toBeNull();
+  });
+
+  it('refuses a non-literal element, whose source position means nothing', () => {
+    const spread = `export default defineConfig({\n  organizations: [\n    ...SHARED,\n  ],\n});\n`;
+    expect(setArrayItemField(spread, ['organizations'], 0, 'name', quote('x'))).toBeNull();
+  });
+
+  it('preserves an expression-valued sibling field rather than flattening it', () => {
+    const withExpr = `export default defineConfig({\n  hosting: { sites: [\n    { repo: 'a', slug: 'a-site' },\n  ] },\n});\n`;
+    const out = setArrayItemField(withExpr, ['hosting', 'sites'], 0, 'branch', quote('gh-pages'))!;
+    expect(out.text).toContain("{ repo: 'a', slug: 'a-site', branch: 'gh-pages' },");
+  });
+
+  it('escapes what it writes, like every other writer here', () => {
+    const out = setArrayItemField(cfg, ['organizations'], 0, 'name', quote("O'Brien & Co"))!;
+    expect(out.text).toContain(`name: ${quote("O'Brien & Co")}`);
   });
 });

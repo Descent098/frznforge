@@ -138,6 +138,51 @@ export const RESERVED_HOSTING_SLUGS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * A path to a file the site serves from `public/`, e.g. `images/owner.png` or
+ * `/images/orgs/acme.png` (both normalise to `/images/...`).
+ *
+ * Local only, deliberately: frznforge's published pages call no third party, and an avatar
+ * URL pointing at a forge's CDN would break that for every visitor of every page. Put the
+ * file in `public/` and reference it here. Astro serves `public/` verbatim, so no ingest or
+ * blob-store plumbing is involved.
+ *
+ * Rejected: anything with a scheme (`http:`, `data:`, `//host`), a backslash, or a `..`
+ * segment — a config value must not be able to point outside `public/`.
+ */
+export const PublicPath = z
+  .string()
+  .min(1)
+  .refine((v) => !/^[a-z][a-z0-9+.-]*:/i.test(v) && !v.startsWith('//'), {
+    message: 'must be a path inside public/, not a URL (frznforge pages load no third-party assets)',
+  })
+  .refine((v) => !v.includes('\\'), { message: 'use forward slashes' })
+  .refine((v) => !v.split('/').includes('..'), { message: 'must not escape public/ with ".."' })
+  .transform((v) => `/${v.replace(/^\/+/, '')}`);
+
+/**
+ * A person credited on the site who is not the owner (0.3.0). Matched against the
+ * git-derived contributors by email, so the display side of a repo can show a real name and
+ * picture instead of whatever `user.email` was configured on some machine.
+ *
+ * `emails` is a list because one person routinely commits under several addresses; every
+ * matching git contributor is MERGED into one entry (commits summed, first/last widened),
+ * which is the only sensible reading of "these addresses are the same person".
+ */
+export const ContributorConfig = z.object({
+  /** Display name; overrides the name git recorded. */
+  name: z.string().min(1),
+  /** Every git author email that is this person. Compared case-insensitively. */
+  emails: z.array(z.string().min(1)).min(1),
+  /** Optional picture, same `public/` rule as the owner's. */
+  avatar: PublicPath.optional(),
+  /** Short blurb shown beside the name. */
+  description: z.string().max(300).optional(),
+  /** Where to link the name (their site, their forge profile). */
+  url: z.url().optional(),
+});
+export type ContributorConfig = z.infer<typeof ContributorConfig>;
+
+/**
  * One organization (schema v4): a named grouping of repos with its own overview page.
  *
  * `repos` is one of the two ways a repo joins an org; the other is `org: '<slug>'` on the repo
@@ -157,6 +202,8 @@ export const OrganizationConfig = z.object({
   description: z.string().max(300).optional(),
   /** Repo slugs that belong to this org. */
   repos: z.array(z.string().min(1)).optional(),
+  /** Optional logo/picture, served from `public/` — see {@link PublicPath}. */
+  avatar: PublicPath.optional(),
 });
 export type OrganizationConfig = z.infer<typeof OrganizationConfig>;
 
@@ -192,6 +239,12 @@ export const FrznforgeConfigSchema = z.object({
     name: z.string().min(1),
     handle: Slug,
     profile: z.string().min(1).default('./content/profile.md'),
+    /**
+     * Profile picture, served from `public/` — see {@link PublicPath}. Lives here rather
+     * than in `profile.md`'s frontmatter because the sidebar shows it on every page, not
+     * just the profile page, and because the wizard edits config natively.
+     */
+    avatar: PublicPath.optional(),
   }),
   theme: z.object({
     palette: Palette.default('hearth'),
@@ -264,6 +317,13 @@ export const FrznforgeConfigSchema = z.object({
   }).prefault({}),
   /** Organizations repos can be grouped under (schema v4). */
   organizations: z.array(OrganizationConfig).default([]),
+  /**
+   * People to credit properly (0.3.0). Purely additive: contributors are still discovered
+   * from git, and an entry here only decorates the ones whose emails it claims. An entry
+   * matching nobody is a build warning (`contributor-unknown-email`), never an error — the
+   * repo it referred to may simply not be ingested in this build.
+   */
+  contributors: z.array(ContributorConfig).default([]),
   /**
    * Hosted static sites (schema v7): serve a repo's branch as a real site at a top-level
    * path, while the normal forge view stays at `/repos/<slug>/`. The classic case is a

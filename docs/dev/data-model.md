@@ -201,7 +201,7 @@ fields are declared in `ForgeData`, and the snapshot tests compare bytes.
 
 | field           | meaning                                                                          |
 | --------------- | -------------------------------------------------------------------------------- |
-| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `7`). The site refuses artifacts of another version. |
+| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `8`). The site refuses artifacts of another version. |
 | `repos`         | `Repo[]`, sorted by slug.                                                        |
 | `notes`         | `Note[]` (schema v4), date desc / undated last / title asc — see "Notes".         |
 | `organizations` | `Organization[]` (schema v4), sorted by slug — see "Organizations".               |
@@ -356,6 +356,28 @@ Empty array when nothing counts.
 
 Commits grouped by author email, lower-cased; `name` is the name used on the most recent
 commit; `firstCommit`/`lastCommit` are author dates. Sorted by `commits` desc, then name.
+
+Since **schema v8** an entry may be decorated by a `contributors[]` config entry that claims
+one of its emails (`src/lib/ingest/contributors.ts`):
+
+| Field         | Meaning                                                                   |
+| ------------- | ------------------------------------------------------------------------- |
+| `avatar`      | `public/`-relative image path from the config entry, else `null`.          |
+| `description` | Short blurb from the config entry, else `null`.                            |
+| `url`         | Link for the name from the config entry, else `null`.                      |
+
+Two consequences worth knowing:
+
+- **A configured entry MERGES its addresses.** `emails` is a list, and every git contributor
+  whose address it claims collapses into one entry: `commits` summed, `firstCommit` /
+  `lastCommit` widened across all of them, and `email` set to the **first** address the
+  config lists. Without that, one person committing from two machines would appear twice
+  with the same name and picture.
+- **`name` becomes the configured name**, overriding the most-recent-commit name. Both the
+  merge and the rename happen before the sort, so the ordering reflects the merged totals.
+
+A contributor nobody configured is exactly what it was before v8, with the three fields
+`null`.
 
 ### Insights: `RepoInsights` / `CommitPoint` / `CodeSizePoint` (schema v5)
 
@@ -519,6 +541,7 @@ annotated-tag derivation, newest first either way. `SiteRelease.source` (`'provi
 | `note-file-unservable`      | site  | A note file's name contains `#` or `%`, which no static raw URL can round-trip (the build escapes `#` in the emitted filename, and `%` aborts the build outright). The file is still collected, stored and rendered inline; it just gets no `/notes/<slug>/raw/<path>` route and no Raw/Download link. `repo` is `null`. |
 | `repo-path-unservable`     | repo  | A committed path (or a ref name) contains `#` or `%`, which no static URL can round-trip — same cause as `note-file-unservable`. The path is still ingested and still listed in the file table, but gets no `tree`/`blob`/`raw` route and is rendered unlinked. A ref whose name is affected loses the whole ref's file routes. |
 | `org-unknown-repo`          | site  | An `organizations[].repos` entry names a slug no ingested repo has (typo, or the repo was removed/skipped). The entry is dropped from `Organization.repos`. |
+| `contributor-unknown-email` | site  | A `contributors[]` entry claims emails that no ingested repo has commits from, so it decorates nobody (schema v8). Harmless — the repo that person contributed to may not be part of this build — so it is reported and ignored. `repo` is `null`. |
 | `repo-unknown-org`          | repo  | A repo source declares `org: '<slug>'` that is not in `organizations[]`. The repo joins no org. `repo` holds the repo's slug. |
 | `hosting-unknown-repo`      | site  | A `hosting.sites` entry names a repo slug no ingested repo has; the site is not served (schema v7). |
 | `hosting-branch-missing`    | repo  | A hosted repo has no branch to serve — the configured branch does not exist, or none of `gh-pages`/`main`/`master` do; the site is not served (schema v7). |
@@ -649,8 +672,16 @@ that is not configured raises `repo-unknown-org` and the repo joins no org.
 | `name`        | Display name, from config.                                                          |
 | `description` | Config `description`, or `null`. The markdown file's frontmatter `description` wins at render time. |
 | `repos`       | Member repo slugs, sorted and de-duplicated; every one exists in `ForgeData.repos`. |
+| `avatar`      | `public/`-relative image path from `organizations[].avatar`, or `null` (schema v8). |
 
 An org with no members is still emitted — it has a page either way.
+
+**Images (schema v8).** `avatar` — here, on `Contributor`, and in `owner.avatar` — is always
+a path the site serves from `public/`, never a URL. Astro copies `public/` verbatim, so no
+blob-store or ingest plumbing is involved, and the published pages keep their guarantee of
+loading nothing from a third party (an avatar pointing at a forge's CDN would break that on
+every page it appears on). The config schema (`PublicPath`) rejects anything with a scheme,
+a leading `//`, a backslash, or a `..` segment.
 
 ### `<content.orgs>/<org-slug>.md`
 

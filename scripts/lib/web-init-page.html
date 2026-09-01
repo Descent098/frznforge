@@ -547,6 +547,19 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
       </div>
 
       <div class="setgroup">
+        <span class="lbl">Contributors</span>
+        <p class="hint" style="margin-top:6px">Put a real name and picture on the people git only knows as an email address. Listing several addresses merges them into one person.</p>
+        <div class="listrows" id="contrib-rows" style="margin-top:9px"></div>
+        <div class="addrow" style="margin-top:10px">
+          <div class="field"><label for="contrib-name">Name</label><input id="contrib-name" type="text" placeholder="e.g. Kieran Wood"></div>
+          <div class="field"><label for="contrib-emails">Git emails</label><input id="contrib-emails" type="text" spellcheck="false" autocapitalize="off" placeholder="comma-separated"></div>
+          <div class="field"><label for="contrib-desc">Description (optional)</label><input id="contrib-desc" type="text" placeholder="one line"></div>
+          <div class="field"><label for="contrib-url">Link (optional)</label><input id="contrib-url" type="text" spellcheck="false" autocapitalize="off" placeholder="https://…"></div>
+          <button type="button" class="btn" id="contrib-add">Add contributor</button>
+        </div>
+      </div>
+
+      <div class="setgroup">
         <span class="lbl">Hosted sites</span>
         <p class="hint" style="margin-top:6px">Serve a repo's branch as a real site at <code>/&lt;slug&gt;/</code> — e.g. a <code>gh-pages</code> branch.</p>
         <div class="listrows" id="hosting-rows" style="margin-top:9px"></div>
@@ -1068,7 +1081,9 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
     { title: 'Owner', fields: [
       { path: 'owner.name', label: 'Name', kind: 'text' },
       { path: 'owner.handle', label: 'Handle', kind: 'text' },
-      { path: 'owner.profile', label: 'Profile file', kind: 'text', hint: 'Markdown file path, relative to the config.' }
+      { path: 'owner.profile', label: 'Profile file', kind: 'text', hint: 'Markdown file path, relative to the config.' },
+      { path: 'owner.avatar', label: 'Profile picture', kind: 'text', unset: true, upload: { kind: 'owner' },
+        hint: 'A file inside public/, e.g. images/owner.png. Empty = show initials.' }
     ] },
     { title: 'Theme', fields: [
       { path: 'theme.palette', label: 'Palette', kind: 'palette' },
@@ -1097,8 +1112,12 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
       { path: 'ingest.tagTrees', label: 'Browsable tags', kind: 'num' },
       { path: 'ingest.branchTrees', label: 'Browsable branches', kind: 'branchtrees', hint: "A number, or 'all'." },
       { path: 'ingest.archives', label: 'Produce zip archives', kind: 'check' },
+      { path: 'ingest.failOnDegraded', label: 'Fail the build if any repo fell back to cached metadata', kind: 'check' },
       { path: 'ingest.reuse.enabled', label: 'Reuse recent ingest work', kind: 'check' },
       { path: 'ingest.reuse.maxAgeMinutes', label: 'Reuse window (minutes)', kind: 'num' },
+      { path: 'ingest.reuse.cooldownSeconds', label: 'Re-fetch cooldown (seconds)', kind: 'numnull', unset: true,
+        hint: 'Skip a repo fetched successfully this recently. Empty = no cooldown.' },
+      { path: 'ingest.reuse.skipUnchanged', label: "Skip the fetch when ls-remote shows nothing changed", kind: 'check' },
       { path: 'ingest.insights.enabled', label: 'Per-repo insights', kind: 'check' },
       { path: 'ingest.insights.samples', label: 'Insights samples', kind: 'num' },
       { path: 'ingest.insights.maxBytesPerSample', label: 'Insights byte budget per sample', kind: 'num' }
@@ -1189,6 +1208,10 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
         }
         input.id = fieldId(f.path);
         field.appendChild(input);
+        // A field backed by an image gets a file picker beside it. The upload writes the
+        // file and answers with the path it chose; the field is then filled in and saved
+        // through the ordinary settings save, so there is still one write path for config.
+        if (f.upload) field.appendChild(uploadControl(f, input));
         if (f.hint) {
           var hint = document.createElement('p');
           hint.className = 'hint';
@@ -1201,6 +1224,44 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
       if (checks.children.length) wrap.appendChild(checks);
       box.appendChild(wrap);
     });
+  }
+
+  /**
+   * "Choose a picture…" beside an image-backed field.
+   *
+   * The browser reads the file and posts the bytes; it never sends a path, and the server
+   * picks the filename from the target plus the type it sniffs. On success the text input is
+   * filled with the returned `public/`-relative path — the user still presses Save, so an
+   * upload never silently rewrites their config.
+   */
+  function uploadControl(f, input) {
+    var wrap = document.createElement('div');
+    wrap.className = 'uploadrow';
+    var picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/*';
+    picker.id = fieldId(f.path) + '-file';
+    var status = document.createElement('span');
+    status.className = 'hint';
+    picker.addEventListener('change', function () {
+      var file = picker.files && picker.files[0];
+      if (!file) return;
+      status.textContent = 'Uploading…';
+      var reader = new FileReader();
+      reader.onerror = function () { status.textContent = 'Could not read that file.'; };
+      reader.onload = function () {
+        api('/api/upload', { target: f.upload, data: String(reader.result) })
+          .then(function (data) {
+            input.value = data.path;
+            status.textContent = 'Uploaded — press Save settings to use it.';
+          })
+          .catch(function (err) { status.textContent = err.message; });
+      };
+      reader.readAsDataURL(file);
+    });
+    wrap.appendChild(picker);
+    wrap.appendChild(status);
+    return wrap;
   }
 
   /** Diff the inputs against what they showed on load; only changed fields become operations. */
@@ -1273,6 +1334,61 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
       .then(function () { $('settings-save').disabled = !(S.cfg && S.cfg.readable); });
   }
 
+  /**
+   * An "Edit" disclosure on a list row: one input per editable field, saved with `setAt`
+   * operations so only the fields the user actually changed are written.
+   *
+   * `fields` is [{ key, label, upload? }]; `expect` is the identity the server re-checks
+   * against the element at `index`, so a page working from a stale list cannot edit the
+   * wrong entry. Identity fields (an org's slug) are deliberately not editable — repos point
+   * at them, and renaming one in place would orphan its members.
+   */
+  function editRow(row, arrayPath, index, entry, fields, expect, uploadTarget) {
+    var box = document.createElement('details');
+    box.className = 'editrow';
+    var summary = document.createElement('summary');
+    summary.textContent = 'Edit';
+    box.appendChild(summary);
+    var inputs = {};
+    fields.forEach(function (f) {
+      var field = document.createElement('div');
+      field.className = 'field';
+      var label = document.createElement('label');
+      var id = 'edit-' + arrayPath.replace(/\./g, '-') + '-' + index + '-' + f.key;
+      label.setAttribute('for', id);
+      label.textContent = f.label;
+      field.appendChild(label);
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.id = id;
+      input.spellcheck = false;
+      input.value = entry[f.key] === undefined || entry[f.key] === null ? '' : String(entry[f.key]);
+      field.appendChild(input);
+      inputs[f.key] = { el: input, was: input.value };
+      if (f.upload && uploadTarget) {
+        field.appendChild(uploadControl({ path: id, upload: uploadTarget }, input));
+      }
+      box.appendChild(field);
+    });
+    var save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'btn small';
+    save.textContent = 'Save changes';
+    save.addEventListener('click', function () {
+      var ops = [];
+      Object.keys(inputs).forEach(function (key) {
+        var got = inputs[key].el.value.trim();
+        if (got === inputs[key].was) return;
+        ops.push({ op: 'setAt', path: arrayPath, index: index, key: key, value: got, expect: expect });
+      });
+      if (!ops.length) { idle('settings-status', 'Nothing changed.'); return; }
+      postOps(ops, 'Saved.', 'settings-status', 'settings-error', { preserve: true });
+    });
+    box.appendChild(save);
+    row.appendChild(box);
+    return row;
+  }
+
   function listRow(text, small, onRemove) {
     var row = document.createElement('div');
     row.className = 'listrow';
@@ -1325,9 +1441,53 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
   function renderOrgs() {
     var orgs = (S.cfg.current && S.cfg.current.organizations) || [];
     renderList('org-rows', orgs, 'No organizations yet.', function (org, i) {
-      return listRow(org.slug, org.name, function () {
+      var row = listRow(org.slug, org.name, function () {
         removeAt('organizations', i, { slug: org.slug, name: org.name });
       });
+      return editRow(
+        row, 'organizations', i, org,
+        [{ key: 'name', label: 'Name' }, { key: 'description', label: 'Description' },
+         { key: 'avatar', label: 'Picture (a file in public/)', upload: true }],
+        { slug: org.slug },
+        { kind: 'org', slug: org.slug },
+      );
+    });
+  }
+
+  function renderContributors() {
+    var people = (S.cfg.current && S.cfg.current.contributors) || [];
+    renderList('contrib-rows', people, 'No contributors configured — git-derived ones still show.', function (person, i) {
+      var emails = (person.emails || []).join(', ');
+      var row = listRow(person.name, emails, function () {
+        removeAt('contributors', i, { name: person.name });
+      });
+      return editRow(
+        row, 'contributors', i, person,
+        [{ key: 'name', label: 'Name' }, { key: 'description', label: 'Description' },
+         { key: 'url', label: 'Link' }, { key: 'avatar', label: 'Picture (a file in public/)', upload: true }],
+        { name: person.name },
+        { kind: 'contributor', index: i },
+      );
+    });
+  }
+
+  function addContributor() {
+    var name = $('contrib-name').value.trim();
+    var emails = $('contrib-emails').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!name || !emails.length) {
+      fail('settings-error', 'Not added', 'A contributor needs a name and at least one git email.');
+      return;
+    }
+    var item = { name: name, emails: emails };
+    var desc = $('contrib-desc').value.trim();
+    if (desc) item.description = desc;
+    var url = $('contrib-url').value.trim();
+    if (url) item.url = url;
+    postOps([{ op: 'add', path: 'contributors', item: item }], 'Added.', 'settings-status', 'settings-error', {
+      preserve: true,
+      onSuccess: function () {
+        ['contrib-name', 'contrib-emails', 'contrib-desc', 'contrib-url'].forEach(function (id) { $(id).value = ''; });
+      }
     });
   }
 
@@ -1338,9 +1498,11 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
       var expect = { repo: site.repo };
       if (site.slug) expect.slug = site.slug;
       if (site.branch) expect.branch = site.branch;
-      return listRow(label, site.branch ? 'branch ' + site.branch : 'branch auto', function () {
+      var row = listRow(label, site.branch ? 'branch ' + site.branch : 'branch auto', function () {
         removeAt('hosting.sites', i, expect);
       });
+      return editRow(row, 'hosting.sites', i, site,
+        [{ key: 'slug', label: 'Served at /…/' }, { key: 'branch', label: 'Branch (empty = auto)' }], expect);
     });
   }
 
@@ -1350,9 +1512,12 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
     var sources = S.cfg.sources || [];
     renderList('source-rows', sources, 'No repositories yet — use the picker above.', function (entry, i) {
       var name = entry.path || entry.project || ((entry.owner || '?') + '/' + (entry.repo || '?'));
-      return listRow(entry.type + ': ' + name, entry.host || '', function () {
+      var row = listRow(entry.type + ': ' + name, entry.host || '', function () {
         removeAt('repos', i, entry);
       });
+      return editRow(row, 'repos', i, entry,
+        [{ key: 'slug', label: 'Slug' }, { key: 'org', label: 'Organization slug' },
+         { key: 'releases', label: "Releases ('provider' or 'tags')" }], entry);
     });
   }
 
@@ -1407,11 +1572,12 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
         fail('settings-unreadable', 'The config file does not load cleanly',
           (cfg.issues || []).join('; ') + ' — the values below are the defaults, and saving is disabled until the file is fixed by hand.');
       }
-      ['settings-save', 'org-add', 'hosting-add'].forEach(function (id) { $(id).disabled = !cfg.readable; });
+      ['settings-save', 'org-add', 'contrib-add', 'hosting-add'].forEach(function (id) { $(id).disabled = !cfg.readable; });
       // Rebuild the scalar inputs only when not preserving in-progress edits (and always on the
       // first load, when there are none to keep).
       if (!preserve || !S.built) { buildSettings(); S.built = true; }
       renderOrgs();
+      renderContributors();
       renderHosting();
       renderSources();
     }).catch(function (err) {
@@ -1432,6 +1598,8 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
         $('profile-fm-field').hidden = false;
       }
       $('profile-body').value = p.body;
+      // What the server last confirmed, so Done can tell an edited body from an untouched one.
+      S.profileSaved = p.body;
       if (!p.exists) idle('profile-status', 'New file — created on first save.');
     }).catch(function () { /* no profile card, then */ });
   }
@@ -1460,6 +1628,7 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
     api('/api/profile/write', { body: $('profile-body').value })
       .then(function (data) {
         idle('profile-status', data.changed ? 'Saved.' : 'Already saved.');
+        S.profileSaved = $('profile-body').value;
         if (S.profile) S.profile.exists = true;
       })
       .catch(function (err) {
@@ -1471,10 +1640,75 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
 
   /* ---------------------------------------------------------------- ending the session */
 
+  /**
+   * Is there an edit the user made but never saved?
+   *
+   * Settings are diffed against what they showed on load (the same diff `saveSettings`
+   * uses); the profile body is compared with the last text the server confirmed.
+   */
+  function pendingWork() {
+    var settings = { ops: [], problems: [] };
+    if (S.cfg && S.cfg.readable) settings = collectSettingsOps();
+    var profileEl = $('profile-body');
+    var profileDirty = !!(S.profile && profileEl && profileEl.value !== S.profileSaved);
+    return { settings: settings, profileDirty: profileDirty };
+  }
+
+  /**
+   * Save everything outstanding, then end the session.
+   *
+   * Before 0.3.0 this button only stopped the wizard: an edited field or a rewritten profile
+   * body that had never been saved was silently discarded. Now the pending saves run first,
+   * in sequence, and a rejected value ABORTS the shutdown — leaving the user in the page with
+   * the error, rather than exiting having thrown their edit away. Cancel is still the way out
+   * without saving.
+   */
   function doneClick() {
+    var pending = pendingWork();
+    if (pending.settings.problems.length) {
+      fail('settings-error', 'Not saved', pending.settings.problems.join(' ') + ' Fix it, or press Cancel to discard.');
+      return;
+    }
     $('done').disabled = true;
     $('cancel').disabled = true;
-    api('/api/done', {}).catch(function () { return null; }).then(function (data) {
+
+    var saved = 0;
+    var chain = Promise.resolve();
+    if (pending.settings.ops.length) {
+      chain = chain.then(function () {
+        busy('settings-status', 'Saving…');
+        return api('/api/config/write', { operations: pending.settings.ops }).then(function () {
+          idle('settings-status', 'Saved.');
+          saved += 1;
+        });
+      });
+    }
+    if (pending.profileDirty) {
+      chain = chain.then(function () {
+        busy('profile-status', 'Saving…');
+        return api('/api/profile/write', { body: $('profile-body').value }).then(function () {
+          idle('profile-status', 'Saved.');
+          S.profileSaved = $('profile-body').value;
+          saved += 1;
+        });
+      });
+    }
+
+    chain
+      .then(function () { return finishSession(); })
+      .catch(function (err) {
+        // Something the user typed was refused. Keep the session alive so they can fix it.
+        idle('settings-status', '');
+        idle('profile-status', '');
+        fail('settings-error', 'Not finished', 'Your changes were not all saved: ' + err.message +
+          ' Nothing was closed — fix it and press Done again, or press Cancel to discard.');
+        $('done').disabled = false;
+        $('cancel').disabled = false;
+      });
+  }
+
+  function finishSession() {
+    return api('/api/done', {}).catch(function () { return null; }).then(function (data) {
       S.finished = true;
       var n = data && data.writes ? data.writes : 0;
       finish('Done', n
@@ -1526,6 +1760,7 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
   $('done').addEventListener('click', doneClick);
   $('settings-save').addEventListener('click', saveSettings);
   $('org-add').addEventListener('click', addOrg);
+  $('contrib-add').addEventListener('click', addContributor);
   $('hosting-add').addEventListener('click', addHosting);
   $('profile-preview').addEventListener('click', previewProfile);
   $('profile-save').addEventListener('click', saveProfile);

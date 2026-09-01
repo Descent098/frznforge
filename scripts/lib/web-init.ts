@@ -58,6 +58,7 @@ import {
   PROVIDER_NAMES,
   SAFE_FIELD,
   assertSafeHost,
+  backupPathFor,
   entriesFor,
   findConfigFile,
   insertRepos,
@@ -70,7 +71,7 @@ import {
   type RemoteRepo,
   type RepoEntry,
 } from '../cli';
-import { insertIntoArray, removeArrayItemAt, renderValue, setObjectField } from './config-edit';
+import { insertIntoArray, removeArrayItemAt, renderValue, setArrayItemField, setObjectField } from './config-edit';
 
 /* ------------------------------------------------------------------ options */
 
@@ -94,6 +95,98 @@ export const INACTIVITY_MS = 15 * 60 * 1000;
 
 /** Bodies bigger than this are refused outright — the real ones are a few kilobytes. */
 const MAX_BODY_BYTES = 1024 * 1024;
+/**
+ * Uploads travel as base64 inside the normal JSON body, so they need their own (larger)
+ * ceiling. 8 MiB of JSON is ~6 MiB of image, which is far more than an avatar ever needs and
+ * still small enough that buffering it is harmless.
+ */
+const MAX_UPLOAD_BODY_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Image types the wizard will write, identified by their magic bytes rather than by anything
+ * the browser claims. The extension is chosen from THIS table, never from the upload.
+ */
+const IMAGE_TYPES: ReadonlyArray<{ ext: string; test: (b: Buffer) => boolean }> = [
+  { ext: 'png', test: (b) => b.length > 8 && b.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) },
+  { ext: 'jpg', test: (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  {
+    ext: 'webp',
+    test: (b) => b.length > 12 && b.subarray(0, 4).toString('ascii') === 'RIFF' && b.subarray(8, 12).toString('ascii') === 'WEBP',
+  },
+  { ext: 'gif', test: (b) => b.length > 6 && ['GIF87a', 'GIF89a'].includes(b.subarray(0, 6).toString('ascii')) },
+  {
+    ext: 'svg',
+    // SVG is markup, not a binary format: sniff it only after the binary types have been
+    // ruled out, and only when it really opens as XML/SVG.
+    test: (b) => /^\s*(<\?xml[\s\S]{0,200}?)?<svg[\s>]/i.test(b.subarray(0, 512).toString('utf8')),
+  },
+];
+
+/** The image kind an upload is for; the server derives the path from this, never the client. */
+export type UploadTarget =
+  | { kind: 'owner' }
+  | { kind: 'org'; slug: string }
+  | { kind: 'contributor'; index: number };
+
+/** Slug-safe, so a target can never introduce a path segment. */
+const SAFE_SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+/**
+ * Parse an upload target. The browser says WHICH avatar it is replacing; the filename is
+ * this module's decision — the standing rule that the page never names a file on disk.
+ */
+export function asUploadTarget(value: unknown): UploadTarget {
+  const raw = asRecord(value);
+  switch (raw.kind) {
+    case 'owner':
+      return { kind: 'owner' };
+    case 'org': {
+      const slug = typeof raw.slug === 'string' ? raw.slug : '';
+      if (!SAFE_SLUG.test(slug)) throw badRequest('invalid target.slug');
+      return { kind: 'org', slug };
+    }
+    case 'contributor': {
+      const index = raw.index;
+      if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index > 999) {
+        throw badRequest('invalid target.index');
+      }
+      return { kind: 'contributor', index };
+    }
+    default:
+      throw badRequest('unknown upload target');
+  }
+}
+
+/** `public/`-relative path for a target, e.g. `images/orgs/acme.png`. Server-chosen. */
+export function uploadPathFor(target: UploadTarget, ext: string): string {
+  if (target.kind === 'owner') return `images/owner.${ext}`;
+  if (target.kind === 'org') return `images/orgs/${target.slug}.${ext}`;
+  return `images/contributors/${target.index}.${ext}`;
+}
+
+/**
+ * Decode a base64 image and identify it by its magic bytes.
+ *
+ * Returns the extension to use, which comes from the sniffed type — an upload claiming
+ * `.png` while carrying something else gets the something-else's extension, or is refused.
+ */
+export function decodeImageUpload(dataBase64: unknown): { bytes: Buffer; ext: string } {
+  if (typeof dataBase64 !== 'string' || dataBase64 === '') throw badRequest('missing image data');
+  // Accept a `data:` URL as well as bare base64 — the browser's FileReader produces the former.
+  const comma = dataBase64.startsWith('data:') ? dataBase64.indexOf(',') : -1;
+  const payload = comma === -1 ? dataBase64 : dataBase64.slice(comma + 1);
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(payload, 'base64');
+  } catch {
+    throw badRequest('image data is not base64');
+  }
+  if (bytes.length === 0) throw badRequest('image data is empty');
+  if (bytes.length > 6 * 1024 * 1024) throw badRequest('image is larger than 6 MB');
+  const type = IMAGE_TYPES.find((t) => t.test(bytes));
+  if (!type) throw badRequest('that does not look like a PNG, JPEG, WebP, GIF or SVG');
+  return { bytes, ext: type.ext };
+}
 
 /** Exit codes `runWebInit` can resolve to. 130 is the conventional SIGINT code. */
 const EXIT = { ok: 0, failed: 1, interrupted: 130 } as const;
@@ -261,7 +354,7 @@ function asEntry(value: unknown): RepoEntry {
  */
 export const SET_PATHS = new Set([
   'site.title', 'site.url', 'site.description', 'site.base',
-  'owner.name', 'owner.handle', 'owner.profile',
+  'owner.name', 'owner.handle', 'owner.profile', 'owner.avatar',
   'theme.palette', 'theme.heat.hot', 'theme.heat.warm', 'theme.heat.neutral', 'theme.heat.cool',
   'markdown.mermaid',
   'content.orgs',
@@ -271,7 +364,9 @@ export const SET_PATHS = new Set([
   'ingest.outDir', 'ingest.maxBlobBytes', 'ingest.maxCommits', 'ingest.maxCommitAgeDays',
   'ingest.concurrency', 'ingest.tagTrees', 'ingest.branchTrees', 'ingest.archives',
   'ingest.cacheDir', 'ingest.fetch',
+  'ingest.failOnDegraded',
   'ingest.reuse.enabled', 'ingest.reuse.maxAgeMinutes',
+  'ingest.reuse.skipUnchanged', 'ingest.reuse.cooldownSeconds',
   'ingest.insights.enabled', 'ingest.insights.samples', 'ingest.insights.maxBytesPerSample',
 ]);
 
@@ -280,7 +375,10 @@ export const SET_PATHS = new Set([
  * schema treats exactly like an absent key — there is no textual "delete this line" operation,
  * because deleting lines is how a comment beside the field gets destroyed.
  */
-export const UNSET_PATHS = new Set(['site.url', 'site.description', 'site.base', 'notes.maxFileBytes']);
+export const UNSET_PATHS = new Set([
+  'site.url', 'site.description', 'site.base', 'notes.maxFileBytes',
+  'owner.avatar', 'ingest.reuse.cooldownSeconds',
+]);
 
 interface ArrayItemSpec {
   required: string[];
@@ -290,14 +388,29 @@ interface ArrayItemSpec {
 }
 
 const ARRAY_ADD_SPECS: Record<string, ArrayItemSpec> = {
-  organizations: { required: ['slug', 'name'], optional: ['description'], lists: ['repos'] },
+  organizations: { required: ['slug', 'name'], optional: ['description', 'avatar'], lists: ['repos'] },
   'hosting.sites': { required: ['repo'], optional: ['slug', 'branch'], lists: [] },
+  contributors: { required: ['name'], optional: ['avatar', 'description', 'url'], lists: ['emails'] },
+};
+
+/**
+ * Fields the page may edit in place on an existing entry (0.3.0), per array path. Narrower
+ * than the add specs on purpose: `slug` is an entry's identity for organizations and is what
+ * repos point at, so renaming it in place would silently orphan every member — remove and
+ * re-add remains the way to change identity.
+ */
+export const ARRAY_SET_FIELDS: Record<string, string[]> = {
+  organizations: ['name', 'description', 'avatar'],
+  'hosting.sites': ['slug', 'branch'],
+  contributors: ['name', 'avatar', 'description', 'url'],
+  repos: ['slug', 'org', 'releases'],
 };
 
 /** `repos` entries are added by the picker (`/api/write`), so `add` is deliberately absent here. */
 const ARRAY_REMOVE_KEYS: Record<string, string[]> = {
   organizations: ['slug', 'name'],
   'hosting.sites': ['repo', 'slug', 'branch'],
+  contributors: ['name'],
   repos: ['type', 'host', 'owner', 'repo', 'project', 'path', 'slug'],
 };
 
@@ -331,7 +444,8 @@ export type SettingsOp =
   | { op: 'set'; path: string[]; value: unknown }
   | { op: 'unset'; path: string[] }
   | { op: 'add'; path: string[]; item: Record<string, unknown> }
-  | { op: 'removeAt'; path: string[]; index: number; expect: Record<string, string> };
+  | { op: 'removeAt'; path: string[]; index: number; expect: Record<string, string> }
+  | { op: 'setAt'; path: string[]; index: number; key: string; value: unknown; expect: Record<string, string> };
 
 function asArrayItem(value: unknown, spec: ArrayItemSpec, label: string): Record<string, unknown> {
   const raw = asRecord(value);
@@ -374,6 +488,33 @@ export function asOperations(value: unknown): SettingsOp[] {
         const spec = ARRAY_ADD_SPECS[pathText];
         if (!spec) throw badRequest(`${label}: '${pathText}' is not a list the wizard can add to`);
         return { op: 'add', path: pathText.split('.'), item: asArrayItem(record.item, spec, `${label}.item`) };
+      }
+      case 'setAt': {
+        // Edit-in-place (0.3.0). Same position-not-content selection as removeAt, and the
+        // same `expect` safety net; the editable field set is narrower than the add spec
+        // because an entry's identity (an org's slug) must not change under its members.
+        const fields = ARRAY_SET_FIELDS[pathText];
+        if (!fields) throw badRequest(`${label}: '${pathText}' is not a list the wizard can edit`);
+        const key = typeof record.key === 'string' ? record.key : '';
+        if (!fields.includes(key)) throw badRequest(`${label}: '${key}' is not editable on ${pathText}`);
+        if (typeof record.index !== 'number' || !Number.isInteger(record.index) || record.index < 0) {
+          throw badRequest(`${label}: index must be a non-negative integer`);
+        }
+        const rawExpect = record.expect === undefined ? {} : asRecord(record.expect);
+        const keys = ARRAY_REMOVE_KEYS[pathText] ?? [];
+        const expect: Record<string, string> = {};
+        for (const k of Object.keys(rawExpect)) {
+          if (!keys.includes(k)) throw badRequest(`${label}: cannot match on '${k}'`);
+          expect[k] = asSettingString(rawExpect[k], `${label}.expect.${k}`);
+        }
+        return {
+          op: 'setAt',
+          path: pathText.split('.'),
+          index: record.index,
+          key,
+          value: asSettingString(record.value, `${label}.value`),
+          expect,
+        };
       }
       case 'removeAt': {
         // Removal is by POSITION, not by content match: two entries can be
@@ -447,6 +588,12 @@ export function applyOpsToInput(input: unknown, ops: SettingsOp[]): Record<strin
       const list = deepGet(target, op.path);
       if (Array.isArray(list)) list.push(op.item);
       else deepSet(target, op.path, [op.item]);
+    } else if (op.op === 'setAt') {
+      const list = deepGet(target, op.path);
+      if (Array.isArray(list) && op.index >= 0 && op.index < list.length) {
+        const item = list[op.index];
+        if (typeof item === 'object' && item !== null) (item as Record<string, unknown>)[op.key] = op.value;
+      }
     } else {
       // removeAt: drop the element at op.index (mirroring the text engine, which pins by
       // position too). Out of range leaves the array untouched — the text edit then also
@@ -470,7 +617,9 @@ export function applyOpsToSource(source: string, ops: SettingsOp[]): { text: str
           ? setObjectField(text, op.path, 'undefined')
           : op.op === 'add'
             ? insertIntoArray(text, op.path, renderValue(op.item))
-            : removeArrayItemAt(text, op.path, op.index, op.expect);
+            : op.op === 'setAt'
+              ? setArrayItemField(text, op.path, op.index, op.key, renderValue(op.value), op.expect)
+              : removeArrayItemAt(text, op.path, op.index, op.expect);
     if (!result) return { error: `could not apply ${op.op} at ${op.path.join('.')} — the file's structure was not recognised; edit it by hand` };
     text = result.text;
     changed = changed || result.changed;
@@ -670,6 +819,28 @@ export async function runWebInit(opts: WebInitOptions): Promise<number> {
     return backup;
   };
   /**
+   * Byte-preserving `.bak` for a BINARY file, once per file per session.
+   *
+   * `backupOnce` routes through `writeBackup`, which writes utf8 — fine for config and
+   * markdown, silently corrupting for an image. Uploads use this instead, and share the same
+   * `sessionBackups` map so "one backup per file per session" still holds across both.
+   */
+  const backupBinaryOnce = async (file: string): Promise<string | null> => {
+    const existing = sessionBackups.get(file);
+    if (existing !== undefined) return existing;
+    let backup: string | null = null;
+    try {
+      const base = backupPathFor(file, new Date());
+      await fs.copyFile(file, base);
+      backup = base;
+    } catch {
+      backup = null; // nothing to back up (the file did not exist), or the copy failed
+    }
+    sessionBackups.set(file, backup);
+    return backup;
+  };
+
+  /**
    * Record that a file was *created* by this session, so a later write to it does not back up
    * the wizard's own first output as if it were the "pre-wizard state". A created file has no
    * pre-wizard bytes, so its session backup is `null` (no `.bak`), not a mid-session snapshot.
@@ -849,12 +1020,12 @@ export async function runWebInit(opts: WebInitOptions): Promise<number> {
 
   /* ---------------------------------------------------------------- request handling */
 
-  async function readBody(req: http.IncomingMessage): Promise<unknown> {
+  async function readBody(req: http.IncomingMessage, maxBytes: number = MAX_BODY_BYTES): Promise<unknown> {
     const chunks: Buffer[] = [];
     let size = 0;
     for await (const chunk of req) {
       size += (chunk as Buffer).byteLength;
-      if (size > MAX_BODY_BYTES) throw badRequest('request body is too large');
+      if (size > maxBytes) throw badRequest('request body is too large');
       chunks.push(chunk as Buffer);
     }
     const text = Buffer.concat(chunks).toString('utf8');
@@ -1046,7 +1217,9 @@ export async function runWebInit(opts: WebInitOptions): Promise<number> {
       sendJson(res, 405, { error: 'method not allowed' });
       return;
     }
-    const body = asRecord(await readBody(req));
+    // Uploads carry base64 image bytes, so they get the larger ceiling; every other
+    // endpoint keeps the 1 MiB one.
+    const body = asRecord(await readBody(req, url.pathname === '/api/upload' ? MAX_UPLOAD_BODY_BYTES : MAX_BODY_BYTES));
 
     if (url.pathname === '/api/repos') {
       const provider = asProvider(body.provider);
@@ -1262,6 +1435,49 @@ export async function runWebInit(opts: WebInitOptions): Promise<number> {
         if (result.backup) io.log(`Backup: ${result.backup}`);
       }
       sendJson(res, 200, result);
+      return;
+    }
+
+    if (url.pathname === '/api/upload') {
+      // Pictures for the owner, an organization or a contributor (0.3.0).
+      //
+      // The browser sends WHICH avatar this is and the bytes; it never sends a path. The
+      // filename is derived here from the target plus the type sniffed from the magic bytes,
+      // and always lands under `<config dir>/public/images/`. The config field is NOT set
+      // here — the page follows up with the ordinary validated `set`/`setAt` operation, so
+      // there is exactly one code path that writes config, with its schema check and its
+      // rollback. A stray image with no config pointing at it is harmless.
+      if (!configPath) {
+        sendJson(res, 409, { error: 'no frznforge.config.ts was found, so there is nowhere to put an image' });
+        return;
+      }
+      const target = asUploadTarget(body.target);
+      const { bytes, ext } = decodeImageUpload(body.data);
+      const relative = uploadPathFor(target, ext);
+      const root = path.dirname(configPath);
+      const file = path.resolve(root, 'public', relative);
+      // Belt and braces: `uploadPathFor` builds the path from validated pieces, but assert
+      // the result really is inside public/ before writing anything.
+      const rel = path.relative(path.resolve(root, 'public'), file);
+      if (rel.startsWith('..') || path.isAbsolute(rel)) {
+        sendJson(res, 400, { error: 'refusing to write outside public/' });
+        return;
+      }
+      try {
+        await serialize(async () => {
+          await fs.mkdir(path.dirname(file), { recursive: true });
+          const exists = await fs.stat(file).then(() => true).catch(() => false);
+          // Byte-preserving copy: an image must never be round-tripped through utf8.
+          if (exists) await backupBinaryOnce(file);
+          else markCreated(file);
+          await fs.writeFile(file, bytes);
+          writesDone += 1;
+        });
+      } catch (error) {
+        sendJson(res, 409, { error: `could not write ${file}: ${scrub(error)}` });
+        return;
+      }
+      sendJson(res, 200, { path: relative, bytes: bytes.length, file });
       return;
     }
 

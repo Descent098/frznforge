@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { insertRepos, type Io } from '../../scripts/cli';
 import {
+  ARRAY_SET_FIELDS,
   SET_PATHS,
   UNSET_PATHS,
   hostAllowed,
@@ -264,6 +265,35 @@ describe('the settings page and the server allow-list agree', () => {
     expect(unsettable).toEqual([]);
     const unclearable = fields.filter((f) => f.unset && !UNSET_PATHS.has(f.path)).map((f) => f.path);
     expect(unclearable).toEqual([]);
+  });
+
+  it('offers no in-place edit the server would refuse (0.3.0)', async () => {
+    const pageSource = await fs.readFile(PAGE, 'utf8');
+    // Same drift, one layer down: `editRow(row, '<array>', i, entry, [{ key: '…' }])` in the
+    // page must line up with ARRAY_SET_FIELDS on the server, or "Save changes" 400s.
+    const source = pageSource;
+    const calls = [...source.matchAll(/editRow\(\s*row,\s*'([^']+)',[\s\S]*?\[([\s\S]*?)\],/g)];
+    expect(calls.length).toBeGreaterThan(2); // the call sites are really being found
+    for (const [, arrayPath, fieldBlock] of calls) {
+      const keys = [...(fieldBlock ?? '').matchAll(/key:\s*'([^']+)'/g)].map((m) => m[1]!);
+      expect(keys.length, `${arrayPath} edit fields`).toBeGreaterThan(0);
+      for (const key of keys) {
+        expect(
+          ARRAY_SET_FIELDS[arrayPath!]?.includes(key),
+          `${arrayPath}.${key} is offered by the page but not editable on the server`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('covers every setting 0.3.0 added', () => {
+    for (const key of [
+      'owner.avatar',
+      'ingest.failOnDegraded',
+      'ingest.reuse.skipUnchanged', 'ingest.reuse.cooldownSeconds',
+    ]) {
+      expect(SET_PATHS.has(key), `${key} should be editable by the wizard`).toBe(true);
+    }
   });
 
   it('covers every setting 0.2.0 added', () => {
@@ -1174,5 +1204,184 @@ describe('/api/profile', () => {
       expect(await run.exit).toBe(0);
     }
     expect(await fs.readFile(outside, 'utf8').catch(() => 'ABSENT')).toBe('ABSENT');
+  });
+});
+
+describe('image uploads (0.3.0)', () => {
+  /** A real PNG, built here so the magic-byte check is exercised against genuine bytes. */
+  const PNG = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from('the rest does not need to be a valid image for a magic-byte check'),
+  ]);
+  const b64 = (b: Buffer) => b.toString('base64');
+
+  it('writes the image to a path the SERVER chose and answers with it', async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    const res = await post(run, '/api/upload', { target: { kind: 'owner' }, data: b64(PNG) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { path: string; bytes: number };
+    // The path is derived from the target and the sniffed type — the browser never sent one.
+    expect(body.path).toBe('images/owner.png');
+    expect(body.bytes).toBe(PNG.length);
+    const onDisk = await fs.readFile(path.join(tmp, 'public', 'images', 'owner.png'));
+    expect(onDisk.equals(PNG)).toBe(true);
+    // ...and the config is untouched: the page still has to save the field explicitly.
+    expect(await fs.readFile(file, 'utf8')).toBe(EDITABLE_CONFIG);
+    await post(run, '/api/cancel', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('accepts a data: URL, which is what FileReader produces', async () => {
+    await writeEditableConfig();
+    const run = await start();
+    const res = await post(run, '/api/upload', {
+      target: { kind: 'org', slug: 'acme' },
+      data: `data:image/png;base64,${b64(PNG)}`,
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { path: string }).path).toBe('images/orgs/acme.png');
+    await post(run, '/api/cancel', {});
+  });
+
+  it('names the file from the SNIFFED type, not from anything the client claims', async () => {
+    await writeEditableConfig();
+    const run = await start();
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.from('jpeg-ish')]);
+    const res = await post(run, '/api/upload', {
+      target: { kind: 'owner' },
+      data: `data:image/png;base64,${b64(jpeg)}`, // claims png, is jpeg
+    });
+    expect(((await res.json()) as { path: string }).path).toBe('images/owner.jpg');
+    await post(run, '/api/cancel', {});
+  });
+
+  it('refuses anything that is not an image', async () => {
+    await writeEditableConfig();
+    const run = await start();
+    for (const payload of [
+      b64(Buffer.from('#!/bin/sh\nrm -rf /\n')),
+      b64(Buffer.from('MZ\x90\x00')), // a Windows executable
+      '',
+      b64(Buffer.alloc(0)),
+    ]) {
+      const res = await post(run, '/api/upload', { target: { kind: 'owner' }, data: payload });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    }
+    expect(await fs.readdir(path.join(tmp, 'public', 'images')).catch(() => [])).toEqual([]);
+    await post(run, '/api/cancel', {});
+  });
+
+  it('refuses a target that tries to steer the path', async () => {
+    await writeEditableConfig();
+    const run = await start();
+    for (const target of [
+      { kind: 'org', slug: '../../etc/passwd' },
+      { kind: 'org', slug: 'a/b' },
+      { kind: 'org', slug: '' },
+      { kind: 'contributor', index: -1 },
+      { kind: 'contributor', index: 1.5 },
+      { kind: 'file', path: 'anywhere.png' }, // no such target kind
+      { kind: 'owner', path: '../escape.png' }, // extra keys are ignored, not honoured
+    ]) {
+      const res = await post(run, '/api/upload', { target, data: b64(PNG) });
+      if ((target as { kind: string }).kind === 'owner') {
+        expect(res.status).toBe(200); // the stray key was ignored; the path stays server-chosen
+        expect(((await res.json()) as { path: string }).path).toBe('images/owner.png');
+      } else {
+        expect(res.status, JSON.stringify(target)).toBeGreaterThanOrEqual(400);
+      }
+    }
+    // nothing escaped public/
+    expect(await fs.readFile(path.join(tmp, 'escape.png')).catch(() => 'ABSENT')).toBe('ABSENT');
+    await post(run, '/api/cancel', {});
+  });
+
+  it('backs up an overwritten image byte-for-byte, not through utf8', async () => {
+    // The bug this guards: the config/profile backup helper writes utf8, which would mangle
+    // a PNG. Uploads use a binary copy instead.
+    await writeEditableConfig();
+    const dir = path.join(tmp, 'public', 'images');
+    await fs.mkdir(dir, { recursive: true });
+    const original = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from([0x00, 0x80, 0xff, 0xfe, 0x01]), // bytes utf8 would destroy
+    ]);
+    await fs.writeFile(path.join(dir, 'owner.png'), original);
+
+    const run = await start();
+    const res = await post(run, '/api/upload', { target: { kind: 'owner' }, data: b64(PNG) });
+    expect(res.status).toBe(200);
+
+    const backups = (await fs.readdir(dir)).filter((f) => f.endsWith('.bak'));
+    expect(backups).toHaveLength(1);
+    const restored = await fs.readFile(path.join(dir, backups[0]!));
+    expect(restored.equals(original)).toBe(true);
+    await post(run, '/api/cancel', {});
+  });
+
+  it('never leaks the token', async () => {
+    await writeEditableConfig();
+    const run = await start();
+    const res = await post(run, '/api/upload', { target: { kind: 'owner' }, data: b64(PNG) });
+    expect(await res.text()).not.toContain(SENTINEL_TOKEN);
+    await post(run, '/api/cancel', {});
+  });
+});
+
+describe('edit in place (setAt, 0.3.0)', () => {
+  it('changes one field of an existing entry and leaves the file otherwise identical', async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    const res = await post(run, '/api/config/write', {
+      operations: [{ op: 'setAt', path: 'organizations', index: 0, key: 'name', value: 'Renamed Co', expect: { slug: 'cc' } }],
+    });
+    expect(res.status).toBe(200);
+    const after = await fs.readFile(file, 'utf8');
+    expect(after).toContain("{ slug: 'cc', name: 'Renamed Co' }");
+    // the whole rest of the file, comments included, is byte-identical
+    expect(after.replace("'Renamed Co'", "'Canadian Coding'")).toBe(EDITABLE_CONFIG);
+    await post(run, '/api/cancel', {});
+    expect(await run.exit).toBe(0);
+  });
+
+  it('refuses a field that is not editable, and identity fields in particular', async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    for (const op of [
+      { op: 'setAt', path: 'organizations', index: 0, key: 'slug', value: 'other' }, // identity
+      { op: 'setAt', path: 'organizations', index: 0, key: '__proto__', value: 'x' },
+      { op: 'setAt', path: 'organizations', index: 0, key: 'constructor', value: 'x' },
+      { op: 'setAt', path: 'nope', index: 0, key: 'name', value: 'x' },
+      { op: 'setAt', path: 'organizations', index: 99, key: 'name', value: 'x' },
+    ]) {
+      const res = await post(run, '/api/config/write', { operations: [op] });
+      expect(res.status, JSON.stringify(op)).toBeGreaterThanOrEqual(400);
+    }
+    expect(await fs.readFile(file, 'utf8')).toBe(EDITABLE_CONFIG);
+    await post(run, '/api/cancel', {});
+  });
+
+  it('refuses when `expect` does not describe the entry at that index', async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    const res = await post(run, '/api/config/write', {
+      operations: [{ op: 'setAt', path: 'organizations', index: 0, key: 'name', value: 'x', expect: { slug: 'not-cc' } }],
+    });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(await fs.readFile(file, 'utf8')).toBe(EDITABLE_CONFIG);
+    await post(run, '/api/cancel', {});
+  });
+
+  it('rejects a value the config schema refuses, before touching the file', async () => {
+    const file = await writeEditableConfig();
+    const run = await start();
+    // An avatar must be a path inside public/, never a URL.
+    const res = await post(run, '/api/config/write', {
+      operations: [{ op: 'setAt', path: 'organizations', index: 0, key: 'avatar', value: 'https://evil.example/u.png' }],
+    });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(await fs.readFile(file, 'utf8')).toBe(EDITABLE_CONFIG);
+    await post(run, '/api/cancel', {});
   });
 });

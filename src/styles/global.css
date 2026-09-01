@@ -445,6 +445,14 @@ code, kbd, pre { font-family: var(--hf-mono); }
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22), 0 24px 48px -18px rgba(234, 90, 20, 0.55);
 }
 .hf-avatar--sm { width: 24px; height: 24px; border-radius: 7px; font-size: 9.5px; }
+/* A real picture (schema v8) occupies the same box as the initials block it replaces: same
+   size and radius, cropped rather than squashed, and without the gradient that exists to
+   make two letters legible. */
+.hf-avatar--img {
+  object-fit: cover;
+  background: var(--hf-surface);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
 
 /* ---- main --------------------------------------------------------------- */
 .hf-main {

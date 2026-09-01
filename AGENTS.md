@@ -1,6 +1,8 @@
 ## Development
 
-When starting the dev server, use background mode:
+`npm run dev` (`scripts/dev.ts`) prints a notice and runs `astro preview` over `dist/`: it serves the **most recent `npm run build`** and rebuilds nothing. It exits 1 with instructions if `dist/` or `data/forge.json` is missing. To see a code or content change, run `npm run build`.
+
+The raw Astro dev server (HMR, but `loadForgeData` memoises `data/forge.json` for the process lifetime, so a re-ingest 404s until restart) is `npm run astro dev`. When starting it, use background mode:
 
 ```
 astro dev --background

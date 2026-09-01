@@ -291,14 +291,29 @@ The wizard opens one page with five sections, and it does not move on until you 
    [`site.base`](configuration.md), owner name/handle/profile path, theme palette and the
    `theme.heat` recency boundaries, mermaid rendering, listing/notes/content paths, the whole
    `ingest` block behind an accordion (blob and commit caps, concurrency, reuse, insights, …),
-   plus list editors for **organizations**, **hosted sites** (`hosting.sites`) and the
-   **sources** already in the config (remove here; add with the picker above). The card shows
-   the values your file actually sets, with schema defaults filling the gaps; **Save
-   settings** writes only the fields you changed.
+   plus list editors for **organizations**, **contributors** (0.3.0), **hosted sites**
+   (`hosting.sites`) and the **sources** already in the config (add sources with the picker
+   above). The card shows the values your file actually sets, with schema defaults filling
+   the gaps; **Save settings** writes only the fields you changed.
+
+   Since 0.3.0 each list row also has an **Edit** disclosure, so an entry can be corrected in
+   place rather than removed and re-added (which used to lose its comments). An entry's
+   *identity* — an organization's slug, which repos point at — stays non-editable on purpose;
+   change that by removing and re-adding.
+
+   Fields that hold a picture (`owner.avatar`, an organization's or a contributor's `avatar`)
+   have a file picker beside them. The upload writes the image into `public/images/` and
+   fills the field with the path it chose — **the browser never names a file on disk**; the
+   server derives the name from what you are editing and the image type it detects in the
+   bytes. You still press Save, so an upload never silently rewrites your config.
 5. **Profile** (0.2.0) — the body of `content/profile.md` (or wherever `owner.profile`
    points) in a plain editor with a server-rendered preview. A YAML frontmatter block at the
    top of the file is shown read-only and round-trips byte-for-byte — the wizard edits the
    body, never your metadata.
+6. **Done** — ends the session. Since 0.3.0 it also **saves anything you edited but did not
+   save**: a changed settings field, a rewritten profile body. If one of those values is
+   rejected, the wizard says so and stays open rather than exiting having discarded it —
+   **Cancel** is still the way to leave without saving.
 
 Every write is the same *textual* operation the terminal flow performs: only the edited
 field's bytes change, and everything else in the file — comments, formatting, expression

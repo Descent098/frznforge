@@ -162,18 +162,24 @@ exports[`ingest > matches the artifact snapshot (paths redacted) 1`] = `
       },
       "contributors": [
         {
+          "avatar": null,
           "commits": 2,
+          "description": null,
           "email": "test@example.com",
           "firstCommit": "2024-01-01T00:00:00Z",
           "lastCommit": "2024-01-01T00:02:00Z",
           "name": "Test User",
+          "url": null,
         },
         {
+          "avatar": null,
           "commits": 1,
+          "description": null,
           "email": "other@example.com",
           "firstCommit": "2024-01-01T00:01:00Z",
           "lastCommit": "2024-01-01T00:01:00Z",
           "name": "Other Dev",
+          "url": null,
         },
       ],
       "createdAt": "2024-01-01T00:00:00Z",
@@ -765,11 +771,14 @@ Hello.
       },
       "contributors": [
         {
+          "avatar": null,
           "commits": 1,
+          "description": null,
           "email": "test@example.com",
           "firstCommit": "2024-01-01T00:00:00Z",
           "lastCommit": "2024-01-01T00:00:00Z",
           "name": "Test User",
+          "url": null,
         },
       ],
       "createdAt": "2024-01-01T00:00:00Z",
@@ -1078,18 +1087,24 @@ Hello.
       },
       "contributors": [
         {
+          "avatar": null,
           "commits": 2,
+          "description": null,
           "email": "test@example.com",
           "firstCommit": "2024-01-01T00:00:00Z",
           "lastCommit": "2024-01-01T00:02:00Z",
           "name": "Test User",
+          "url": null,
         },
         {
+          "avatar": null,
           "commits": 1,
+          "description": null,
           "email": "other@example.com",
           "firstCommit": "2024-01-01T00:01:00Z",
           "lastCommit": "2024-01-01T00:01:00Z",
           "name": "Other Dev",
+          "url": null,
         },
       ],
       "createdAt": "2024-01-01T00:00:00Z",
@@ -1616,7 +1631,7 @@ Hello.
       "warnings": [],
     },
   ],
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "warnings": [
     {
       "code": "repo-not-found",

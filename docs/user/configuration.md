@@ -25,7 +25,10 @@ export default defineConfig({
     // description: 'Kieran’s frozen forge',  // meta description, if profile.md has no bio
     // base: '/mysite',      // serve from a sub-path (e.g. a GitHub Pages project site)
   },
-  owner: { name: 'Kieran Wood', handle: 'kieran', profile: './content/profile.md' },
+  owner: {
+    name: 'Kieran Wood', handle: 'kieran', profile: './content/profile.md',
+    // avatar: 'images/owner.png',   // a file in public/ — see "Pictures" below
+  },
   theme: {
     palette: 'hearth',       // 'hearth' (warm) | 'frost' (cool)
     // heat: { hot: 7, warm: 30, neutral: 180, cool: 365 },  // recency-accent day boundaries
@@ -51,7 +54,12 @@ export default defineConfig({
   organizations: [
     { slug: 'canadian-coding', name: 'Canadian Coding',
       description: 'Tools and teaching material.',
+      // avatar: 'images/orgs/canadian-coding.png',
       repos: ['useful', 'frznforge'] },
+  ],
+  contributors: [           // credit people properly — see "Pictures" below
+    { name: 'Kieran Wood', emails: ['kieran@example.com', 'work@example.com'],
+      avatar: 'images/kieran.png', url: 'https://kieranwood.ca' },
   ],
   hosting: {
     sites: [
@@ -187,6 +195,27 @@ Notes
   `remote-rate-limited`, `remote-auth-missing` or `remote-cache-stale` warning). The artifact
   is still written and the warnings still print — only the exit code changes. For CI that
   would rather fail than quietly publish stale metadata after a rate limit.
+- **Pictures (`owner.avatar`, `organizations[].avatar`, `contributors[].avatar`).** Put the
+  image anywhere under `public/` — `public/images/` is the convention — and give the path
+  relative to `public/` (`images/owner.png`; a leading `/` is fine too). Astro serves
+  `public/` as-is, so nothing is ingested, resized or cached: what you commit is what ships,
+  and a sub-path deploy (`site.base`) prefixes it automatically. Where no picture is set the
+  site keeps drawing the initials block it always has.
+
+  Paths only — **not URLs**. A frznforge site loads nothing from a third party, and an avatar
+  pointing at a forge's CDN would break that on every page it appears on; the config rejects
+  anything with a scheme, a leading `//`, a backslash, or a `..` segment.
+- **`contributors[]` credits the people git only knows as an email address.** Each entry
+  claims one or more `emails` and can set `name`, `avatar`, `description` and `url`; those
+  then show wherever that person appears. Two things worth knowing:
+  - Listing several `emails` **merges** them into one contributor — commits summed, first and
+    last activity widened — because one person committing from two machines is one person.
+    The first address listed becomes the canonical one.
+  - `name` overrides whatever git recorded, which is usually the point.
+
+  Entries are purely additive: contributors are still discovered from git, and an entry whose
+  emails appear nowhere in this build is reported (`contributor-unknown-email`) and ignored —
+  the repo that person worked on may simply not be part of this site.
 - `insights` controls the `/repos/<slug>/insights/` page. Monthly commits and contributors are
   exact — they come from the commit list already in the artifact. Code size over time is
   **sampled**: at most `samples` monthly checkpoints (always including the first and last),

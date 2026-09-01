@@ -1,6 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import Base from '../layouts/Base.astro';
+import Avatar from '../components/Avatar.astro';
 import ContributionGraph from '../components/ContributionGraph.astro';
 import RepoCard from '../components/RepoCard.svelte';
 import { buildActivity } from '../lib/activity';
@@ -77,7 +78,7 @@ const forges = Object.entries(fm?.forges ?? {}).filter(([, url]) => Boolean(url)
 <Base title={cfg.site.title} description={fm?.bio ?? cfg.site.description} active="profile">
   <div class="hf-container">
     <section class="hf-hero" aria-labelledby="owner-name">
-      <div class="hf-avatar hf-avatar--xl" aria-hidden="true">{initials(cfg.owner.name)}</div>
+      <Avatar name={cfg.owner.name} src={cfg.owner.avatar} size="xl" eager />
       <div class="hf-hero-id">
         <div class="hf-hero-name">
           <h1 id="owner-name">{cfg.owner.name}</h1>

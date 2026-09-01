@@ -213,13 +213,19 @@ To use the generated example: add the org to your config, rename
 
 ```sh
 npm run ingest   # read the git repositories → data/forge.json + data/blobs/ + data/archives/
-npm run dev      # local preview on http://localhost:4321, using the last ingest
 npm run build    # ingest, then build the static site into dist/
+npm run dev      # serve dist/ on http://localhost:4321 — the last build, nothing rebuilt
 ```
 
-`npm run build` is just `npm run ingest && astro build`. Re-run `ingest` after changing which
-repositories you list or after committing to one of them; `dev` picks up edits to `content/`
-without it.
+`npm run build` is just `npm run ingest && astro build`, and it is the only command that
+changes what you see. `npm run dev` prints a notice saying so and then runs `astro preview`
+over `dist/`; run it before your first build and it tells you to build instead of failing on
+a missing directory. So the loop is **edit → `npm run build` → refresh the browser**, whether
+you changed a repository, `content/`, or the config.
+
+(`npm run astro dev` still gets you Astro's dev server with HMR, but it reads
+`data/forge.json` once at startup and caches it for the life of the process, so anything you
+re-ingest under it 404s until you restart — which is why it is not what `dev` runs.)
 
 Everything in `dist/` is plain files. Upload the folder anywhere that serves static content.
 

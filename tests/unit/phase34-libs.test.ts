@@ -111,7 +111,7 @@ const repo: Repo = {
     { ref: 'v1.0.0', kind: 'tag', commit: sha(1), file: 'archives/alpha/v1.0.0.zip', bytes: 999 },
   ],
   languages: [{ name: 'TypeScript', bytes: 20, percent: 100, color: '#3178c6' }],
-  contributors: [{ name: 'Kieran', email: 'kieran@example.com', commits: 3, firstCommit: '2026-08-19T09:00:00Z', lastCommit: '2026-08-21T10:00:00Z' }],
+  contributors: [{ name: 'Kieran', email: 'kieran@example.com', commits: 3, firstCommit: '2026-08-19T09:00:00Z', lastCommit: '2026-08-21T10:00:00Z', avatar: null, description: null, url: null }],
   insights: null,
   readme: null,
   createdAt: '2026-08-19T09:00:00Z',
@@ -268,7 +268,7 @@ describe('activity', () => {
 });
 
 describe('search', () => {
-  const data = { schemaVersion: 7 as const, repos: [repo], notes: [], organizations: [], hosting: [], warnings: [] };
+  const data = { schemaVersion: 8 as const, repos: [repo], notes: [], organizations: [], hosting: [], warnings: [] };
   const index = buildSearchIndex(data);
   it('indexes pages, repos and default-branch files only', () => {
     const kinds = index.docs.map((d) => d.kind);

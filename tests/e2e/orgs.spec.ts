@@ -32,6 +32,36 @@ function cardSlugs(page: Page): Promise<string[]> {
 }
 
 test.describe('organizations', () => {
+  test('an organization renders its configured picture (schema v8)', async ({ page }) => {
+    await page.goto('/orgs/canadian-coding/');
+    // the picture occupies exactly the 128px box the initials block used to
+    const hero = page.locator('.hf-hero img.hf-avatar--img');
+    await expect(hero).toHaveAttribute('src', '/logo.png');
+    const box = (await hero.boundingBox())!;
+    expect(Math.round(box.width)).toBe(128);
+    await expect(hero).toHaveJSProperty('naturalWidth', 512); // it actually decodes
+
+    // `owner.avatar` deliberately has NO e2e assertion: the site build reads the checked-in
+    // frznforge.config.ts (only outDir/cacheDir/base have env overrides), so an owner value
+    // set on the fixture config object never reaches the rendered page — the same limitation
+    // recorded for `theme.heat` in 0.2.0. Organization and contributor avatars DO reach it,
+    // because those travel in the artifact. The owner path is covered by the unit tests and
+    // was verified by hand in a real browser.
+  });
+
+  test('an avatar-less organization still falls back to initials', async ({ page }) => {
+    await page.goto('/orgs/');
+    // every card either has a picture or the initials block — never neither
+    const cards = page.locator('.hf-org-card .hf-org-top');
+    const n = await cards.count();
+    for (let i = 0; i < n; i += 1) {
+      const card = cards.nth(i);
+      const hasImg = await card.locator('img.hf-avatar--img').count();
+      const hasInitials = await card.locator('span.hf-avatar').count();
+      expect(hasImg + hasInitials).toBeGreaterThan(0);
+    }
+  });
+
   test('the index lists every organization in the artifact with its member count', async ({ page }) => {
     const orgs = artifactOrgs();
     await page.goto('/orgs/');

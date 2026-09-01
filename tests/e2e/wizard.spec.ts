@@ -119,11 +119,41 @@ test('adds an organization from the list editor', async ({ page }) => {
   expect(await fs.readFile(configFile(), 'utf8')).toContain("organizations: [{ slug: 'cc', name: 'Canadian Coding' }]");
 });
 
+test('edits an organization in place instead of removing and re-adding it', async ({ page }) => {
+  // 0.2.0 could only add and remove; "edit the information once entered" is the 0.3.0 ask.
+  await page.goto(wizardUrl);
+  const row = page.locator('#org-rows .listrow').first();
+  await row.locator('details.editrow summary').click();
+  await page.fill('#edit-organizations-0-name', 'Canadian Coding Renamed');
+  await page.fill('#edit-organizations-0-description', 'tools that keep working');
+  await row.locator('details.editrow button', { hasText: 'Save changes' }).click();
+  await expect(page.locator('#settings-status')).toHaveText('Saved.');
+
+  const written = await fs.readFile(configFile(), 'utf8');
+  expect(written).toContain("name: 'Canadian Coding Renamed'");
+  expect(written).toContain("description: 'tools that keep working'");
+  // the slug — the entry's identity, which repos point at — is deliberately not editable
+  expect(written).toContain("slug: 'cc'");
+  await expect(page.locator('#edit-organizations-0-slug')).toHaveCount(0);
+});
+
+test('adds a contributor and gives them a picture path', async ({ page }) => {
+  await page.goto(wizardUrl);
+  await page.fill('#contrib-name', 'Kieran Wood');
+  await page.fill('#contrib-emails', 'k@example.com, work@example.com');
+  await page.click('#contrib-add');
+  await expect(page.locator('#contrib-rows .listrow')).toHaveCount(1);
+  const written = await fs.readFile(configFile(), 'utf8');
+  expect(written).toContain("name: 'Kieran Wood'");
+  expect(written).toContain("emails: ['k@example.com', 'work@example.com']");
+});
+
 test('removes a source, leaving its neighbour byte-identical', async ({ page }) => {
   await page.goto(wizardUrl);
   const rows = page.locator('#source-rows .listrow');
   await expect(rows).toHaveCount(2);
-  await rows.filter({ hasText: 'github' }).locator('button').click();
+  // Rows carry a Remove button and (since 0.3.0) an Edit disclosure, so name the one we mean.
+  await rows.filter({ hasText: 'github' }).getByRole('button', { name: 'Remove' }).click();
   await expect(page.locator('#source-rows .listrow')).toHaveCount(1);
 
   const written = await fs.readFile(configFile(), 'utf8');
@@ -146,12 +176,52 @@ test('edits the profile body; the frontmatter block rides along untouched', asyn
   expect(await fs.readFile(profileFile(), 'utf8')).toBe('---\ntitle: Me\n---\n# New heading\n\nnew body\n');
 });
 
-test('Done stops the wizard and reports the session', async ({ page }) => {
+test('uploads a picture and fills the field with the path the server chose', async ({ page }) => {
   await page.goto(wizardUrl);
   await expect(page.locator('#settings-card')).toBeVisible();
+  await page.locator('#settings-groups details.setgroup').first(); // groups rendered
+
+  // A real PNG header — the server identifies the type from the bytes, not from the name.
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from('fixture'),
+  ]);
+  await page.setInputFiles('#set-owner-avatar-file', {
+    name: 'whatever-they-called-it.bin',
+    mimeType: 'application/octet-stream',
+    buffer: png,
+  });
+
+  // The field is filled in with the SERVER's path; the file is on disk; config is untouched
+  // until the user saves.
+  await expect(page.locator('#set-owner-avatar')).toHaveValue('images/owner.png', { timeout: 15000 });
+  const onDisk = await fs.readFile(path.join(tmp, 'public', 'images', 'owner.png'));
+  expect(onDisk.equals(png)).toBe(true);
+  expect(await fs.readFile(configFile(), 'utf8')).not.toContain('avatar');
+
+  await page.click('#settings-save');
+  await expect(page.locator('#settings-status')).toHaveText('Saved.');
+  expect(await fs.readFile(configFile(), 'utf8')).toContain("avatar: 'images/owner.png'");
+});
+
+test('Done saves pending edits before it stops the wizard', async ({ page }) => {
+  await page.goto(wizardUrl);
+  await expect(page.locator('#settings-card')).toBeVisible();
+
+  // Two edits that are NEVER saved explicitly — before 0.3.0 both were silently discarded.
+  await page.fill('#set-site-title', 'Saved By Done');
+  const flushedBody = ['# Flushed', '', 'by done', ''].join('\n');
+  await page.fill('#profile-body', flushedBody);
+
   await page.click('#done');
   await expect(page.locator('#done-card')).toBeVisible();
   await expect(page.locator('#done-title')).toHaveText('Done');
+
+  // ...and both landed on disk rather than being thrown away with the session.
+  const config = await fs.readFile(configFile(), 'utf8');
+  expect(config).toContain("title: 'Saved By Done', // shown in the sidebar");
+  expect(await fs.readFile(profileFile(), 'utf8')).toBe(`---\ntitle: Me\n---\n${flushedBody}`);
+
   expect(await exit).toBe(0);
   expect(out.join('\n')).toContain('Done — ');
   // One backup per edited file, holding the pre-wizard bytes.

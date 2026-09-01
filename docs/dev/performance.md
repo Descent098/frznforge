@@ -8,6 +8,10 @@ things we deliberately did not build.
 Everything here is reproducible with `scripts/measure-build.ts` — see
 [Reproducing the measurement](#reproducing-the-measurement).
 
+This document is about *cost*. For what the pipeline actually does — the order of the steps,
+where each cache is read and written, and what a run records about itself — see
+[build-steps.md](./build-steps.md).
+
 ## Where the pages come from
 
 Almost every page belongs to one of three families, and one of them is multiplied.
@@ -134,6 +138,10 @@ inputs and scan options are unchanged replays its recorded scan from
 `<cacheDir>/scan/<digest>.json`, and a remote source fetched fully-fresh within the last
 `maxAgeMinutes` (default 2) is not re-fetched at all. Reuse never changes artifact bytes —
 a hit replays exactly what the fresh scan produced, or quietly falls back to a real scan.
+0.3.0 added two more skips ahead of it — an opt-in cooldown and an opt-in same-commit
+`ls-remote` probe — plus misses-first ordering;
+[build-steps.md § The four skips](./build-steps.md#the-four-skips-and-why-each-is-safe) walks
+each one and the argument for why it cannot change a byte.
 
 Measured on this repository's own site (1 repo, 18 commits, 219 files, 5 notes,
 2026-08-28, Windows 11 / warm mirror):
@@ -294,7 +302,9 @@ would replace (`readBlobBuffer` / `writeArtifact`):
 Against a ≈2.3 s cold ingest and a ≈18 s render, a storage backend that cost literally
 zero would win a few hundred milliseconds — and on the four-repo remote corpus, warm-cache
 ingest (7.1 s) is dominated by git subprocess work, not blob I/O, with the 0.2.0 scan
-cache already skipping the repeated reads that motivated the idea. The costs of adopting
+cache already skipping the repeated reads that motivated the idea (the full set of caches,
+and which one each read hits, is tabulated in
+[build-steps.md § Where each cache lives](./build-steps.md#where-each-cache-lives)). The costs of adopting
 it are real and the wins are not: reads must stay synchronous inside Astro frontmatter,
 which means `node:sqlite`'s `DatabaseSync` — still printing an `ExperimentalWarning` on
 Node 24 and flag-gated at this project's Node floor (`engines: >=22.12.0`) — or

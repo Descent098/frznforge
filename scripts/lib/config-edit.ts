@@ -670,3 +670,83 @@ export function removeArrayItemAt(
     removed: 1,
   };
 }
+
+/**
+ * Set one field of the array element at `index`, e.g. `organizations[1].name`.
+ *
+ * This is the edit-in-place primitive the 0.2.0 wizard did without (remove + re-add was the
+ * workaround, which loses every comment and every hand-written expression in the entry).
+ * The contract is the module's usual one: only the target field's bytes move. A field the
+ * element does not have yet is appended inside its braces; an existing one is replaced in
+ * place, so a trailing comment after it survives.
+ *
+ * `expect` is checked exactly as in {@link removeArrayItemAt} — a safety net over the
+ * element the index selected, never the selector itself.
+ *
+ * Returns null when the path is not an array of object literals, when the index is out of
+ * range, or when the element is not a plain object literal (a spread cannot be edited by
+ * source position). Returns `changed: false` when the value is already what was asked for.
+ */
+export function setArrayItemField(
+  source: string,
+  path: readonly string[],
+  index: number,
+  key: string,
+  valueSource: string,
+  expect: Record<string, string> = {},
+): EditResult | null {
+  const root = findRootObject(source);
+  if (!root) return null;
+
+  let { open, close } = root;
+  for (let depth = 0; depth < path.length - 1; depth += 1) {
+    const range = findKeyRange(source, open, close, path[depth]!);
+    if (range === null) return null;
+    if (source[range.valueStart] !== '{') return null;
+    open = range.valueStart;
+    close = matchBracket(source, open);
+    if (close === -1) return null;
+  }
+
+  const range = findKeyRange(source, open, close, path[path.length - 1]!);
+  if (range === null) return null;
+  if (source[range.valueStart] !== '[') return null;
+  const arrOpen = range.valueStart;
+  const arrClose = matchBracket(source, arrOpen);
+  if (arrClose === -1) return null;
+
+  const body = source.slice(arrOpen + 1, arrClose);
+  const spans = topLevelItemSpans(body);
+  if (!Number.isInteger(index) || index < 0 || index >= spans.length) return null;
+  const span = spans[index]!;
+  if (!stripComments(span.text).trimStart().startsWith('{')) return null;
+
+  for (const [k, v] of Object.entries(expect)) {
+    const got = readField(stripComments(span.text), k);
+    if (got !== undefined && got !== v) return null;
+  }
+
+  // Absolute offsets of this element's braces in the ORIGINAL source, so the edit can be
+  // spliced back without re-serialising anything around it.
+  const elemStart = arrOpen + 1 + span.start;
+  const braceOpen = elemStart + span.text.indexOf('{');
+  const braceClose = matchBracket(source, braceOpen);
+  if (braceClose === -1) return null;
+
+  const field = findKeyRange(source, braceOpen, braceClose, key);
+  if (field === null) {
+    // New field: append just inside the closing brace, matching the spacing already used.
+    const inner = source.slice(braceOpen + 1, braceClose);
+    const trimmedEnd = inner.replace(/\s*$/, '');
+    const needsComma = trimmedEnd !== '' && !trimmedEnd.endsWith(',');
+    const insertion = `${needsComma ? ',' : ''} ${key}: ${valueSource}`;
+    const at = braceOpen + 1 + trimmedEnd.length;
+    return { text: `${source.slice(0, at)}${insertion}${source.slice(at)}`, changed: true };
+  }
+  const current = source.slice(field.valueStart, field.valueEnd);
+  if (current === valueSource) return { text: source, changed: false };
+  return {
+    text: `${source.slice(0, field.valueStart)}${valueSource}${source.slice(field.valueEnd)}`,
+    changed: true,
+  };
+}

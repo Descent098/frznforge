@@ -8,6 +8,7 @@
  * from the artifact plus the optional `<content.orgs>/<slug>.md` frontmatter, so an org with
  * no markdown file still renders a complete header.
  */
+import Avatar from './Avatar.astro';
 import type { Organization, Repo } from '../lib/data/schema';
 import type { OrgFrontmatter } from '../content.config';
 import {
@@ -55,7 +56,7 @@ const touchedRecently = repos.filter((r) => heatFor(r.updatedAt, now, heatDays) 
 const links = Object.entries(fm?.links ?? {}) as Array<[string, string]>;
 ---
 <section class="hf-hero" aria-labelledby="org-name">
-  <div class="hf-avatar hf-avatar--xl" aria-hidden="true">{initials(org.name)}</div>
+  <Avatar name={org.name} src={org.avatar} size="xl" eager />
   <div class="hf-hero-id">
     <div class="hf-hero-name">
       <h1 id="org-name">{org.name}</h1>

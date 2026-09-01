@@ -355,7 +355,24 @@ export default async function globalSetup() {
           name: 'Canadian Coding',
           description: "Small, sturdy, source-available tools that keep working when the server doesn't.",
           repos: ['bravo'],
+          // schema v8: an org picture. `logo.png` is a real file already in public/, so the
+          // fixture needs no image of its own and the assertion covers a genuine round-trip.
+          avatar: 'logo.png',
         },
+      ],
+      // schema v8: the owner has a picture, one contributor is configured (and merges two
+      // addresses), and a second entry deliberately matches nobody so the
+      // `contributor-unknown-email` warning is exercised end to end.
+      owner: { ...userConfig.owner, avatar: 'logo.png' },
+      contributors: [
+        {
+          name: 'Fixture Author (configured)',
+          emails: ['fixture@example.com', 'also-fixture@example.invalid'],
+          avatar: 'logo.png',
+          description: 'the fixture commit author',
+          url: 'https://example.com/fixture-author',
+        },
+        { name: 'Nobody At All', emails: ['nobody@example.invalid'] },
       ],
       // alpha's gh-pages branch served as a real site (0.2.0, schema v7); hosting.spec.ts
       // and the base-path leak scan both drive it.

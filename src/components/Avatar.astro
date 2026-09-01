@@ -1,0 +1,47 @@
+---
+/**
+ * A person's or organization's picture, falling back to their initials (schema v8).
+ *
+ * One component so the fallback rule lives in exactly one place: every avatar on the site
+ * had been initials-only, and a configured image must not change the box it sits in — the
+ * sizes, radii and the ember→ice gradient of `.hf-avatar` are load-bearing in the sidebar,
+ * the profile hero, org headers and commit lists alike.
+ *
+ * `src` is a `public/`-relative path the config validated (`PublicPath`); it is made
+ * base-aware here so callers never have to remember to. Images are decorative: the name is
+ * always adjacent in the markup, so an empty `alt` is correct and a repeated name would
+ * just be noise to a screen reader.
+ */
+import { withBase } from '../lib/base';
+import { initials } from '../lib/format';
+
+interface Props {
+  /** Used for the initials fallback, and for nothing else. */
+  name: string;
+  /** `public/`-relative image path, or null/undefined for initials. */
+  src?: string | null;
+  /** Matches the existing `.hf-avatar--sm` / `.hf-avatar--xl` modifiers. */
+  size?: 'sm' | 'md' | 'xl';
+  /** Extra classes for callers that decorate the avatar (e.g. `is-bot`). */
+  class?: string;
+  /**
+   * Load immediately instead of lazily. True for avatars that are always on screen — the
+   * sidebar owner tile and the profile/org hero — because lazy-loading something visible on
+   * first paint just makes it pop in late. The many small ones in lists stay lazy.
+   */
+  eager?: boolean;
+}
+
+const { name, src = null, size = 'md', class: extra = '', eager = false } = Astro.props;
+const sizeClass = size === 'md' ? '' : ` hf-avatar--${size}`;
+const cls = `hf-avatar${sizeClass}${extra ? ` ${extra}` : ''}`;
+/** Intrinsic box, so the image reserves its space before it loads (no layout shift). */
+const px = size === 'xl' ? 128 : size === 'sm' ? 24 : 34;
+---
+{
+  src ? (
+    <img class={`${cls} hf-avatar--img`} src={withBase(src)} alt="" width={px} height={px} loading={eager ? 'eager' : 'lazy'} decoding="async" />
+  ) : (
+    <span class={cls} aria-hidden="true">{initials(name)}</span>
+  )
+}

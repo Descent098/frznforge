@@ -102,12 +102,12 @@ const notes: Note[] = [
 ];
 
 const organizations: Organization[] = [
-  { slug: 'alpha-org', name: 'alpha', description: null, repos: [] },
-  { slug: 'canadian-coding', name: 'Canadian Coding', description: 'Small, sturdy, source-available tools.', repos: ['alpha', 'beacon'] },
+  { slug: 'alpha-org', name: 'alpha', description: null, repos: [], avatar: null },
+  { slug: 'canadian-coding', name: 'Canadian Coding', description: 'Small, sturdy, source-available tools.', repos: ['alpha', 'beacon'], avatar: null },
 ];
 
 const data: ForgeData = {
-  schemaVersion: 7,
+  schemaVersion: 8,
   repos: [repo('alpha', 'alpha', 'Alpha repo', ['ssg']), repo('beacon', 'beacon', 'Beacon repo')],
   notes,
   organizations,

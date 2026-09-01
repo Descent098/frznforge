@@ -9,7 +9,15 @@
 
 * **Rate limits back off per origin.** A 429 — or GitHub's 403-with-no-quota-left — is now retried with exponential backoff keyed to the host, so every repo being ingested in parallel from one forge waits behind a single timer while other forges are unaffected. The provider's `Retry-After` is honoured; a limit longer than a minute blocks that host for the stated period so the remaining repos fall back to cached metadata immediately instead of each burning a retry ladder. Repos with no cached metadata are fetched first, so a limited run spends its budget where there is nothing to fall back on. `ingest.failOnDegraded` (default off) makes such a run exit non-zero instead of quietly publishing stale metadata.
 
+* **Pictures for the owner, organizations and contributors.** `owner.avatar`, `organizations[].avatar` and a new top-level `contributors[]` block let you attach a real name, picture, blurb and link to the people and groups on the site; anywhere without one keeps the initials block. Images are paths inside `public/` rather than URLs, so the published pages still load nothing from a third party. A `contributors[]` entry listing several `emails` merges them into one person, since one contributor committing from two machines is one contributor. Artifact schema v8 — additive, so the only migration is re-running the build (`npm run build`), which ingest does automatically.
+
+* **The init wizard edits people, pictures and the 0.3.0 settings.** `frznforge init --web` gains a contributors list, an Edit control on every list row (organizations, contributors, hosted sites and sources can now be corrected in place instead of removed and re-added), a file picker for every avatar field, and the new ingest settings. Uploads write into `public/images/` under a name the *server* chooses from the image's own bytes — the browser never names a file on disk.
+
+* **`npm run dev` serves the last build instead of pretending to be live.** It now explains that nothing is rebuilt, checks that a build exists (and says what to run when it doesn't), then hands off to `astro preview`. The raw Astro dev server is still available as `npm run astro dev`.
+
 ## Bug Fixes
+
+* **The wizard's Done button discarded unsaved edits.** Pressing Done ended the session without saving a settings field or profile body that had been edited but not explicitly saved. It now saves them first, and a value the config schema rejects keeps the wizard open with the error rather than exiting having thrown the edit away.
 
 * **The clone popup was squeezed to the width of its button.** Its `max-width: 100%` resolved against the shrink-wrapped `<details>` that contains it, clamping the panel to the "Clone" button and pushing its contents outside. The panel now sizes against the viewport, and is 400px so a typical GitHub clone URL fits without truncation. Below 900px — where the toolbar drops its `margin-left: auto` and the button is no longer at the right edge — the panel anchors to the toolbar instead, so it can no longer hang off the side of a phone screen.
 

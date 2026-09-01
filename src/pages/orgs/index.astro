@@ -6,6 +6,7 @@
  * unconditionally and the sync test asserts the build against that list. Only the sidebar
  * entry hides at count 0.
  */
+import Avatar from '../../components/Avatar.astro';
 import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import { getOrgRoutes, orgReposUrl, unmatchedOrgContent } from '../../lib/routes';
@@ -57,7 +58,7 @@ const orgs = getOrgRoutes(data).map(({ org, repos, url }) => {
           <li>
             <article class={`hf-org-card heat-${o.heat}`} data-slug={o.org.slug}>
               <div class="hf-org-top">
-                <span class="hf-avatar" aria-hidden="true">{initials(o.org.name)}</span>
+                <Avatar name={o.org.name} src={o.org.avatar} />
                 <h2><a href={o.url}>{o.org.name}</a></h2>
                 <span class="hf-handle">@{o.org.slug}</span>
               </div>

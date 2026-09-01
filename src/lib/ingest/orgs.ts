@@ -52,6 +52,8 @@ interface Draft {
   slug: string;
   name: string;
   description: string | null;
+  /** `public/`-relative image path (schema v8), or null. */
+  avatar: string | null;
   /** Member repo slugs; a Set so the two directions cannot produce a duplicate. */
   members: Set<string>;
   /** Entries already reported as `org-unknown-repo`, so a slug listed twice warns once. */
@@ -87,6 +89,7 @@ export function resolveOrganizations(
       slug: org.slug,
       name: org.name,
       description: org.description ?? null,
+      avatar: org.avatar ?? null,
       members: new Set<string>(),
       reported: new Set<string>(),
     };
@@ -128,6 +131,7 @@ export function resolveOrganizations(
       name: d.name,
       description: d.description,
       repos: [...d.members].sort(cmp),
+      avatar: d.avatar,
     }));
 
   return { organizations, warnings };

@@ -180,15 +180,51 @@ a missing `git`.
 
 ## 4. Run it
 
+Ingest produced the *data*; the site itself is rendered by the build. Do that once, then
+serve it:
+
 ```
+$ npm run build      # = npm run ingest && astro build
 $ npm run dev
 
- astro  v7.2.4 ready in 2531 ms
-┃ Local    http://localhost:4321/
-┃ Network  use --host to expose
+frznforge dev — serving dist/ from the most recent `npm run build`.
+
+  Nothing is rebuilt here. This is `astro preview` over the static files already in
+  dist/, rendered from data/forge.json as it stood at that build. Editing a page,
+  a component, a style, content/ or frznforge.config.ts changes nothing you see until
+  you build again — file changes are not watched.
+
+    npm run build       refresh everything (ingest → data/forge.json → astro build → dist/)
+    npm run astro dev   the raw Astro dev server, if you want HMR on components and
+                        styles — it reads the artifact once at startup and never again,
+                        so re-ingested repos will 404 there until you restart it.
+
+Preview server running at http://localhost:4321
 ```
 
 Open <http://localhost:4321/>.
+
+`npm run dev` is a local viewer, not a live-reloading dev server: **the loop is edit → `npm
+run build` → refresh the browser.** That is the honest shape of a static forge — the pages are
+rendered from an artifact, and re-rendering them is what `build` does. Run it before you have
+ever built and it says so and stops, rather than failing on a missing `dist/`:
+
+```
+$ npm run dev
+
+frznforge dev: there is no built site to serve yet.
+
+  missing: data/forge.json
+  missing: dist
+
+  Run the build first — it does both halves:
+
+    npm run build       ingest (git → data/forge.json) then astro build → dist/
+
+  Then `npm run dev` again.
+```
+
+Anything after `--` goes to `astro preview`, so `npm run dev -- --port 4400 --host` works.
 
 **What you should see.** The profile page: your name and bio, a contribution graph, an
 activity log, and cards for your pinned repositories. A docked sidebar with **Overview**,
@@ -233,8 +269,11 @@ insights charts are all there. The browser covers the default branch plus the 10
 updated branches and the 25 newest tags; those two caps are configurable and matter a lot for
 build size (see step 7).
 
-> **The dev server reads `data/forge.json` once, at startup.** Re-run `npm run ingest` and
-> the new pages will 404 until you restart `npm run dev`. This catches everyone once.
+> **`npm run dev` serves the last build, and rebuilds nothing.** Re-run `npm run ingest` on
+> its own and nothing you see changes — the pages in `dist/` were rendered from the old
+> artifact. `npm run build` is the command that makes new content appear. (The same trap is
+> sharper in `npm run astro dev`, which additionally caches the artifact in memory for the
+> life of the process, so even a rebuild under it needs a restart.)
 
 ### Where did that metadata come from?
 
@@ -276,7 +315,9 @@ identities: [ada@example.com]  # emails counted as "you" in the contribution gra
 Everything I publish lives here.
 ```
 
-Save it and the dev server reloads — no ingest needed, this file is not part of the artifact.
+Save it and re-run `npm run build`. No *ingest* is strictly needed — this file is not part of
+the artifact, it is read by the site build — but `build` is the one command that renders it
+either way.
 
 `identities` lists every address you commit under. Leave it out and the contribution graph
 counts *all* commits in *all* your repositories — fine for a solo account, misleading the
@@ -339,10 +380,11 @@ repositories produced 3,798 pages and a 400 MB `dist/`, 161 MB of which was sour
 [deploying.md](./deploying.md#3-how-big-will-my-site-be) has the formula and the knobs
 (`branchTrees`, `tagTrees`, `archives`) that bring it down.
 
-Check the output locally with the production server:
+Check the output locally — this is the same thing step 4 did:
 
 ```bash
-npm run preview      # http://localhost:4321/
+npm run dev          # http://localhost:4321/  (notice + astro preview over dist/)
+npm run preview      # the same server without the notice or the guard
 ```
 
 Then put `dist/` on a host. [deploying.md](./deploying.md) has a working GitHub Actions
@@ -365,7 +407,8 @@ workflow and the trailing-slash rules for Cloudflare Pages, Netlify, nginx and A
 |---|---|
 | `⚠ [repo-not-found]` | The `path` is not a git repository. It is relative to `frznforge.config.ts`, not to your shell |
 | `⚠ [repo-empty]` | The repository has no commits. It still gets a page saying so |
-| A new page 404s in dev | The dev server is holding the old artifact — restart it after `npm run ingest` |
+| A new page 404s in `npm run dev` | `dev` serves the last build. Run `npm run build`; `ingest` alone only refreshes the data |
+| `npm run dev` says "there is no built site to serve yet" | You have not built. Run `npm run build` first |
 | An imported repo is missing | Look for `remote-fetch-failed` / `remote-auth-missing` / `remote-rate-limited` in the ingest output |
 | `Filename too long` while cloning a mirror | Windows `MAX_PATH`. Run `git config --global core.longpaths true`, or point `ingest.cacheDir` somewhere shallow |
 | The site is empty | `repos: []`. Ingest says `(no repos configured — writing an empty artifact)` |

@@ -439,14 +439,14 @@ index.ts edits need a stated merge point (Phase 3 owns lines ~325-340, Phase 4 o
 
 ---
 
-## Phase 6 — `npm run dev` repurpose + build-pipeline documentation
+## Phase 6 — `npm run dev` repurpose + build-pipeline documentation ✅ *(done 2026-08-31)*
 
 Goal: two small, independent deliverables that both want the pipeline settled: the dev
 script's honest replacement, and `docs/dev/build-steps.md` — written *after* Phases 3–5
 so the diagrams document the pipeline 0.3.0 actually ships.
 
 Ships
-- [ ] **`npm run dev` → notice + preview** (TODO: "show a message that the information
+- [x] **`npm run dev` → notice + preview** (TODO: "show a message that the information
   displayed is taken from the most recent build, and that it doesn't build itself, then
   run `astro preview`"). New tiny `scripts/dev.ts`; `package.json`'s `dev` script points
   at it. It: (1) prints the notice — the site being served reflects the most recent
@@ -461,7 +461,7 @@ Ships
   `astro dev --background` guidance no longer matches `npm run dev`),
   `.claude/launch.json` (already preview-based — verify), and any docs that say
   `npm run dev` (`quick-start.md`, `starting-a-site.md` — grep).
-- [ ] **`docs/dev/build-steps.md`** (TODO: mermaid diagrams + code references). The
+- [x] **`docs/dev/build-steps.md`** (TODO: mermaid diagrams + code references). The
   document walks `npm run build` end to end, per the TODO's dev-docs rule (diagrams +
   code references throughout):
   1. a top-level flowchart: config resolve → ingest (`scripts/ingest.ts` →
@@ -480,21 +480,21 @@ Ships
   are discussed.
 
 Done when
-- [ ] `npm run dev` on a fresh clone (no build yet) prints actionable guidance and exits
+- [x] `npm run dev` on a fresh clone (no build yet) prints actionable guidance and exits
   cleanly; after a build it serves the site with the notice shown first.
-- [ ] `build-steps.md` exists, renders its mermaid on the forge itself (the self-hosted
+- [x] `build-steps.md` exists, renders its mermaid on the forge itself (the self-hosted
   repo ingests its own docs — a nice dogfood: the diagrams render via 0.2.0's mermaid
   support), and its code references resolve to real lines.
 
 Tests
-- [ ] Unit: a small `dev-script` test if the guard logic is extracted as a function
+- [x] Unit: a small `dev-script` test if the guard logic is extracted as a function
   (missing-dist message, arg passthrough); otherwise the script stays thin enough that
   the e2e-adjacent manual check suffices — don't build a test rig for a 30-line wrapper.
-- [ ] Docs have no automated gate; the review bar is the Done-when.
+- [x] Docs have no automated gate; the review bar is the Done-when.
 
 ---
 
-## Phase 7 — People & avatars: owner image, org images, contributor entries (schema v8)
+## Phase 7 — People & avatars: owner image, org images, contributor entries (schema v8) ✅ *(done 2026-08-31)*
 
 Goal: the TODO's two people-clusters — "an image for the main user" and "information
 about other contributors and organizations" — landed together because they share one
@@ -504,7 +504,7 @@ config or frontmatter key carries an image, and provider metadata doesn't even r
 `avatar_url` (`ImportedRepoMeta`, `src/lib/importers/types.ts:36-56`).
 
 Ships
-- [ ] **Image storage convention.** Owner/org/contributor images are site content, not
+- [x] **Image storage convention.** Owner/org/contributor images are site content, not
   ingest artifacts: they live in `public/` (Astro serves them verbatim; no pipeline
   work), by convention under `public/images/` (e.g. `public/images/owner.png`,
   `public/images/orgs/<slug>.png`) but any `public/`-relative path is accepted. Config
@@ -512,7 +512,7 @@ Ships
   reserved-path collision check (`resolveHosting`, `src/lib/ingest/hosting.ts:43-104`)
   already hard-errors on `public/` collisions, so a hosted slug can't shadow `images/`
   — verify with a test rather than assuming.
-- [ ] **Owner avatar.** `avatar: string` (optional) — decide its home deliberately:
+- [x] **Owner avatar.** `avatar: string` (optional) — decide its home deliberately:
   `owner` config block (`frznforge.config.ts`, beside `name`/`handle`) rather than
   profile frontmatter, because the wizard edits config natively and the sidebar needs it
   on every page (frontmatter is profile-page-scoped). Rendered as `<img class="hf-avatar
@@ -521,7 +521,7 @@ Ships
   (`src/components/Sidebar.astro:79`); initials remain the no-avatar fallback
   everywhere. Alt text: empty (`alt=""`) — decorative, name is adjacent; the usability
   stance says don't over-engineer.
-- [ ] **Avatar import from forges** (TODO: "When importing from github or some other
+- [x] **Avatar import from forges** (TODO: "When importing from github or some other
   forge, give the option to import the profile picture as well, and store it"). This is
   an *init-time* fetch, not an ingest concern: a `frznforge init`/wizard action that,
   given the owner's forge handle, downloads the avatar (GitHub:
@@ -532,7 +532,7 @@ Ships
   new network calls right after Phase 4/5 tamed it. (If org-avatar import from provider
   orgs proves cheap it may piggyback on the same helper; otherwise org images are
   user-supplied files only. Record whichever way it goes.)
-- [ ] **Organization images + fields.** `OrganizationConfig`
+- [x] **Organization images + fields.** `OrganizationConfig`
   (`src/lib/config/schema.ts:151-161`) gains `avatar?: string` (public-relative path).
   Artifact `Organization` (`src/lib/data/schema.ts:642-649`) gains `avatar: string |
   null` — **this is the v8 `SCHEMA_VERSION` bump**, executed as one change with
@@ -541,7 +541,7 @@ Ships
   re-ingest as designed — say exactly that in the changelog per the updated TODO rule).
   Rendered in `OrgHeader.astro:58`, the orgs index card (`src/pages/orgs/index.astro:60`),
   initials fallback preserved.
-- [ ] **Contributor entries** (TODO: "similar behaviour for contributors, which allow
+- [x] **Contributor entries** (TODO: "similar behaviour for contributors, which allow
   the same fields as organizations, including the avatar"). New top-level config
   `contributors: [{ name, emails: string[], avatar?, description?, url? }]` — matched
   against git-derived contributors (`src/lib/ingest/contributors.ts`;
@@ -553,29 +553,29 @@ Ships
   (`src/pages/repos/[slug]/index.astro:171-180`) shows avatars where present (initials
   otherwise) and links the `url` when given; commit lists stay initials-only for now
   (perf: no per-commit image soup) unless it falls out free.
-- [ ] Docs: `configuration.md` — `owner.avatar`, org `avatar`, the `contributors` block,
+- [x] Docs: `configuration.md` — `owner.avatar`, org `avatar`, the `contributors` block,
   the `public/images/` convention.
 
 Done when
-- [ ] A config with an owner avatar, one org image, and one enriched contributor renders
+- [x] A config with an owner avatar, one org image, and one enriched contributor renders
   all three (profile hero, org header + card, About contributors), falls back to
   initials wherever unset, works under the base path, and a stale (v7) artifact
   triggers a clean re-ingest rather than a confusing failure.
 
 Tests
-- [ ] Unit: `schema.test.ts`/snapshot regen for v8; `orgs.test.ts` — avatar threading +
+- [x] Unit: `schema.test.ts`/snapshot regen for v8; `orgs.test.ts` — avatar threading +
   unknown-contributor warning; `contributors.test.ts` — email matching, enrichment,
   no-match passthrough; config validation for the new keys; the hosting reserved-path
   interaction probe.
-- [ ] UI (e2e): `site.spec.ts`/`orgs.spec.ts` — `<img>` present with correct base-aware
+- [x] UI (e2e): `site.spec.ts`/`orgs.spec.ts` — `<img>` present with correct base-aware
   src on fixture pages, initials fallback asserted on an avatar-less fixture;
   `base-path.spec.ts` leak scan covers the new srcs automatically.
-- [ ] Data model: the v8 bump done as one change (the TODO migration rule applies —
+- [x] Data model: the v8 bump done as one change (the TODO migration rule applies —
   changelog carries the note).
 
 ---
 
-## Phase 8 — Wizard: uploads, edit-in-place, new settings, Done saves everything
+## Phase 8 — Wizard: uploads, edit-in-place, new settings, Done saves everything ✅ *(done 2026-08-31)*
 
 Goal: the wizard catches up with 0.3.0 — last feature phase, per the 0.2.0 precedent,
 because it must expose every setting the version added (`reuse.skipUnchanged`,
@@ -583,7 +583,7 @@ because it must expose every setting the version added (`reuse.skipUnchanged`,
 `scripts/lib/web-init.ts`; page: `scripts/lib/web-init-page.html`.
 
 Ships
-- [ ] **Image upload** (TODO: owner upload + org upload in the web UI). New endpoint
+- [x] **Image upload** (TODO: owner upload + org upload in the web UI). New endpoint
   `/api/upload` inside the existing security envelope (127.0.0.1 bind, session token,
   Host/Origin pinning, serialized writes): accepts a JSON body with base64 image data
   (staying inside the existing `readBody` JSON path — no multipart parser dependency;
@@ -595,10 +595,10 @@ Ships
   data:` already allows client-side preview of the picked file; `form-action 'none'`
   stays (uploads go through `fetch`, not form posts). `.bak` semantics don't apply to
   new image files; an overwritten existing image gets the `backupOnce` treatment.
-- [ ] **Owner avatar import in the web UI**: a "fetch from forge" button beside the
+- [x] **Owner avatar import in the web UI**: a "fetch from forge" button beside the
   upload (server does the download using Phase 7's helper — the browser can't, CSP
   `connect-src 'self'`).
-- [ ] **Edit-in-place** (TODO: "edit the information once entered, not just remove").
+- [x] **Edit-in-place** (TODO: "edit the information once entered, not just remove").
   The 0.2.0 scope-down gets paid off: the config-edit engine
   (`scripts/lib/config-edit.ts`) gains an indexed-set operation — `setInArray(source,
   arrayPath, index, field, value)` — with the same textual-edit contract (only the
@@ -608,12 +608,12 @@ Ships
   grows edit affordances on the existing cards (prefill → save via ops). Validation
   path is unchanged: apply to a clone, `FrznforgeConfigSchema.parse`, write, re-load in
   a child process, restore on failure.
-- [ ] **New settings exposed**: the ingest card gains `reuse.skipUnchanged` +
+- [x] **New settings exposed**: the ingest card gains `reuse.skipUnchanged` +
   `reuse.cooldownSeconds`; owner card gains the avatar controls; org card gains image;
   a contributors card (add/edit/remove) joins the family. The 0.2.0 page↔allow-list
   drift guard (`web-init.test.ts`) must be extended first — it's the test that makes
   "expose everything" checkable.
-- [ ] **Done saves all** (TODO: "Hitting `done` in the web UI should also save/apply all
+- [x] **Done saves all** (TODO: "Hitting `done` in the web UI should also save/apply all
   current changes"). Today `doneClick()` (`web-init-page.html:1474-1485`) posts
   `/api/done` with **no flush** — unsaved settings edits and profile-body text are
   silently discarded (confirmed: no dirty tracking exists in the page). Fix on both
@@ -624,30 +624,50 @@ Ships
   must not be half-lost at exit — the user fixes it or explicitly cancels), then posts
   `/api/done`. `/api/done`'s server behavior (drain queue, report count) is already
   correct and stays; the finish card reports what was flushed.
-- [ ] The token-never-leaks sweep extends over `/api/upload` and every new response.
+- [x] The token-never-leaks sweep extends over `/api/upload` and every new response.
 
 Done when
-- [ ] From the page: upload an owner image and see it in config + on disk; fetch an
+- [x] From the page: upload an owner image and see it in config + on disk; fetch an
   avatar from GitHub; edit an existing org's name in place (file diff touches only that
   field); set a cooldown; add a contributor; then — with an *unsaved* settings edit and
   *unsaved* profile text pending — hit Done and find every pending change saved, the
   config still parsing, and `npm run build` green on the result.
 
 Tests
-- [ ] Unit: `config-edit.test.ts` — `setInArray` (comments, expressions, escaped quotes,
+- [x] Unit: `config-edit.test.ts` — `setInArray` (comments, expressions, escaped quotes,
   nested arrays, byte-identity outside the field, out-of-range index refused);
   `web-init.test.ts` — upload endpoint (magic-byte refusal, size cap, path pinning,
   traversal attempts, overwrite backup), allow-list additions incl. `__proto__`-family
   probes on the new ops, drift guard over the new fields, done-flush ordering at the
   API level, token sweep.
-- [ ] UI (e2e): `wizard.spec.ts` — an upload round-trip (tiny fixture png), an in-place
+- [x] UI (e2e): `wizard.spec.ts` — an upload round-trip (tiny fixture png), an in-place
   org edit asserting the on-disk diff, and the Done-with-pending-edits flush asserting
   the file afterwards.
-- [ ] Data model: none — the wizard edits config/content/images, never the artifact.
+- [x] Data model: none — the wizard edits config/content/images, never the artifact.
 
 ---
 
-### ✅ CHECKPOINT 3 — after Phases 6–8
+### ✅ CHECKPOINT 3 — after Phases 6–8 — *PASSED 2026-08-31*
+
+*Result: `npm test` 673 passed / 1 skipped (41 files, up from 634), `npm run test:e2e`
+187 passed / 1 skipped (up from 181), `npm run check` 0 errors, `npm run build` clean with
+0 warnings, and `forge.json` byte-identical across runs.*
+
+*Phase 6 DID run as a parallel subagent while Phase 7 was implemented here — the footprints
+were disjoint (scripts/dev.ts + docs vs. src/lib + components), with an explicit
+do-not-touch list for the shared bookkeeping files (CHANGELOG, TODO, this plan). It worked,
+with one caveat worth recording: the agent's `file.ts:line` citations in build-steps.md went
+stale under my concurrent edits to `src/lib/ingest/index.ts`, and it said so. They were
+re-verified at this checkpoint — every reference resolves, and the ones spot-checked
+(`ingest()`, `highlightToHtml`'s memo call, `OriginBackoff.beforeRequest`/`noteRateLimit`)
+point at the right code.*
+
+*Phase 6 also found a real error in this plan's own text: the remote path fetches provider
+metadata BEFORE the mirror (`prepareRemote` needs the API answer for the clone URL), not
+after as Phase 4's sequence sketch assumed. The consequence for Phase 5 is worth stating
+plainly: **`skipUnchanged` saves git traffic, not API traffic** — the `ls-remote` probe lives
+inside `ensureMirror`, which runs after the metadata call. The cooldown is the knob that
+skips both halves, and it is the one that helps with 429s.*
 
 Full suite green. Subagent note: Phase 6 (scripts/dev.ts + docs) is disjoint from
 Phase 7 (ingest/site/schema) and can run in parallel with it; Phase 8 depends on

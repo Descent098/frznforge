@@ -14,6 +14,7 @@ import type {
   Warning,
 } from '../data/schema';
 import { contributorsFromCommits } from './contributors';
+import type { ContributorConfig } from '../config/schema';
 import { loadCommits } from './commits';
 import { gitBuffer, isGitRepo, looksBinary, readBlob } from './git';
 import { computeInsights, DEFAULT_INSIGHTS_OPTIONS, type InsightsOptions } from './insights';
@@ -96,6 +97,16 @@ export interface ScanOptions {
   insights?: InsightsOptions;
   /** Byte cap for files on HOSTED branches (schema v7, `hosting.maxFileBytes`). */
   hostedMaxFileBytes?: number;
+  /**
+   * Configured contributors indexed by lower-cased email (schema v8), from
+   * `contributorIndex(config.contributors)`. A match decorates and merges the git-derived
+   * entry; absent means "git only", which is the normal case.
+   *
+   * Part of `ScanOptions` — and therefore of the scan-cache digest — on purpose: renaming a
+   * contributor or adding an avatar changes the artifact, so a cached scan must not replay
+   * the old value.
+   */
+  contributors?: Map<string, ContributorConfig>;
 }
 
 export type ScanResult =
@@ -377,7 +388,7 @@ export async function scanRepo(source: ScanSource, opts: ScanOptions): Promise<S
     refTrees,
     archives,
     languages: languageStats(Object.values(treeRes.files)),
-    contributors: contributorsFromCommits(commitList),
+    contributors: contributorsFromCommits(commitList, opts.contributors),
     insights: insightsRes.insights,
     readme,
     createdAt,

@@ -182,6 +182,16 @@ test.describe('repo overview', () => {
     expect(docScrolls).toBe(false);
   });
 
+  test('a configured contributor shows their picture, name and link (schema v8)', async ({ page }) => {
+    await page.goto('/repos/alpha/');
+    const row = page.locator('.hf-about .hf-contributor', { hasText: 'Fixture Author (configured)' });
+    await expect(row).toHaveCount(1); // the two configured addresses merged into ONE entry
+    await expect(row.locator('img.hf-avatar--img')).toHaveAttribute('src', '/logo.png');
+    await expect(row.locator('a')).toHaveAttribute('href', 'https://example.com/fixture-author');
+    // the configured name replaced the one git recorded
+    await expect(page.locator('.hf-about .hf-contributors')).not.toContainText('Fixture Author —');
+  });
+
   test('template repo shows the template banner', async ({ page }) => {
     await page.goto('/repos/bravo/');
     await expect(page.locator('.hf-banner--template')).toContainText('template repository');

@@ -1,5 +1,6 @@
 ---
 import Base from '../../../layouts/Base.astro';
+import Avatar from '../../../components/Avatar.astro';
 import RepoHeader from '../../../components/RepoHeader.astro';
 import RefSwitcher from '../../../components/RefSwitcher.astro';
 import FileTable from '../../../components/FileTable.astro';
@@ -190,7 +191,11 @@ const heat = heatFor(repo.updatedAt, now, cfg.theme.heat);
               <h2>Contributors <span class="hf-count hf-count--plain">{repo.contributors.length}</span></h2>
               <div class="hf-contributors">
                 {repo.contributors.map((c) => (
-                  <span class="hf-contributor"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">{initials(c.name)}</span><strong>{c.name}</strong><small>{formatInt(c.commits)} commit{c.commits === 1 ? '' : 's'}</small></span>
+                  <span class="hf-contributor" title={c.description ?? undefined}>
+                    <Avatar name={c.name} src={c.avatar} size="sm" />
+                    {c.url ? <a href={c.url} rel="noopener"><strong>{c.name}</strong></a> : <strong>{c.name}</strong>}
+                    <small>{formatInt(c.commits)} commit{c.commits === 1 ? '' : 's'}</small>
+                  </span>
                 ))}
               </div>
             </section>

@@ -17,7 +17,7 @@
  */
 import { z } from 'astro/zod';
 
-export const SCHEMA_VERSION = 7 as const;
+export const SCHEMA_VERSION = 8 as const;
 
 /* ---- primitives -------------------------------------------------------- */
 
@@ -165,11 +165,23 @@ export const LanguageStat = z.object({
 export type LanguageStat = z.infer<typeof LanguageStat>;
 
 export const Contributor = z.object({
+  /** Display name: the configured one when a `contributors[]` entry claims this person, else git's. */
   name: z.string(),
+  /**
+   * Canonical author email. For a configured contributor with several addresses this is the
+   * FIRST one listed in the config; the other addresses' commits are merged into this entry.
+   */
   email: z.string(),
   commits: z.number().int().positive(),
   firstCommit: IsoDate,
   lastCommit: IsoDate,
+  /**
+   * Decoration from a matching `contributors[]` config entry (schema v8); all null when the
+   * person is only known from git, which is the normal case.
+   */
+  avatar: z.string().nullable(),
+  description: z.string().nullable(),
+  url: z.string().nullable(),
 });
 export type Contributor = z.infer<typeof Contributor>;
 
@@ -379,6 +391,12 @@ export const WarningCode = z.enum([
   'repo-path-unservable',
   /** An `organizations[].repos` entry names a slug no ingested repo has; ignored (schema v4). */
   'org-unknown-repo',
+  /**
+   * A `contributors[]` entry claims emails that no ingested repo's history contains, so it
+   * decorates nobody. Harmless — the repo that person contributed to may simply not be part
+   * of this build — so it is reported and ignored (schema v8).
+   */
+  'contributor-unknown-email',
   /** A repo source declares `org` naming an organization that is not configured; ignored (schema v4). */
   'repo-unknown-org',
   /** A `hosting.sites` entry names a repo slug no ingested repo has; the entry is dropped (schema v7). */
@@ -645,6 +663,8 @@ export const Organization = z.object({
   description: z.string().nullable(),
   /** Member repo slugs, sorted, de-duplicated; every one of them exists in `ForgeData.repos`. */
   repos: z.array(Slug),
+  /** `public/`-relative image path from `organizations[].avatar`, or null (schema v8). */
+  avatar: z.string().nullable(),
 });
 export type Organization = z.infer<typeof Organization>;
 

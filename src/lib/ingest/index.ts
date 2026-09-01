@@ -15,6 +15,7 @@ import {
   type Repo,
   type Warning,
 } from '../data/schema';
+import { contributorIndex, unmatchedContributors } from './contributors';
 import { resolveHosting } from './hosting';
 import { slugFor, slugify } from './meta';
 import { collectNotes } from './notes';
@@ -182,6 +183,9 @@ export async function ingest(
     archives: config.ingest.archives,
     insights: config.ingest.insights,
     hostedMaxFileBytes: config.hosting.maxFileBytes,
+    // schema v8: decorates and merges git-derived contributors. In `opts` — and therefore in
+    // the scan-cache digest — so editing a contributor invalidates the cached scan.
+    contributors: contributorIndex(config.contributors),
   };
 
   // Cross-run reuse (`ingest.reuse`): reads are disabled by `--no-cache`, writes are not —
@@ -416,6 +420,19 @@ export async function ingest(
   const orgInputs: OrgRepoInput[] = scanned.map((s) => ({ slug: s.repo.slug, org: s.org }));
   const orgRes = resolveOrganizations(config, orgInputs);
 
+  // Contributors (schema v8): every email that actually appears in this build's history,
+  // so a configured entry matching none of them can be reported. Collected after scanning
+  // because that is when the merged contributor lists exist.
+  const seenEmails = new Set<string>();
+  for (const s of scanned) for (const c of s.repo.contributors) seenEmails.add(c.email.toLowerCase());
+  const contributorWarnings: Warning[] = unmatchedContributors(config.contributors, seenEmails).map((entry) => ({
+    code: 'contributor-unknown-email' as const,
+    repo: null,
+    message:
+      `contributor '${entry.name}' lists ${entry.emails.map((e) => `'${e}'`).join(', ')}, ` +
+      'which no ingested repo has commits from; the entry decorates nobody',
+  }));
+
   // Hosting (schema v7): resolved against the final slugs, like organizations. Runs before
   // the warning mirror below because it pushes repo-scoped warnings onto matched repos.
   const hostingRes = resolveHosting(config, scanned.map((s) => s.repo));
@@ -424,7 +441,13 @@ export async function ingest(
   const archives = new Map<string, Buffer>();
   // Fixed warning order: site-level, then notes, then organizations, then hosting, then
   // per repo in slug order.
-  const warnings: Warning[] = [...siteWarnings, ...noteRes.warnings, ...orgRes.warnings, ...hostingRes.warnings];
+  const warnings: Warning[] = [
+    ...siteWarnings,
+    ...noteRes.warnings,
+    ...orgRes.warnings,
+    ...contributorWarnings,
+    ...hostingRes.warnings,
+  ];
   for (const { repo, blobs: b, archives: a } of scanned) {
     for (const w of repo.warnings) warnings.push({ ...w, repo: repo.slug });
     for (const [sha, buf] of b) blobs.set(sha, buf);

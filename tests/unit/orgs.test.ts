@@ -34,7 +34,7 @@ describe('resolveOrganizations', () => {
     const { organizations, warnings } = resolveOrganizations(cfg, [repo('alpha'), repo('beta'), repo('gamma')]);
     expect(warnings).toEqual([]);
     expect(organizations).toEqual([
-      { slug: 'acme', name: 'Acme', description: 'Makers of things', repos: ['alpha', 'beta'] },
+      { slug: 'acme', name: 'Acme', description: 'Makers of things', repos: ['alpha', 'beta'], avatar: null },
     ]);
   });
 
@@ -42,7 +42,7 @@ describe('resolveOrganizations', () => {
     const cfg = configWith([{ slug: 'acme', name: 'Acme' }]);
     const { organizations, warnings } = resolveOrganizations(cfg, [repo('alpha', 'acme'), repo('beta')]);
     expect(warnings).toEqual([]);
-    expect(organizations).toEqual([{ slug: 'acme', name: 'Acme', description: null, repos: ['alpha'] }]);
+    expect(organizations).toEqual([{ slug: 'acme', name: 'Acme', description: null, repos: ['alpha'], avatar: null }]);
   });
 
   it('unions both directions and never lists a repo twice', () => {
@@ -57,7 +57,7 @@ describe('resolveOrganizations', () => {
   it('emits an organization with no members rather than dropping it', () => {
     const cfg = configWith([{ slug: 'empty-org', name: 'Empty Org' }]);
     const { organizations, warnings } = resolveOrganizations(cfg, [repo('alpha')]);
-    expect(organizations).toEqual([{ slug: 'empty-org', name: 'Empty Org', description: null, repos: [] }]);
+    expect(organizations).toEqual([{ slug: 'empty-org', name: 'Empty Org', description: null, repos: [], avatar: null }]);
     expect(warnings).toEqual([]);
   });
 
@@ -134,7 +134,7 @@ describe('resolveOrganizations', () => {
     ]);
     const { organizations } = resolveOrganizations(cfg, [repo('alpha'), repo('beta')]);
     expect(organizations).toEqual([
-      { slug: 'acme', name: 'Acme', description: 'first', repos: ['alpha', 'beta'] },
+      { slug: 'acme', name: 'Acme', description: 'first', repos: ['alpha', 'beta'], avatar: null },
     ]);
   });
 
@@ -149,7 +149,7 @@ describe('unmatchedOrgContent', () => {
   /** An artifact holding just the organizations named. */
   const withOrgs = (...slugs: string[]) => ({
     ...emptyForgeData(),
-    organizations: slugs.map((slug) => ({ slug, name: slug, description: null, repos: [] })),
+    organizations: slugs.map((slug) => ({ slug, name: slug, description: null, repos: [], avatar: null })),
   });
 
   it('names every orgs markdown file no configured organization claims', () => {
