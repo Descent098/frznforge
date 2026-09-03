@@ -35,7 +35,7 @@ const OPTIONS = { gfm: true, breaks: false } as const;
  * The visual result is unchanged: `.hf-md`'s heading sizes are shifted by the same one level
  * in `styles/global.css`, so a `#` still renders as a title. The same demotion is applied to
  * the profile and organization markdown, which goes through Astro's own pipeline — see the
- * rehype plugin in `astro.config.mjs`. Change one and you must change the other.
+ * rehype plugin in `astro.config.ts`. Change one and you must change the other.
  */
 function demoteHeading(token: Tokens.Heading): false {
   token.depth = Math.min(6, token.depth + 1);

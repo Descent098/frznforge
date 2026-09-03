@@ -176,7 +176,7 @@ Windows 11, two runs per value, `Measure-Command { npx astro build }`, 2026-08-2
 2 is a small (~8%) but consistent win — both its runs beat every run at 1 and 4 — and 4 is
 measurably worse. That shape makes sense: the pages' blob reads are synchronous
 (`readFileSync` in frontmatter), so there is little I/O for concurrent renders to overlap
-and the render is CPU-bound. Adopted as a literal in `astro.config.mjs`; re-measure by
+and the render is CPU-bound. Adopted as a literal in `astro.config.ts`; re-measure by
 overriding it there if the page mix ever changes materially.
 
 ## Measured: the highlight memo (0.2.0)
@@ -273,7 +273,7 @@ the ones worth knowing about:
 The 0.2.0 wish list re-floated "if the most recent commit hash matches the one on the page,
 skip rebuilding it in dist". The standing rejection above holds. What changed in 0.2.0 is that
 the *goal* behind the request — a faster rebuild — was met without taking the risk: the
-highlight memo above cut a no-change rebuild by 63% by memoizing a pure function, leaving every
+highlight memo above cut a no-change rebuild by 66% by memoizing a pure function, leaving every
 page rendered and every byte verified. That is the cheap 84% of the problem; skipping pages
 would be chasing the remaining 16% with a mechanism that can be silently wrong.
 

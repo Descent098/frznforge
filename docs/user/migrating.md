@@ -233,8 +233,8 @@ config, then set `ingest.fetch: 'never'` and build offline as often as you like.
 ## 7. A migration plan that works
 
 1. **Start with one repository.** `{ type: 'github', owner: 'you', repo: 'smallest-thing' }`,
-   `npm run ingest`, `npm run dev`. Confirm the description, license, languages and releases
-   look right before you scale up.
+   `npm run build`, then `npm run dev` to look at it. Confirm the description, license,
+   languages and releases look right before you scale up.
 2. **Bulk-add the rest.** `npm run frznforge -- init --provider=github --account=you
    --select=all-nfna` adds everything except forks and archived repositories, with a
    confirmation and a config backup.

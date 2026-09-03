@@ -8,7 +8,9 @@ since schema v5 it computes per-repo **insights** (monthly commit, contributor a
 series) from sampled commits. Since schema v6 it carries **display-support commits**
 (`Repo.extraCommits`) so the history-narrowing knobs cannot blank per-file or tag commit
 info, and since schema v7 it resolves **hosted static sites** (`ForgeData.hosting`) — a
-repo's branch served as a real site at `/<slug>/…`.
+repo's branch served as a real site at `/<slug>/…`. Since schema v8 the people on the site
+can carry a name, picture, blurb and link of their own (`Contributor`, `Organization.avatar`),
+configured rather than derived from git.
 Every page of the site is built from this artifact and nothing else — the site never talks to
 git and never talks to a forge.
 
@@ -57,7 +59,7 @@ git-ignored) and the ordinary local scanner then runs on that bare mirror:
 
 ```
 <ingest.cacheDir>/
-├── last-run.json                          run log for the freshness window (0.2.0)
+├── last-run.json                          run log: fetch status + ref heads (v2, 0.3.0)
 ├── scan/
 │   └── <digest>.json                      per-repo scan cache (0.2.0)
 ├── highlight/
@@ -99,9 +101,19 @@ Three more cacheDir entries exist so repeat builds can skip work **without chang
 output** — wall-clock timestamps are allowed here precisely because this directory never
 feeds the artifact:
 
-- `last-run.json` — the **run log**: per remote source (keyed by its mirror path), when the
-  last real fetch happened and whether it was fully fresh (mirror updated, no `remote-*`
-  warnings). The freshness window (`ingest.reuse.maxAgeMinutes`, default 2) reads it: under
+- `last-run.json` — the **run log** (**version 2** since 0.3.0): per remote source (keyed by
+  its mirror path), when the last real fetch happened, whether it was fully fresh (mirror
+  updated, no `remote-*` warnings), and — new in v2 — the two halves of that fetch
+  separately (`gitOk`, `metaOk`) plus the mirror's refs afterwards (`heads`). The halves are
+  reported by the fetch code rather than inferred from warning codes, because
+  `remote-cache-stale` covers both a stale mirror and stale provider metadata. A log written
+  by an older version is discarded wholesale and rebuilt.
+
+  It has three readers now: the freshness window (below), the **cooldown**
+  (`ingest.reuse.cooldownSeconds`, opt-in) which requires BOTH halves to have succeeded, and
+  the **same-commit skip** (`ingest.reuse.skipUnchanged`, opt-in) which compares `heads`
+  against a `git ls-remote` before paying for a fetch — see
+  [build-steps.md](./build-steps.md) for the whole sequence. The freshness window (`ingest.reuse.maxAgeMinutes`, default 2) reads it: under
   `fetch: 'auto'`, a source fetched fresh within the window is not re-fetched — the cached
   `.meta.json` and mirror are used as-is with **no warning**, because they are exactly what
   a fetch would have returned (`MirrorAction: 'reused'`). A degraded source is always
@@ -201,7 +213,7 @@ fields are declared in `ForgeData`, and the snapshot tests compare bytes.
 
 | field           | meaning                                                                          |
 | --------------- | -------------------------------------------------------------------------------- |
-| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `8`). The site refuses artifacts of another version. |
+| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `8`). The site refuses artifacts of another version — `loadForgeData` names the version it found and tells the reader to re-run the build, rather than surfacing a raw validation error. |
 | `repos`         | `Repo[]`, sorted by slug.                                                        |
 | `notes`         | `Note[]` (schema v4), date desc / undated last / title asc — see "Notes".         |
 | `organizations` | `Organization[]` (schema v4), sorted by slug — see "Organizations".               |
@@ -740,6 +752,13 @@ releaseMode? }`. The site config's `overrides` for that repo win field-by-field.
 
 ## Version history
 
+- **v8** — people and pictures: `Contributor` gains `avatar` / `description` / `url`, and
+  `Organization` gains `avatar`; new warning `contributor-unknown-email`; new config
+  `owner.avatar`, `organizations[].avatar` and a top-level `contributors[]` block (config
+  only — `ForgeData`'s own key list is unchanged). Every avatar is a `public/`-relative path,
+  never a URL, so the published pages keep loading nothing from a third party. Purely
+  additive: an older artifact is rejected on load with a message naming the version and
+  telling the reader to re-run the build.
 - **v7** — hosted static sites: `ForgeData.hosting` (`HostedSite[]` — `{ slug, repo, ref }`,
   declared after `organizations` and before `warnings`) records each `hosting.sites` entry
   resolved against the final repos; new warnings `hosting-unknown-repo`,

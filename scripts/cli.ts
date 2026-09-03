@@ -490,7 +490,7 @@ Options (new)
                                              nothing.
 
   There is no published npm package yet, so \`new\` writes only the files you author; the
-  engine (src/, package.json, astro.config.mjs, …) comes from a frznforge checkout.
+  engine (src/, package.json, astro.config.ts, …) comes from a frznforge checkout.
   See docs/user/starting-a-site.md.
 
 Options (init)

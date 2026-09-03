@@ -53,6 +53,10 @@ Additional things to keep in mind:
 
 This section is for me to keep track of what I need to manually review, feel free to add to this
 
+- [ ] **PUSH THE RELEASE.** `git ls-remote` says the documented clone URL works, but the
+  remote's `master` is at `fb7235b` — the **0.2.0** commit. None of 0.3.0 is pushed, so a
+  reader following `quick-start.md` today gets 0.2.0 while the docs describe 0.3.0. This is
+  the one thing that blocks announcing the release.
 - [ ] **TypeScript 7 is deferred.** 7.0.2 is out, but `@astrojs/check` and `@astrojs/svelte`
   both declare a `typescript` peer range of `^5.0.0 || ^6.0.0`, so we stay on 6.0.3.
   Revisit when the Astro toolchain widens its peers — nothing in our code is known to

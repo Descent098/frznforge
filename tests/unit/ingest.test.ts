@@ -3,8 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { resolveConfig, type ResolvedConfig } from '../../src/lib/config/index';
-import { loadForgeData, readBlob, resetForgeDataCache } from '../../src/lib/data/load';
-import { parseForgeData, type ForgeData } from '../../src/lib/data/schema';
+import { ARTIFACT_FILENAME, loadForgeData, readBlob, resetForgeDataCache } from '../../src/lib/data/load';
+import { emptyForgeData, parseForgeData, type ForgeData } from '../../src/lib/data/schema';
 import { ingest, serializeForgeData, writeArtifact } from '../../src/lib/ingest/index';
 import { FixtureRepo, at } from './helpers/fixture-repo';
 
@@ -209,5 +209,36 @@ describe('ingest', () => {
     expect(data).toEqual({ schemaVersion: 8, repos: [], notes: [], organizations: [], hosting: [], warnings: [] });
     expect(blobs.size).toBe(0);
     expect(archives.size).toBe(0);
+  });
+});
+
+describe('artifact version mismatch', () => {
+  it('names the version and says how to fix it, instead of dumping a schema error', async () => {
+    // The v7 → v8 bump means anyone upgrading meets this path once. A bare ZodError
+    // ("Invalid input: expected 8") is accurate and useless; the artifact is fully derived
+    // from the repos, so the message says so and names the command.
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'frznforge-stale-'));
+    const artifact = { ...emptyForgeData(), schemaVersion: 7 };
+    fs.writeFileSync(path.join(outDir, ARTIFACT_FILENAME), JSON.stringify(artifact), 'utf8');
+
+    resetForgeDataCache();
+    expect(() => loadForgeData(outDir)).toThrow(/artifact schema v7.*needs v8/s);
+    resetForgeDataCache();
+    expect(() => loadForgeData(outDir)).toThrow(/npm run build/);
+    fs.rmSync(outDir, { recursive: true, force: true });
+  });
+
+  it('still reports a genuinely malformed artifact of the RIGHT version', async () => {
+    // The version check must not swallow real corruption.
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'frznforge-bad-'));
+    fs.writeFileSync(
+      path.join(outDir, ARTIFACT_FILENAME),
+      JSON.stringify({ ...emptyForgeData(), repos: 'not an array' }),
+      'utf8',
+    );
+    resetForgeDataCache();
+    expect(() => loadForgeData(outDir)).toThrow();
+    expect(() => loadForgeData(outDir)).not.toThrow(/different version of frznforge/);
+    fs.rmSync(outDir, { recursive: true, force: true });
   });
 });

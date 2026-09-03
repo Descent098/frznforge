@@ -1,4 +1,4 @@
-# 0.3.0 (unreleased)
+# 0.3.0 (2026-08-31)
 
 ## Features
 
@@ -9,7 +9,7 @@
 
 * **Rate limits back off per origin.** A 429 — or GitHub's 403-with-no-quota-left — is now retried with exponential backoff keyed to the host, so every repo being ingested in parallel from one forge waits behind a single timer while other forges are unaffected. The provider's `Retry-After` is honoured; a limit longer than a minute blocks that host for the stated period so the remaining repos fall back to cached metadata immediately instead of each burning a retry ladder. Repos with no cached metadata are fetched first, so a limited run spends its budget where there is nothing to fall back on. `ingest.failOnDegraded` (default off) makes such a run exit non-zero instead of quietly publishing stale metadata.
 
-* **Pictures for the owner, organizations and contributors.** `owner.avatar`, `organizations[].avatar` and a new top-level `contributors[]` block let you attach a real name, picture, blurb and link to the people and groups on the site; anywhere without one keeps the initials block. Images are paths inside `public/` rather than URLs, so the published pages still load nothing from a third party. A `contributors[]` entry listing several `emails` merges them into one person, since one contributor committing from two machines is one contributor. Artifact schema v8 — additive, so the only migration is re-running the build (`npm run build`), which ingest does automatically.
+* **Pictures for the owner, organizations and contributors.** `owner.avatar`, `organizations[].avatar` and a new top-level `contributors[]` block let you attach a real name, picture, blurb and link to the people and groups on the site; anywhere without one keeps the initials block. Images are paths inside `public/` rather than URLs, so the published pages still load nothing from a third party. A `contributors[]` entry listing several `emails` merges them into one person, since one contributor committing from two machines is one contributor. Artifact schema v8 — additive, so the only migration is re-running the build (`npm run build`), and an artifact left over from an older version now says exactly that instead of failing with a raw schema error.
 
 * **The init wizard edits people, pictures and the 0.3.0 settings.** `frznforge init --web` gains a contributors list, an Edit control on every list row (organizations, contributors, hosted sites and sources can now be corrected in place instead of removed and re-added), a file picker for every avatar field, and the new ingest settings. Uploads write into `public/images/` under a name the *server* chooses from the image's own bytes — the browser never names a file on disk.
 
@@ -26,6 +26,8 @@
 * **Per-half fetch status is recorded.** The ingest run log (`<cacheDir>/last-run.json`) is now version 2: beside the existing timestamp and freshness flag, each remote source records whether the *git mirror* fetch and the *provider metadata* fetch each succeeded, plus the mirror's refs at the end of the run. The halves are reported by the fetch code rather than inferred from warning codes, because `remote-cache-stale` is raised for both a stale mirror and stale metadata. A version 1 log on disk is discarded and rebuilt, which costs one un-skipped fetch cycle.
 
 * **Insights lead with lines of code.** The code-size tile now shows the line count as the headline number and the approximate byte size beneath it, with the label following suit. A checkpoint that went over the ingest read budget cannot count lines, so it keeps bytes as the headline and says why.
+
+* **Documentation sweep.** Audited every doc against the code for the release: the copy-the-engine recipe in `starting-a-site.md` (and the scaffolded site's own README) named `astro.config.mjs`, which has been `astro.config.ts` since 0.2.0 — following it produced a site that built zero pages. Also corrected two contradictory rebuild figures, added the missing v8 entry to the data-model version history, and documented the run log's v2 fields and the rate-limit behaviour where a rate-limited reader actually lands.
 
 * **Dependency updates.** Updated Astro (7.2.4 → 7.2.9), Svelte (5.56.10 → 5.57.0), marked (18.0.10 → 18.0.11), tsx (4.23.12 → 4.23.13), and `@types/node` (26.2.0 → 26.4.0). TypeScript 7.0.2 is available but deliberately deferred: `@astrojs/check` and `@astrojs/svelte` both declare a `typescript` peer range of `^5.0.0 || ^6.0.0`, so the project stays pinned on 6.0.3 until the Astro toolchain supports 7.
 

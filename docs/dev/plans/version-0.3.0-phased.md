@@ -676,36 +676,59 @@ on Phases 3–5 (already landed at Checkpoint 2).
 
 ---
 
-## Phase 9 — Docs sweep, checklist, cut 0.3.0
+## Phase 9 — Docs sweep, checklist, cut 0.3.0 ✅ *(done 2026-08-31)*
 
 Goal: everything a stranger needs, then the release.
 
 Ships
-- [ ] Docs sweep, code-vs-doc audited (the 0.2.0 Phase 9 method — it found 24 mismatches
+- [x] Docs sweep, code-vs-doc audited (the 0.2.0 Phase 9 method — it found 24 mismatches
   last time): `configuration.md` documents every 0.3.0 key (`reuse.skipUnchanged`,
   `reuse.cooldownSeconds`, `owner.avatar`, org `avatar`, `contributors`, license-link
   behavior if it warrants a note); `data-model.md` reflects v8; `build-steps.md`
   cross-checked against the shipped pipeline one final time; `quick-start.md` /
   `starting-a-site.md` reflect the new `npm run dev` behavior and transcripts re-verified;
   README version/schema references current.
-- [ ] `docs/dev/release-checklist.md` run and extended with the 0.3.0 items needing a
+- [x] `docs/dev/release-checklist.md` run and extended with the 0.3.0 items needing a
   real browser/deploy: the clone popup at mobile width, an avatar-bearing deploy, the
   wizard upload + Done-flush end to end, a rate-limited-then-recovered build. The five
   carried-over 0.2.0 manual items get resolved or re-carried with reasons (the standing
   precedent: honest annotations beat silent ticks).
-- [ ] `CHANGELOG.md`'s `0.3.0 (unreleased)` heading gains its release date; `VERSION`,
+- [x] `CHANGELOG.md`'s `0.3.0 (unreleased)` heading gains its release date; `VERSION`,
   `package.json`, and the heading agree; the `TODO`'s 0.3.0 items are all ticked (or
   explicitly moved to a future version with a note in **For human**).
 
 Done when
-- [ ] All three gates green, `npm run build` clean, ingest byte-identical across runs,
+- [x] All three gates green, `npm run build` clean, ingest byte-identical across runs,
   checklist items ticked or carried with reasons, and the **For human** section of the
   TODO lists anything that genuinely needs the owner's eyes (at minimum: the manual
   browser checks, and the TypeScript 7 decision if it was deferred in Phase 1).
 
 Tests
-- [ ] None new — the deliverable is the docs, the checklist, and the gates staying green
+- [x] None new — the deliverable is the docs, the checklist, and the gates staying green
   over everything 0.3.0 shipped.
+  *Deviation, on purpose: two tests WERE added, because the sweep found code worth changing.
+  Exercising the v7 → v8 migration by hand showed a stale artifact failing with a raw Zod
+  dump ("Invalid input: expected 8") that never said what to do about it; `loadForgeData`
+  now names the version it found and tells the reader to re-run the build. One test covers
+  that message, a second proves the version check does not swallow genuine corruption of a
+  correctly-versioned artifact.*
+
+*Run as a **read-only** audit subagent — findings only, every fix applied here, so no file
+had two writers. It reported 10 confirmed contradictions and 6 documentation gaps, plus an
+explicit list of what it checked and found correct: all 60+ `file.ts:line` citations in
+build-steps.md resolve to the right symbol (the drift I expected from Phase 7's concurrent
+edits did not materialise), the warning table matches the `WarningCode` union in both
+directions, and configuration.md documents every config key with the right defaults.*
+
+*The worst finding was not a 0.3.0 regression at all: `starting-a-site.md`'s copy-the-engine
+command has named `astro.config.mjs` since the 0.2.0 rename, so anyone following it built a
+site with zero pages — and the troubleshooting entry for exactly that symptom pointed at the
+same nonexistent file. Ten references fixed across the docs, the scaffolder (which shipped it
+into every generated README) and two code comments. Also corrected: two contradictory rebuild
+figures (63% vs 66%; 16.7→5.0 vs 23.1→7.9), the missing v8 row in the data-model version
+history, the run log still documented as v1, and `package-lock.json` left at 0.2.0 while the
+other three version files said 0.3.0 — a fourth place the version lives, now named in the
+checklist.*
 
 ---
 

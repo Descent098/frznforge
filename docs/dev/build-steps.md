@@ -172,7 +172,7 @@ explicit ask to fetch and `'never'` must keep emitting its stale-cache warnings.
 | Provider answers | `<cacheDir>/…/<repo>-<digest>.meta.json` | `writeProviderCache`, `remote.ts:597` | `readProviderCache`, `remote.ts:580` | the mirror path (`providerCachePathFor`, `remote.ts:575`) |
 | Mirror | `<cacheDir>/…/<repo>-<digest>.git` | `git clone --mirror` / `git remote update` | `scanRepo` | `cachePathFor`, `config/index.ts:133` |
 | Scan result | `<cacheDir>/scan/<digest>.json` | `writeScanCache`, `reuse.ts:307` | `readScanCache` + `rehydrateScan`, `reuse.ts:283`/`332` | `scanInputDigest`: refs + HEAD + `ScanSource` (provider metadata and releases included) + `ScanOptions`, `reuse.ts:257` |
-| Highlight memo | `<cacheDir>/highlight/<sha>` | `memoizeHighlight`, `highlight-cache.ts:185` | same | Shiki fingerprint + effective language + line-id prefix + source, `highlight-cache.ts:221` |
+| Highlight memo | `<cacheDir>/highlight/<key>.gz` | `memoizeHighlight`, `highlight-cache.ts:185` | same | Shiki fingerprint + effective language + line-id prefix + source, `highlight-cache.ts:221` |
 
 **The highlight memo is not part of ingest.** It is read and written during `astro build`,
 inside `highlightToHtml` (`src/lib/highlight.ts:204`), once per distinct highlighted file

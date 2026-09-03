@@ -720,7 +720,7 @@ code, kbd, pre { font-family: var(--hf-mono); }
 .hf-readme { padding: 8px 28px 28px; }
 .hf-md { font-size: 14.5px; color: var(--hf-text); line-height: 1.65; }
 /* Rendered markdown starts at h2, never h1 — the page chrome owns the h1 (see
-   `renderMarkdown()` in src/lib/markdown.ts and the rehype plugin in astro.config.mjs).
+   `renderMarkdown()` in src/lib/markdown.ts and the rehype plugin in astro.config.ts).
    These sizes are the old h1/h2/h3 sizes shifted down one level, so a `#` still looks like a
    title and a `##` like a section: the markup changed, the page did not. */
 .hf-md h2 { font-size: 26px; font-weight: 740; letter-spacing: -0.02em; margin: 20px 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--hf-border); }

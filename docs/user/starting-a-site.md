@@ -100,7 +100,7 @@ Re-run without --dry-run to write these files.
 ## 2. The engine has to be in the same directory
 
 `new` writes the files **you** author. It does not write the generator: `src/`, `scripts/`,
-`public/`, `astro.config.mjs`, `svelte.config.js`, `tsconfig.json` and `package.json` all come
+`public/`, `astro.config.ts`, `svelte.config.js`, `tsconfig.json` and `package.json` all come
 from a frznforge checkout and belong in the same directory as your `frznforge.config.ts`.
 
 That is not an accident of packaging, it is how the config is loaded: `frznforge.config.ts`
@@ -116,7 +116,7 @@ brings you engine updates. Your content and the engine share one git history.
 
 ```sh
 npm run frznforge -- new ../my-site
-cp -r src scripts public package.json astro.config.mjs svelte.config.js tsconfig.json ../my-site/
+cp -r src scripts public package.json astro.config.ts svelte.config.js tsconfig.json ../my-site/
 cd ../my-site && npm install
 ```
 
@@ -268,7 +268,7 @@ engine is not in the same directory as `frznforge.config.ts`. See
 **`[WARN] Missing pages directory: src/pages`, then `0 page(s) built`** — the same cause, and
 the nastier shape of it: with `src/` missing (or only half-copied) `astro build` does not
 fail, it cheerfully builds nothing and exits 0. If a build "succeeds" but `dist/` has no
-pages in it, check that `src/`, `scripts/`, `public/` and `astro.config.mjs` all came across.
+pages in it, check that `src/`, `scripts/`, `public/` and `astro.config.ts` all came across.
 
 **The site builds but lists no repositories** — `repos: []` in the config. That is the default;
 uncomment one of the examples.

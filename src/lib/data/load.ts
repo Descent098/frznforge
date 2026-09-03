@@ -5,7 +5,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { emptyForgeData, parseForgeData, type ForgeData, type Repo } from './schema';
+import { SCHEMA_VERSION, emptyForgeData, parseForgeData, type ForgeData, type Repo } from './schema';
 
 export const ARTIFACT_FILENAME = 'forge.json';
 export const BLOB_DIRNAME = 'blobs';
@@ -21,7 +21,20 @@ export function loadForgeData(outDir: string): ForgeData {
     console.warn(`[frznforge] no artifact at ${file} — run \`npm run ingest\`. Building an empty site.`);
     data = emptyForgeData();
   } else {
-    data = parseForgeData(JSON.parse(fs.readFileSync(file, 'utf8')));
+    const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+    // An artifact from an older frznforge is the single most likely reason validation fails,
+    // and a bare ZodError dump ("expected 8") does not tell anyone what to do about it. The
+    // artifact is fully derived from the repos, so the fix is always the same: re-ingest.
+    const found = (raw as { schemaVersion?: unknown } | null)?.schemaVersion;
+    if (typeof found === 'number' && found !== SCHEMA_VERSION) {
+      throw new Error(
+        `[frznforge] ${file} was written by a different version of frznforge ` +
+          `(artifact schema v${found}; this build needs v${SCHEMA_VERSION}). ` +
+          'Re-run `npm run build` (or `npm run ingest`) to rebuild it — nothing is lost, ' +
+          'the artifact is derived entirely from your repositories.',
+      );
+    }
+    data = parseForgeData(raw);
   }
   cache = { outDir, data };
   return data;

@@ -6,7 +6,7 @@ browser, history, diffs, branches, tags, releases, insights — as plain HTML.
 
 No server. No database. No accounts, issues, pull requests or stars.
 
-**Status: 0.2.0, released 2026-08-30** — the second release. Everything in
+**Status: 0.3.0, released 2026-08-31** — the third release. Everything in
 [CHANGELOG.md](CHANGELOG.md) is implemented and tested, and it builds this project's own site.
 Expect rough edges; the known ones are listed under [Status](#status) below.
 
@@ -37,7 +37,12 @@ plus a content-addressed blob store.
 - **Deterministic**: the same repositories at the same commits produce a byte-identical
   artifact. No clock values, no unsorted iteration.
 - Nothing about a repository fails a build. Empty repos, missing paths, a forge that is down —
-  all warnings, printed at ingest and counted in the site footer.
+  all warnings, printed at ingest and counted in the site footer. Rate limits back off per
+  forge rather than per repo, and repeat builds can skip fetches they can prove are
+  unnecessary (`ingest.reuse`).
+- **People**: contributors are discovered from git, and `contributors[]` lets you give them a
+  real name, picture, blurb and link — as `owner.avatar` and `organizations[].avatar` do for
+  you and your groups. Pictures are files in `public/`, never third-party URLs.
 
 **Site** — `astro build` turns the artifact into static pages.
 
@@ -71,17 +76,21 @@ box.
 npm install
 # edit frznforge.config.ts — your name, and the repos to publish
 # edit content/profile.md  — bio, links, pinned repos
-npm run ingest     # git → data/forge.json + blobs + archives
-npm run dev        # http://localhost:4321/
+npm run build      # ingest (git → data/forge.json + blobs) then astro build → dist/
+npm run dev        # serve the site you just built, http://localhost:4321/
 ```
 
-`npm run build` (= ingest + `astro build`) writes the deployable site to `dist/`.
+`npm run dev` serves what the last `npm run build` produced — it rebuilds nothing, so re-run
+`npm run build` to see a change. (`npm run astro dev` is the raw Astro dev server if you want
+HMR on components and styles.)
 
 Two commands help you fill that config in:
 `npm run frznforge -- new <dir>` scaffolds fresh authoring files, and
 `npm run frznforge -- init` walks a forge account and writes the repo entries for you.
 `init --web` opens a local browser editor for the whole config — the repo picker plus site,
-owner, theme, ingest, organizations and hosted sites — and for your `profile.md`.
+owner, theme, ingest, organizations, contributors and hosted sites — and for your
+`profile.md`. Entries can be edited in place, avatars can be uploaded, and **Done** saves
+anything still unsaved.
 
 ## Documentation
 
@@ -116,8 +125,9 @@ Keep all three green. No test may touch the network.
 
 ## Status
 
-**0.2.0**, released 2026-08-30 — the second release. Artifact schema v7.
-(0.1.0, released 2026-08-24, was the first usable one, on schema v5.)
+**0.3.0**, released 2026-08-31 — the third release. Artifact schema v8.
+(0.2.0, released 2026-08-30, was on schema v7; 0.1.0, released 2026-08-24, was the first
+usable one, on schema v5.)
 
 Rough edges, honestly:
 

@@ -6,7 +6,7 @@
  * generator in as a dependency. What this command does instead is the honest half of the same
  * job — it writes every file a site owner actually authors (config, profile, notes, orgs,
  * .gitignore, their own README) into a directory, correct on the first build, with one commented
- * example of every source type. The engine (`src/`, `astro.config.mjs`, `package.json`, …) comes
+ * example of every source type. The engine (`src/`, `astro.config.ts`, `package.json`, …) comes
  * from a frznforge checkout; `docs/user/starting-a-site.md` spells out both halves and what the
  * npm route would need.
  *
@@ -325,13 +325,13 @@ history and the prose, rebuilt from scratch on every deploy.
 
 \`\`\`sh
 npm install     # once
-npm run dev     # local preview on http://localhost:4321 (uses the last ingest)
 npm run build   # ingest the repos, then build the static site into dist/
+npm run dev     # preview the site you just built, on http://localhost:4321
 \`\`\`
 
-\`npm run build\` is \`npm run ingest\` followed by \`astro build\`. Run \`npm run ingest\` on its
-own after changing which repositories you list, then \`npm run dev\` to look at the result.
-Everything in \`dist/\` is plain files — upload them anywhere.
+\`npm run build\` is \`npm run ingest\` followed by \`astro build\`. \`npm run dev\` only serves
+what that produced — it rebuilds nothing — so after changing which repositories you list, run
+\`npm run build\` again. Everything in \`dist/\` is plain files — upload them anywhere.
 
 ## What to edit
 
@@ -348,7 +348,7 @@ site builds correctly but lists nothing.
 ## Where the engine lives
 
 This directory holds the files **you** author. The generator itself — \`src/\`,
-\`astro.config.mjs\`, \`package.json\`, \`scripts/\` — comes from a frznforge checkout and belongs
+\`astro.config.ts\`, \`package.json\`, \`scripts/\` — comes from a frznforge checkout and belongs
 in this same directory. See \`docs/user/starting-a-site.md\` in that checkout if these files
 are not here yet.
 `;
@@ -495,7 +495,7 @@ export function nextSteps(result: ScaffoldResult, cwd: string = process.cwd()): 
   const steps: string[][] = [];
   if (!result.engineReady) {
     steps.push([
-      `Put the frznforge engine in ${where}: copy src/, scripts/, public/, astro.config.mjs,`,
+      `Put the frznforge engine in ${where}: copy src/, scripts/, public/, astro.config.ts,`,
       'svelte.config.js, tsconfig.json and package.json from your frznforge checkout, then run',
       'npm install there. (docs/user/starting-a-site.md — there is no npm package to install yet.)',
     ]);

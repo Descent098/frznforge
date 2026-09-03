@@ -272,7 +272,8 @@ under `--web` the picking and the confirming both happen in the page.
 
 #### What you see
 
-The wizard opens one page with five sections, and it does not move on until you tell it to:
+The wizard opens one page with five numbered sections plus a **Done**/**Cancel** control,
+and it does not move on until you tell it to:
 
 1. **Source** — provider, account, and (for Gitea/Forgejo, or behind *Custom API host* for the
    others) the instance URL. Under the fields it says which environment variable it consulted
@@ -512,6 +513,23 @@ footer. The import-related ones:
 GitHub's anonymous limit is 60 requests/hour per IP; a token raises it to 5,000. GitLab,
 Gitea and Forgejo vary per instance. frznforge makes roughly two API calls per remote repo
 per build, so a token is worth setting even for a handful of repos.
+
+**What the build does about it (0.3.0).** A 429 — or GitHub's 403-with-no-quota-left — is
+retried with exponential backoff keyed to the **forge**, not to the repo, so the repos being
+ingested in parallel from one host wait behind a single timer instead of each hammering the
+window; a different forge is unaffected. The provider's own `Retry-After` is honoured. If a
+forge asks for longer than a minute, the build stops calling it for that period and the
+remaining repos on that host fall back to their cached metadata immediately rather than each
+burning a retry ladder. Repos with **no** cached metadata are fetched first, so a run that
+does hit a limit spends its budget where there is nothing to fall back on.
+
+If you build often against a large account, two opt-in knobs in
+[configuration.md](configuration.md) cut the traffic further:
+`ingest.reuse.cooldownSeconds` (skip a repo fetched successfully within the cooldown — this
+is the one that reduces API calls) and `ingest.reuse.skipUnchanged` (one `git ls-remote`
+decides whether the mirror already has everything, which saves *git* traffic). Set
+`ingest.failOnDegraded: true` if you would rather a rate-limited build failed than quietly
+published stale metadata.
 
 ---
 

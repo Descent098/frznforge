@@ -22,17 +22,17 @@
   },
   "dependencies": {
     "@astrojs/svelte": "^9.0.1",
-    "astro": "^7.2.4",
-    "marked": "^18.0.10",
+    "astro": "^7.2.9",
+    "marked": "^18.0.11",
     "mermaid": "^11.17.2",
-    "svelte": "^5.56.10",
+    "svelte": "^5.57.0",
     "typescript": "^6.0.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@playwright/test": "^1.62.1",
-    "@types/node": "^26.2.0",
-    "tsx": "^4.23.12",
+    "@types/node": "^26.4.0",
+    "tsx": "^4.23.13",
     "vitest": "^4.1.11"
   }
 }

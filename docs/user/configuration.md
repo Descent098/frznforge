@@ -1,17 +1,18 @@
 # Configuration
 
-frznforge is configured in three places:
+frznforge is configured in five places:
 
 | Where | What |
 |---|---|
-| `frznforge.config.ts` (project root) | Site title/URL, owner, colour palette, the list of repositories to ingest, organizations, notes folder, ingest limits, listing page size |
+| `frznforge.config.ts` (project root) | Site title/URL, owner, colour palette, the list of repositories to ingest, organizations, contributors, notes folder, ingest limits, listing page size |
 | `content/profile.md` | The profile page: frontmatter for links / location / pinned repos, markdown body rendered as your README |
 | `content/orgs/<slug>.md` | One organization's page: frontmatter for links / pinned repos, markdown body |
 | `content/notes/` | Your notes — one file, or one folder, per note |
 | `.frznforge.json` inside each repository | Per-repo metadata: name, description, links, tags, template flag, license |
 
-Everything is read at **build time**. Change something → run `npm run build` (or
-`npm run ingest` then `npm run dev`) to see it.
+Everything is read at **build time**. Change something → run `npm run build`, then
+`npm run dev` to look at the result (`npm run dev` serves the last build; it rebuilds
+nothing).
 
 ## `frznforge.config.ts`
 
@@ -420,6 +421,9 @@ frznforge never fails a build because of a repo's state; it emits a warning and 
 | `hosting.sites[].repo` names a slug no ingested repo has | That entry is dropped, the site is not served (`hosting-unknown-repo`) |
 | A hosted repo has no branch to serve — the configured `branch` does not exist, or none was configured and none of `gh-pages`/`main`/`master` exist | That entry is dropped, the site is not served (`hosting-branch-missing`) |
 | A file on a hosted branch has `#` or `%` in its path | The rest of the site is still served; those files get no URL and are missing from it (`hosting-file-unservable`) |
+| `ingest.maxCommitAgeDays` cut a branch's history | The older commits are dropped, the branch head is always kept (`commits-aged-out`) |
+| A note's filename has `#` or `%` in it | It still renders inline, but gets no raw/download URL (`note-file-unservable`) |
+| A `contributors[]` entry claims emails no ingested repo has commits from | The entry decorates nobody and is ignored (`contributor-unknown-email`) |
 
 Warnings are printed by `npm run ingest` and counted in the site footer.
 
