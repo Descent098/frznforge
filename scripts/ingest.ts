@@ -21,6 +21,12 @@ try {
 
 const started = performance.now();
 const config = await loadConfig();
+if (args.backfillMetadata) {
+  console.log(
+    '  --backfill-metadata: only repos with no cached provider metadata will be fetched, ' +
+      'and git is not touched at all.',
+  );
+}
 if (args.noCache) {
   // ingest() forces a full fetch and reads no provider/scan caches for this run; fresh
   // results are still recorded (under the real config's hash) for the next ordinary run.
@@ -57,7 +63,7 @@ const { data, blobs, archives, remotes } = await ingest(
           (repo.empty ? ' (empty)' : ''),
       ),
   },
-  { noCache: args.noCache },
+  { noCache: args.noCache, backfillMetadata: args.backfillMetadata },
 );
 
 try {
@@ -74,8 +80,33 @@ for (const w of data.warnings) {
   console.warn(`  ⚠ [${w.code}]${w.repo ? ` ${w.repo}:` : ''} ${w.message}`);
 }
 
+/** Repos that ended the run on cached-or-missing provider data. Read twice below. */
+const degraded = degradedRepos(data);
+
+// In backfill mode, say plainly which repos actually used the quota and which replayed, so a
+// run that filled nothing is not mistaken for a run that had nothing to fill.
+if (args.backfillMetadata) {
+  const replayed = remotes.filter((r) => r.action === 'reused');
+  const attempted = remotes.filter((r) => r.action !== 'reused');
+  const stillMissing = attempted.filter((r) => degraded.includes(r.slug));
+  const filled = attempted.filter((r) => !degraded.includes(r.slug) && !r.skipped);
+  console.log(
+    `  backfill: ${filled.length} filled, ${stillMissing.length} still missing, ` +
+      `${replayed.length} already had metadata (no network)`,
+  );
+  if (filled.length > 0) console.log(`    ✓ filled: ${filled.map((r) => r.slug).join(', ')}`);
+  if (stillMissing.length > 0) {
+    console.log(`    ⚠️ still missing: ${stillMissing.map((r) => r.slug).join(', ')}`);
+    console.log('      Run it again later — the quota resets, and each run only spends it on these.');
+  }
+}
+
 // Remote trouble is a warning, never an error — say so plainly so a stale build is obvious.
-const cached = remotes.filter((r) => r.action === 'cached');
+//
+// In backfill mode `'cached'` is not trouble: git is deliberately never fetched, so every
+// repo reports it. Saying "13 served from cache" about the 13 repos whose metadata was just
+// successfully fetched is exactly backwards, so that line is left to the backfill summary.
+const cached = args.backfillMetadata ? [] : remotes.filter((r) => r.action === 'cached');
 const skipped = remotes.filter((r) => r.skipped);
 if (cached.length > 0 || skipped.length > 0) {
   const parts = [
@@ -88,7 +119,6 @@ if (cached.length > 0 || skipped.length > 0) {
 // `ingest.failOnDegraded`: the artifact is already written and the warnings are already
 // printed, so this only decides the exit code. Opt-in, for CI that would rather fail than
 // publish stale metadata after a rate limit.
-const degraded = degradedRepos(data);
 if (config.ingest.failOnDegraded && degraded.length > 0) {
   console.error(
     `frznforge ingest: ${degraded.length} source(s) ended the run degraded ` +

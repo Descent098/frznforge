@@ -71,11 +71,15 @@ function makeConfig(
 }
 
 describe('parseIngestArgs', () => {
-  it('parses --no-cache and rejects anything else', () => {
-    expect(parseIngestArgs([])).toEqual({ noCache: false });
-    expect(parseIngestArgs(['--no-cache'])).toEqual({ noCache: true });
+  it('parses the flags and rejects anything else', () => {
+    expect(parseIngestArgs([])).toEqual({ noCache: false, backfillMetadata: false });
+    expect(parseIngestArgs(['--no-cache'])).toEqual({ noCache: true, backfillMetadata: false });
+    expect(parseIngestArgs(['--backfill-metadata'])).toEqual({ noCache: false, backfillMetadata: true });
     expect(() => parseIngestArgs(['--nope'])).toThrow(/unknown flag: --nope/);
     expect(() => parseIngestArgs(['--no-cache', 'extra'])).toThrow(/unknown flag: extra/);
+    // Opposites: --no-cache reads nothing from the provider cache, so every repo would look
+    // like a gap and the "backfill" would quietly be a full refetch.
+    expect(() => parseIngestArgs(['--no-cache', '--backfill-metadata'])).toThrow(/opposites/);
   });
 });
 
@@ -818,5 +822,138 @@ describe('misses-first ordering (0.3.0)', () => {
     const slugs = (json: string) => (JSON.parse(json) as { repos: Array<{ slug: string }> }).repos.map((r) => r.slug);
     expect(slugs(forward)).toEqual(['alpha', 'bravo']);
     expect(slugs(reversed)).toEqual(['alpha', 'bravo']);
+  });
+});
+
+describe('--backfill-metadata (0.3.0)', () => {
+  /**
+   * Two remote repos sharing one importer, so a run's API calls can be counted per repo.
+   * Mirrors the real failure: git is unmetered and always works, metadata is metered.
+   */
+  function pair() {
+    const root = tempDir('backfill-root');
+    const origins: Record<string, FixtureRepo> = {};
+    for (const name of ['alpha', 'bravo']) {
+      const r = newFixture(name);
+      r.writeAndCommit({ [`${name}.txt`]: `${name}\n` }, name, { date: at(0) });
+      origins[name] = r;
+    }
+    const cfg = makeConfig(root, [
+      { type: 'gitea', host: 'https://gitea.example.com', owner: 'acme', repo: 'alpha' },
+      { type: 'gitea', host: 'https://gitea.example.com', owner: 'acme', repo: 'bravo' },
+    ], { concurrency: 1 });
+
+    const calls: string[] = [];
+    const failFor = new Set<string>();
+    const deps = (): PrepareRemoteDeps => ({
+      env: {},
+      createImporter: (source) => {
+        const name = (source as { repo: string }).repo;
+        return {
+          provider: 'gitea',
+          async fetchMeta() {
+            calls.push(`meta:${name}`);
+            if (failFor.has(name)) throw new ImporterError('rate-limit', 'slow down', { status: 429 });
+            return {
+              name: null,
+              description: `${name} from the provider`,
+              homepage: null,
+              topics: [],
+              license: null,
+              defaultBranch: 'main',
+              webUrl: `https://gitea.example.com/acme/${name}`,
+              cloneUrl: `https://gitea.example.com/acme/${name}.git`,
+              issuesUrl: null,
+              template: false,
+              archived: false,
+            } satisfies ImportedRepoMeta;
+          },
+          async fetchReleases() {
+            calls.push(`rel:${name}`);
+            if (failFor.has(name)) throw new ImporterError('rate-limit', 'slow down', { status: 429 });
+            return { releases: [] as Release[], truncated: false };
+          },
+        };
+      },
+      ensureMirror: (source, cachePath, opts) =>
+        ensureMirror(source, cachePath, {
+          ...opts,
+          cloneUrl: origins[(source as { repo: string }).repo]!.dir.replace(/\\/g, '/'),
+        }),
+    });
+    return { cfg, calls, deps, failFor };
+  }
+
+  it('spends the quota only on the repo that has no metadata', async () => {
+    // Reproduces the reported failure and then fixes it: bravo is rate-limited on the first
+    // run and left blank, while alpha's metadata lands. A NORMAL second run would re-request
+    // alpha's metadata too; the backfill run must ask only about bravo.
+    const s = pair();
+    s.failFor.add('bravo');
+    const run1 = await ingest(s.cfg, {}, { remote: s.deps() });
+    expect(run1.data.repos.find((r) => r.slug === 'alpha')!.description).toBe('alpha from the provider');
+    expect(run1.data.repos.find((r) => r.slug === 'bravo')!.description).toBeNull();
+
+    s.failFor.clear();
+    s.calls.length = 0;
+    const run2 = await ingest(s.cfg, {}, { remote: s.deps(), backfillMetadata: true });
+
+    // alpha already had its answer: no API call at all. Only bravo's gap costs anything.
+    expect(s.calls.filter((c) => c.endsWith(':alpha'))).toEqual([]);
+    expect(s.calls.filter((c) => c.endsWith(':bravo')).length).toBeGreaterThan(0);
+    // ...and the gap is filled, with alpha's own metadata still intact.
+    expect(run2.data.repos.find((r) => r.slug === 'bravo')!.description).toBe('bravo from the provider');
+    expect(run2.data.repos.find((r) => r.slug === 'alpha')!.description).toBe('alpha from the provider');
+  });
+
+  it('touches git for nothing, and says so by never reporting a fetch', async () => {
+    const s = pair();
+    await ingest(s.cfg, {}, { remote: s.deps() });
+    const run2 = await ingest(s.cfg, {}, { remote: s.deps(), backfillMetadata: true });
+    // Every repo already had metadata, so every one replays whole: no git, no API.
+    expect(run2.remotes.every((r) => r.action === 'reused')).toBe(true);
+    expect(s.calls.filter((c) => c.startsWith('meta:')).length).toBe(2); // run 1 only
+  });
+
+  it('emits a complete artifact, byte-identical to the full run it replaces', async () => {
+    // The safety argument: backfill is a cheaper route to the same bytes, never a partial one.
+    const full = pair();
+    full.failFor.add('bravo');
+    const r1 = await ingest(full.cfg, {}, { remote: full.deps() });
+    await writeArtifact(r1.data, r1.blobs, r1.archives, full.cfg.outDir);
+    full.failFor.clear();
+    const viaFullRun = await ingest(full.cfg, {}, { remote: full.deps() });
+
+    const back = pair();
+    back.failFor.add('bravo');
+    const b1 = await ingest(back.cfg, {}, { remote: back.deps() });
+    await writeArtifact(b1.data, b1.blobs, b1.archives, back.cfg.outDir);
+    back.failFor.clear();
+    const viaBackfill = await ingest(back.cfg, {}, { remote: back.deps(), backfillMetadata: true });
+
+    const strip = (json: string) => json.replace(/"[A-Za-z]:\\[^"]*"/g, '"<path>"');
+    expect(strip(serializeForgeData(viaBackfill.data))).toBe(strip(serializeForgeData(viaFullRun.data)));
+  });
+
+  it('does not downgrade what the run log knows about git', async () => {
+    // A backfill never asks git anything, so recording `gitOk: false` would be a lie that
+    // then blocks the cooldown. The previous run's answer has to carry forward.
+    const s = pair();
+    await ingest(s.cfg, {}, { remote: s.deps() });
+    const before = (await readRunLog(s.cfg.cacheDir))!.remotes;
+    expect(Object.values(before).every((e) => e.gitOk)).toBe(true);
+
+    await ingest(s.cfg, {}, { remote: s.deps(), backfillMetadata: true });
+    const after = (await readRunLog(s.cfg.cacheDir))!.remotes;
+    expect(Object.values(after).every((e) => e.gitOk)).toBe(true);
+    expect(Object.values(after).every((e) => e.heads !== null)).toBe(true);
+  });
+
+  it('still reports a gap it could not fill, rather than looking successful', async () => {
+    const s = pair();
+    s.failFor.add('bravo');
+    await ingest(s.cfg, {}, { remote: s.deps() });
+    const run2 = await ingest(s.cfg, {}, { remote: s.deps(), backfillMetadata: true });
+    expect(run2.data.warnings.some((w) => w.code === 'remote-rate-limited' && w.repo === 'bravo')).toBe(true);
   });
 });

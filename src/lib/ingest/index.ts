@@ -112,6 +112,15 @@ export interface IngestOptions {
    * so the next ordinary run benefits from this one.
    */
   noCache?: boolean;
+  /**
+   * `--backfill-metadata`: only repos with no cached provider metadata talk to the network,
+   * and nothing talks to git. See `PrepareRemoteOptions.backfillMetadata` for why.
+   *
+   * The artifact is complete either way — repos that are skipped replay their cached answers,
+   * exactly as the freshness window does — so this is a cheaper route to the same output,
+   * not a partial one.
+   */
+  backfillMetadata?: boolean;
 }
 
 /** Run `fn` over `items` with at most `limit` in flight; results keep input order. */
@@ -194,6 +203,7 @@ export async function ingest(
   // reach the artifact (it only ever lands in the cacheDir run log).
   const reuse = config.ingest.reuse;
   const noCache = options.noCache ?? false;
+  const backfillMetadata = options.backfillMetadata ?? false;
   const reuseReads = reuse.enabled && !noCache;
   const now = () => options.remote?.now?.() ?? new Date();
   // Hashed over the CALLER's config, before any --no-cache override — the run log this run
@@ -215,6 +225,8 @@ export async function ingest(
   // This reorders *processing*, never output: assembly sorts by slug and the run log is
   // keyed by path, so the artifact is byte-identical whatever order the pool runs in — the
   // "byte-identical under a reordered run" test pins that.
+  // Misses first — and in backfill mode they are the ONLY sources that will use the network,
+  // so this is what decides where a limited quota goes.
   const order = await orderMissesFirst(config, noCache);
 
   const results = await pool(order, config.ingest.concurrency, async (src) => {
@@ -251,7 +263,7 @@ export async function ingest(
     let remoteWarnings: Warning[] = [];
     let remote: RemoteStatus | null = null;
     // Run-log v2: which half of the fetch worked, and the mirror's refs afterwards.
-    let fetchStatus: { git: boolean; meta: boolean } | null = null;
+    let fetchStatus: { git: boolean | null; meta: boolean } | null = null;
     let heads: Record<string, string> | null = null;
 
     const skipRemote = (message: string) => ({
@@ -296,6 +308,7 @@ export async function ingest(
           // when reuse reads are on at all (`--no-cache` means fetch everything).
           ...(reuseReads && reuse.skipUnchanged ? { skipUnchanged: true } : {}),
           ...(reuseReads && prevEntry?.heads ? { knownHeads: prevEntry.heads } : {}),
+          ...(backfillMetadata ? { backfillMetadata: true } : {}),
         });
       } catch (e) {
         remote = { slug, provider: src.type, action: 'missing', skipped: true, cooldown: false };
@@ -356,7 +369,7 @@ export async function ingest(
     action: MirrorAction;
     skipped: boolean;
     warnings: Warning[];
-    fetchStatus: { git: boolean; meta: boolean } | null;
+    fetchStatus: { git: boolean | null; meta: boolean } | null;
     heads: Record<string, string> | null;
   }> = [];
   for (const { result, remoteWarnings, remote, remoteAbsPath, fetchStatus, heads, org } of results) {
@@ -481,8 +494,10 @@ export async function ingest(
         fetchedAt: now().toISOString(),
         fresh: !run.skipped && !run.warnings.some((w) => DEGRADED_WARNING_CODES.has(w.code)),
         // v2: the halves, straight from prepareRemote. A run that never got that far
-        // (an unexpected throw) reports both failed rather than guessing.
-        gitOk: run.fetchStatus?.git ?? false,
+        // (an unexpected throw) reports both failed rather than guessing. A `null` git half
+        // means "not attempted this run" — only backfill mode does that — so the previous
+        // run's answer carries forward instead of being overwritten with a false failure.
+        gitOk: run.fetchStatus?.git ?? prev?.gitOk ?? false,
         metaOk: run.fetchStatus?.meta ?? false,
         // Heads describe the mirror as it now stands. When they could not be read, keep the
         // previous baseline rather than erasing it: a forgotten baseline only costs one

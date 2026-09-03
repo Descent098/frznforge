@@ -166,6 +166,35 @@ Notes
   npm run ingest -- --no-cache
   ```
 
+  The opposite flag is **`--backfill-metadata`**, for the case where the API quota, not the
+  network, is what is failing:
+
+  ```bash
+  npm run ingest -- --backfill-metadata
+  ```
+
+  It fetches provider metadata **only for repos that have none cached yet**, and touches git
+  for nothing at all. Cloning is unmetered, so on a large account the commits always arrive —
+  but metadata is metered, and an ordinary run re-requests it for every repo, spends the
+  budget on repos whose answer is already on disk, and runs out before it reaches the ones
+  that have nothing. That leaves the *same* repos blank on every run. This mode spends the
+  whole budget on the gaps, so a few repeat runs fill them in. It is not a partial ingest —
+  every other repo replays its cached answer, and the artifact it writes is the same one a
+  full run would have written.
+
+  Follow it with the render alone, not `npm run build` (which would re-ingest everything and
+  undo the point):
+
+  ```bash
+  npm run ingest -- --backfill-metadata
+  npm run astro build
+  ```
+
+  The render is not partial: a repo's description and license appear in the header of *every*
+  one of its pages, and in the listing, the profile, the org pages and the search index, so
+  there is no small set of pages to redo. On a 27,000-page site the full render takes about
+  two minutes with the highlight memo warm.
+
   The highlight half is bypassed with `FRZNFORGE_NO_HL_CACHE=1` (it runs during
   `astro build`, not during ingest). Deleting `cacheDir` is always safe: everything in it is
   rebuilt on demand.

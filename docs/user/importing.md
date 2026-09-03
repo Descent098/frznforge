@@ -531,6 +531,20 @@ decides whether the mirror already has everything, which saves *git* traffic). S
 `ingest.failOnDegraded: true` if you would rather a rate-limited build failed than quietly
 published stale metadata.
 
+**If some repos are permanently blank**, the quota ran out before the build reached them and
+will do so again next run, because an ordinary run re-requests metadata for every repo —
+including the ones whose answer is already cached. Fix it with:
+
+```bash
+npm run ingest -- --backfill-metadata
+```
+
+which asks the provider only about the repos that have no metadata yet, and skips git
+entirely, then `npm run astro build` to render (plain `npm run build` would re-ingest
+everything and spend the budget it just saved). Repeat it until it reports `0 still missing`. A token is the other half of the
+answer: anonymous GitHub allows 60 requests an hour, and frznforge needs roughly two per
+repo, so an account of more than ~30 repos cannot be refreshed in one anonymous run at all.
+
 ---
 
 ## 8. Verify it worked

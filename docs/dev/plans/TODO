@@ -49,10 +49,29 @@ Additional things to keep in mind:
 - [x] Hitting `done` in the web UI should also save/apply all current changes
 
 
+## Follow-ups after 0.3.0
+
+- [x] Fetch only the metadata that is missing, for a rate-limited account
+  (`npm run ingest -- --backfill-metadata`). Trialled on the real 72-repo corpus: 13 blank
+  repos filled in 30s, 59 replayed with no network, no git traffic.
+  - [ ] Rebuild only the affected pages — **deliberately not done** (your call, 2026-09-03).
+    Metadata is not confined to the overview page: `RepoHeader` draws the description and
+    license on every page of a repo, and descriptions/tags drive the listing, profile, org
+    pages and the search index. A full render of your 27,060 pages is 2 minutes warm, so
+    `npm run astro build` after a backfill is the whole answer. Written up in
+    `docs/dev/performance.md`.
+
 ## For human
 
 This section is for me to keep track of what I need to manually review, feel free to add to this
 
+- [ ] **Set a GitHub token — this is the actual root cause of the blank repos.** The
+  `frznforge - Copy` run had no `GITHUB_TOKEN`/`FRZNFORGE_GITHUB_TOKEN` in the environment.
+  Anonymous GitHub allows **60 requests an hour**; 72 repos need roughly 144, so a full
+  metadata refresh can never complete anonymously no matter how the fetching is ordered —
+  the run log showed `metaOk: false` for all 72 sources. A token raises it to 5,000/hour and
+  the problem disappears. `--backfill-metadata` makes the anonymous case survivable (13
+  requests instead of 144) but a token makes it a non-issue.
 - [ ] **PUSH THE RELEASE.** `git ls-remote` says the documented clone URL works, but the
   remote's `master` is at `fb7235b` — the **0.2.0** commit. None of 0.3.0 is pushed, so a
   reader following `quick-start.md` today gets 0.2.0 while the docs describe 0.3.0. This is

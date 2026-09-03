@@ -457,7 +457,7 @@ export interface PrepareRemoteResult {
    * is raised both for a mirror that could not be refreshed and for provider metadata
    * served from cache: the code alone cannot tell the two halves apart.
    */
-  fetchStatus: { git: boolean; meta: boolean } | null;
+  fetchStatus: { git: boolean | null; meta: boolean } | null;
 }
 
 /** A configured remote source, optionally carrying the resolved cache path from the config. */
@@ -480,6 +480,23 @@ export interface PrepareRemoteOptions {
    */
   skipUnchanged?: boolean;
   knownHeads?: Record<string, string> | null;
+  /**
+   * `--backfill-metadata`: spend the provider's rate limit ONLY on repos that have no
+   * cached metadata yet, and do not touch git at all.
+   *
+   * The case it exists for: a large account against an anonymous or nearly-spent API quota.
+   * Cloning is cheap and unmetered, so every mirror succeeds and every repo gets its commits
+   * — but metadata is metered, and a full run re-requests it for every repo, including the
+   * ones whose cached answer is already on disk. The quota runs out partway through and the
+   * same tail of repos is left blank on every subsequent run, because each run spends the
+   * budget the same way before reaching them.
+   *
+   * In this mode a repo with cached metadata makes no API call and no git call (its cached
+   * answer is used with no warning — the same reasoning as the freshness window: it is
+   * exactly what a fetch would have returned), so the whole budget goes to the repos that
+   * have nothing.
+   */
+  backfillMetadata?: boolean;
 }
 
 function warn(code: Warning['code'], message: string): Warning {
@@ -635,9 +652,14 @@ export async function prepareRemote(
   const onDisk = await readProviderCache(cacheFile);
   const cached = opts.noCacheReads ? null : onDisk;
 
+  // Backfill mode: this repo already has its metadata, so it needs nothing from the network.
+  // Handled by the same replay path as the freshness window — the two skips differ only in
+  // WHY they fired, and both mean "the cache is exactly what a fetch would return".
+  const backfillSatisfied = opts.backfillMetadata === true && cached !== null;
+
   // Freshness window: everything a fetch would return is already on disk from a fully
   // successful fetch moments ago. No importer call, no git, no warning — same bytes.
-  if (opts.skipFetch && cached && (await isGitRepo(cachePath))) {
+  if ((opts.skipFetch || backfillSatisfied) && cached && (await isGitRepo(cachePath))) {
     const providerMeta = cached.meta;
     const releases = wantProviderReleases ? cached.releases : [];
     const webUrl = isHttpUrl(providerMeta?.webUrl) ? providerMeta.webUrl : deriveWebUrl(source);
@@ -732,7 +754,9 @@ export async function prepareRemote(
   const cloneUrl = isHttpUrl(providerMeta?.cloneUrl) ? providerMeta.cloneUrl : `${webUrl}.git`;
 
   const result = await mirror(source, cachePath, {
-    fetch: cfg.ingest.fetch,
+    // Backfill spends nothing on git: the mirrors are already there (cloning is unmetered,
+    // which is why the commits were never the problem) and this run exists to buy metadata.
+    fetch: opts.backfillMetadata ? 'never' : cfg.ingest.fetch,
     cloneUrl,
     token,
     ...(opts.skipUnchanged ? { skipUnchanged: true } : {}),
@@ -744,7 +768,9 @@ export async function prepareRemote(
   if (result.error) {
     warnings.push(warn('remote-fetch-failed', redactSecrets(result.error.message, token)));
   }
-  if (result.action === 'cached' && cfg.ingest.fetch !== 'never') {
+  // 'cached' means the update failed — EXCEPT in backfill mode, where not updating is the
+  // whole point and warning about it would flag every repo in a healthy run.
+  if (result.action === 'cached' && cfg.ingest.fetch !== 'never' && !opts.backfillMetadata) {
     warnings.push(warn('remote-cache-stale', 'the mirror could not be refreshed; the cached clone was used'));
   }
 
@@ -775,7 +801,13 @@ export async function prepareRemote(
       // means it asked and was told there was nothing to fetch — all three leave the mirror
       // provably up to date. 'cached' means the update FAILED and the old mirror was used;
       // 'missing' means there is no mirror at all.
-      git: result.action === 'fetched' || result.action === 'cloned' || result.action === 'current',
+      //
+      // `null` = not attempted, which only happens in backfill mode. It is NOT `false`: the
+      // caller carries the previous run's answer forward rather than recording a failure that
+      // never happened, so a backfill cannot downgrade what the run log knows about git.
+      git: opts.backfillMetadata && result.action !== 'missing'
+        ? null
+        : result.action === 'fetched' || result.action === 'cloned' || result.action === 'current',
       // Metadata is healthy only when every call we wanted actually succeeded — a releases
       // failure that fell back to cache is still a failed metadata fetch.
       meta: freshMeta && (!wantProviderReleases || freshReleases),

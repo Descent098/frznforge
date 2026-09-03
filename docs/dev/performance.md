@@ -271,7 +271,15 @@ the ones worth knowing about:
 ## Measured, then rejected again: skip-unchanged-pages (0.2.0)
 
 The 0.2.0 wish list re-floated "if the most recent commit hash matches the one on the page,
-skip rebuilding it in dist". The standing rejection above holds. What changed in 0.2.0 is that
+skip rebuilding it in dist". The standing rejection above holds — and it was re-tested in
+0.3.0 against a concrete case. Backfilling metadata for 13 repos of 73 looks like it should
+only need those repos' overview pages re-rendered; it does not. A repo's description and
+license badge are drawn by `RepoHeader.astro` on **every** page of that repo (thousands of
+blob and tree pages), and its description and tags also feed the listing, the profile, the
+org pages and `search-index.json`. The set of pages a metadata change can touch is therefore
+most of the site, and the measured cost of just re-rendering everything is **2 minutes** for
+27,060 pages with the highlight memo warm — far too little to justify a copy-forward manifest
+that can be silently wrong. Owner decision, 2026-09-03: leave it. What changed in 0.2.0 is that
 the *goal* behind the request — a faster rebuild — was met without taking the risk: the
 highlight memo above cut a no-change rebuild by 66% by memoizing a pure function, leaving every
 page rendered and every byte verified. That is the cheap 84% of the problem; skipping pages

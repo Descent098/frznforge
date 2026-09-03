@@ -362,14 +362,32 @@ export async function rehydrateScan(
 export interface IngestArgs {
   /** `--no-cache`: ignore the provider cache, the freshness window and the scan cache. */
   noCache: boolean;
+  /**
+   * `--backfill-metadata`: fetch provider metadata ONLY for repos that have none yet, and
+   * touch git for nothing. Everything else replays from cache.
+   *
+   * For a large account against a spent or anonymous API quota: cloning is unmetered so the
+   * commits always arrive, but a normal run re-requests metadata for every repo and runs out
+   * of budget before it reaches the ones that never got any — leaving the same tail blank
+   * every time. This spends the whole budget on the gaps.
+   */
+  backfillMetadata: boolean;
 }
 
 /** Parse `npm run ingest -- <flags>`. Throws on anything unrecognised. */
 export function parseIngestArgs(argv: string[]): IngestArgs {
-  const args: IngestArgs = { noCache: false };
+  const args: IngestArgs = { noCache: false, backfillMetadata: false };
   for (const a of argv) {
     if (a === '--no-cache') args.noCache = true;
-    else throw new Error(`unknown flag: ${a} (usage: npm run ingest [-- --no-cache])`);
+    else if (a === '--backfill-metadata') args.backfillMetadata = true;
+    else {
+      throw new Error(`unknown flag: ${a} (usage: npm run ingest [-- --no-cache | --backfill-metadata])`);
+    }
+  }
+  if (args.noCache && args.backfillMetadata) {
+    // --no-cache reads nothing from the provider cache, so every repo would look like a gap
+    // and the run would be a full refetch wearing the wrong name.
+    throw new Error('--no-cache and --backfill-metadata are opposites; pass only one');
   }
   return args;
 }
