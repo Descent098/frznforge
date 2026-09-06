@@ -17,6 +17,8 @@
 
 * **`--backfill-metadata` fills in repos the rate limit skipped.** `npm run ingest -- --backfill-metadata` asks the provider only about repos that have no cached metadata, and touches git for nothing. On a large account the commits always arrive (cloning is unmetered) while metadata is metered, so an ordinary run spends its budget re-requesting answers it already has and leaves the same tail of repos blank every time. Measured on a 72-repo account: 13 blank repos filled in 30s using 13 requests, with the other 59 replayed from cache and no git traffic at all. The artifact is the same one a full run would write — this is a cheaper route to it, not a partial one.
 
+* **`npm run build` takes flags.** It is a script rather than a chained `ingest && astro build`, so the two halves can be steered: `--no-ingest` renders the artifact already on disk (for iterating on templates and styles, or after a `--backfill-metadata` run), and ingest flags like `--backfill-metadata` are forwarded to the ingest step. Anything else is passed through to `astro build`. `--no-ingest` refuses to run when there is no artifact yet, rather than quietly building an empty site over a good one.
+
 ## Bug Fixes
 
 * **The wizard's Done button discarded unsaved edits.** Pressing Done ended the session without saving a settings field or profile body that had been edited but not explicitly saved. It now saves them first, and a value the config schema rejects keeps the wizard open with the error rather than exiting having thrown the edit away.

@@ -184,7 +184,7 @@ Ingest produced the *data*; the site itself is rendered by the build. Do that on
 serve it:
 
 ```
-$ npm run build      # = npm run ingest && astro build
+$ npm run build      # = ingest, then astro build
 $ npm run dev
 
 frznforge dev — serving dist/ from the most recent `npm run build`.
@@ -364,7 +364,7 @@ warned (`notes-dir-missing`) if that folder disappears — see
 ## 7. Build the real thing
 
 ```
-$ npm run build      # = npm run ingest && astro build
+$ npm run build      # = ingest, then astro build
 
 [build] 3798 page(s) built in 1m 57s
 [build] Complete!

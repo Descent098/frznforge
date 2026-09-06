@@ -9,7 +9,7 @@ the exact host settings for GitHub Pages, Cloudflare Pages, Netlify, and a plain
 ## 1. What `npm run build` produces
 
 ```
-$ npm run build      # = npm run ingest && astro build
+$ npm run build      # = ingest, then astro build
 
 frznforge ingest → …/data
   ▸ hello-forge

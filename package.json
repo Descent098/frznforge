@@ -9,7 +9,7 @@
     "dev": "tsx scripts/dev.ts",
     "frznforge": "tsx scripts/cli.ts",
     "ingest": "tsx scripts/ingest.ts",
-    "build": "npm run ingest && astro build",
+    "build": "tsx scripts/build.ts",
     "preview": "astro preview",
     "astro": "astro",
     "test": "vitest run",

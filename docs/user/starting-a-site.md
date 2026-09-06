@@ -217,7 +217,8 @@ npm run build    # ingest, then build the static site into dist/
 npm run dev      # serve dist/ on http://localhost:4321 — the last build, nothing rebuilt
 ```
 
-`npm run build` is just `npm run ingest && astro build`, and it is the only command that
+`npm run build` runs the ingest and then `astro build` (pass `--no-ingest` to skip the
+first half and re-render the artifact you already have), and it is the only command that
 changes what you see. `npm run dev` prints a notice saying so and then runs `astro preview`
 over `dist/`; run it before your first build and it tells you to build instead of failing on
 a missing directory. So the loop is **edit → `npm run build` → refresh the browser**, whether

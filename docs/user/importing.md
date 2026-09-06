@@ -540,8 +540,8 @@ npm run ingest -- --backfill-metadata
 ```
 
 which asks the provider only about the repos that have no metadata yet, and skips git
-entirely, then `npm run astro build` to render (plain `npm run build` would re-ingest
-everything and spend the budget it just saved). Repeat it until it reports `0 still missing`. A token is the other half of the
+entirely — or `npm run build -- --backfill-metadata` to do that and render in one step.
+Repeat it until it reports `0 still missing`. A token is the other half of the
 answer: anonymous GitHub allows 60 requests an hour, and frznforge needs roughly two per
 repo, so an account of more than ~30 repos cannot be refreshed in one anonymous run at all.
 

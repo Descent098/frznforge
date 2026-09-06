@@ -58,8 +58,13 @@ Additional things to keep in mind:
     Metadata is not confined to the overview page: `RepoHeader` draws the description and
     license on every page of a repo, and descriptions/tags drive the listing, profile, org
     pages and the search index. A full render of your 27,060 pages is 2 minutes warm, so
-    `npm run astro build` after a backfill is the whole answer. Written up in
+    `npm run build -- --no-ingest` after a backfill is the whole answer. Written up in
     `docs/dev/performance.md`.
+- [x] A flag to build without ingesting (`npm run build -- --no-ingest`). `npm run build` is
+  now `scripts/build.ts` rather than a chained npm script, because a chain gives every `--`
+  argument to its LAST command. It routes three ways: `--no-ingest` for itself, ingest flags
+  (`--no-cache`, `--backfill-metadata`) to the ingest step, everything else to `astro build`.
+  Verified on the 72-repo corpus: 27k pages re-rendered in 1m49s with no network or git.
 
 ## For human
 

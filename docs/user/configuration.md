@@ -182,12 +182,16 @@ Notes
   every other repo replays its cached answer, and the artifact it writes is the same one a
   full run would have written.
 
-  Follow it with the render alone, not `npm run build` (which would re-ingest everything and
-  undo the point):
+  The whole cycle is one command:
 
   ```bash
-  npm run ingest -- --backfill-metadata
-  npm run astro build
+  npm run build -- --backfill-metadata
+  ```
+
+  or, if the artifact is already filled in and you only want the pages rebuilt,
+
+  ```bash
+  npm run build -- --no-ingest
   ```
 
   The render is not partial: a repo's description and license appear in the header of *every*

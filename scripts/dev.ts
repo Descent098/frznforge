@@ -69,6 +69,7 @@ export function noticeLines(input: PreflightInput): string[] {
     '  you build again — file changes are not watched.',
     '',
     '    npm run build       refresh everything (ingest → data/forge.json → astro build → dist/)',
+    '    npm run build -- --no-ingest   re-render the artifact you already have (no fetching)',
     '    npm run astro dev   the raw Astro dev server, if you want HMR on components and',
     '                        styles — it reads the artifact once at startup and never again,',
     '                        so re-ingested repos will 404 there until you restart it.',

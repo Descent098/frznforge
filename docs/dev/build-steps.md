@@ -3,9 +3,18 @@
 What `npm run build` actually does, in order, with the file and line to read for each step.
 
 ```
-npm run build  =  npm run ingest  &&  astro build
-                  └ tsx scripts/ingest.ts        └ renders dist/ from data/forge.json
+npm run build  =  tsx scripts/build.ts
+                  ├ tsx scripts/ingest.ts   git + forge APIs → data/forge.json
+                  └ astro build             data/forge.json → dist/
 ```
+
+`scripts/build.ts` exists so the two halves can be steered separately — a chained npm script
+gives every `--` argument to the last command in the chain, so there was no way to say "skip
+the ingest". It routes arguments three ways: `--no-ingest` it keeps, ingest flags
+(`--no-cache`, `--backfill-metadata`) go to `scripts/ingest.ts`, and everything else is passed
+through to `astro build` untouched. `--no-ingest` refuses to run when no artifact exists,
+because `loadForgeData` answers a missing artifact with an EMPTY one — the build would
+otherwise succeed and replace a good `dist/` with a site containing no repos.
 
 Two processes, one artifact between them. Ingest talks to git and to forge APIs and writes
 `data/forge.json` plus its byte stores; `astro build` never touches git or the network — it
@@ -22,7 +31,7 @@ nothing (`scripts/dev.ts`). See [quick-start](../user/quick-start.md#4-run-it).
 
 ```mermaid
 flowchart TD
-  BUILD["npm run build<br/>package.json"] --> ING["npm run ingest<br/>scripts/ingest.ts"]
+  BUILD["npm run build<br/>scripts/build.ts"] --> ING["ingest step<br/>scripts/ingest.ts"]
   BUILD --> ASTRO
 
   ING --> ARGS["parseIngestArgs — only --no-cache<br/>src/lib/ingest/reuse.ts:368"]
