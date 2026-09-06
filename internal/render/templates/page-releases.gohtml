@@ -1,0 +1,35 @@
+{{- /*
+  The releases index. Port of src/pages/repos/[slug]/releases/index.astro.
+
+  A real <ol>, labelled: the order is the content ("newest first"), not a layout choice.
+
+  The empty state depends on where releases were supposed to come from — telling the owner of a
+  provider-backed repo to run `git tag -a` would be wrong advice.
+*/ -}}
+{{define "page-releases"}}
+{{- $p := .Payload}}
+<div class="hf-container">
+  {{template "repo-sub-head" $p.Head}}
+
+  <div class="hf-repo-main" style="margin-top:16px">
+    {{- if $p.Cards}}
+    <ol class="hf-release-list" aria-label="Releases of {{$p.Name}}, newest first">
+      {{- range $p.Cards}}
+      <li>
+        {{template "release-card" .}}
+      </li>
+      {{- end}}
+    </ol>
+    {{- else}}
+    <div class="hf-card hf-empty">
+      <svg class="hf-i"><use href="#i-package" /></svg>
+      {{- if $p.ProviderEmpty}}
+      <p><strong>No releases published on {{$p.Label}} yet.</strong> They will appear here on the next build once the first one is published.</p>
+      {{- else}}
+      <p><strong>No releases yet.</strong> Releases are created from annotated tags — <code>git tag -a v1.0.0 -m '...'</code></p>
+      {{- end}}
+    </div>
+    {{- end}}
+  </div>
+</div>
+{{end}}

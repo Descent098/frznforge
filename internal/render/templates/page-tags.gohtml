@@ -1,0 +1,39 @@
+{{- /*
+  Every git tag — /repos/<slug>/tags/. Port of src/pages/repos/[slug]/tags/index.astro.
+
+  The target sha links only when the artifact holds that commit: a tag can point at history
+  the narrowing knobs dropped, and a link to a page nobody built is worse than plain text.
+*/ -}}
+{{define "page-tags"}}
+  {{- $p := .Payload -}}
+  <div class="hf-container">
+    {{- template "repo-header" $p.Head}}
+    <div class="hf-repo-main" style="margin-top:16px">
+      {{- if $p.Rows}}
+      <div class="hf-card hf-reflist hf-taglist">
+        <table>
+          <thead>
+            <tr><th scope="col">Tag</th><th scope="col">Message</th><th scope="col">Target</th><th scope="col" style="text-align:right">Date</th><th scope="col" style="text-align:right">Links</th></tr>
+          </thead>
+          <tbody>
+            {{- range $p.Rows}}
+            <tr>
+              <td><span class="hf-ref-name"><svg class="hf-i"><use href="#i-tag" /></svg><code>{{.Tag.Name}}</code></span><span class="hf-tag {{if .Tag.Annotated}}hf-tagkind--annotated{{else}}hf-tagkind--light{{end}}">{{if .Tag.Annotated}}annotated{{else}}lightweight{{end}}</span></td>
+              <td class="hf-fmsg">{{.Message}}</td>
+              <td>{{if .TargetURL}}<a class="hf-sha-link" href="{{.TargetURL}}"><code>{{printf "%.7s" .Tag.Target}}</code></a>{{else}}<code>{{printf "%.7s" .Tag.Target}}</code>{{end}}</td>
+              <td class="hf-fage"><span class="hf-age {{heatClass .Tag.Date}}" title="{{.Tag.Date}}">{{relativeTime .Tag.Date}}</span></td>
+              <td class="hf-ref-links">{{if .ArchiveURL}}<a href="{{.ArchiveURL}}" title="Download source zip"><svg class="hf-i"><use href="#i-zip" /></svg> zip</a>{{end}}{{if .ReleaseURL}}<a href="{{.ReleaseURL}}"><svg class="hf-i"><use href="#i-package" /></svg> Release</a>{{end}}</td>
+            </tr>
+            {{- end}}
+          </tbody>
+        </table>
+      </div>
+      {{- else}}
+      <div class="hf-card hf-empty">
+        <svg class="hf-i"><use href="#i-tag" /></svg>
+        <p><strong>No tags yet.</strong> Tags will appear here once the repository has some.</p>
+      </div>
+      {{- end}}
+    </div>
+  </div>
+{{end}}

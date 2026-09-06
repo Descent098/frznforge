@@ -2,7 +2,9 @@ package render
 
 import (
 	"fmt"
+	"math"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -171,14 +173,63 @@ func FormatInt(n int64) string {
 //
 // Deliberately not locale-aware: this string is baked into static HTML, so it must not vary
 // with the build machine's locale the way FormatInt may.
+//
+// The decimal goes through ToFixed, not %.1f. A size of 13568 bytes is 13.25 KB exactly, and
+// Go's %.1f rounds that exact half to even ("13.2") where the browser's toFixed rounds the
+// magnitude up ("13.3"). Every power-of-two-ish file size lands on such a half, so this is not
+// a corner case: it is most of a repository's file table.
 func FormatBytes(n int64) string {
 	if n < 1024 {
 		return fmt.Sprintf("%d B", n)
 	}
 	if n < 1024*1024 {
-		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+		return ToFixed(float64(n)/1024, 1) + " KB"
 	}
-	return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
+	return ToFixed(float64(n)/(1024*1024), 1) + " MB"
+}
+
+// ToFixed formats v exactly the way JavaScript's Number.prototype.toFixed does.
+//
+// Not strconv.FormatFloat: toFixed rounds the exact binary value and, on an exact half, rounds
+// the magnitude UP, while Go rounds an exact half to even. Sizes and chart coordinates land on
+// exact halves often enough (they are built from powers of two) that one differing digit shows
+// up all over the built site with no explanation.
+func ToFixed(v float64, digits int) string {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return strconv.FormatFloat(v, 'f', digits, 64)
+	}
+	// 70 fractional digits is past the longest exact expansion a float64 in this range has, so
+	// what comes back is the exact value, zero-padded — nothing has been rounded yet.
+	s := strconv.FormatFloat(v, 'f', 70, 64)
+	neg := false
+	if s[0] == '-' {
+		neg, s = true, s[1:]
+	}
+	dot := strings.IndexByte(s, '.')
+	kept := []byte(s[:dot] + s[dot+1:dot+1+digits])
+	if tail := s[dot+1+digits:]; tail != "" && tail[0] >= '5' {
+		// An exact half rounds up like everything past it: toFixed's "pick the larger n",
+		// applied to the magnitude the sign was stripped from.
+		i := len(kept) - 1
+		for ; i >= 0; i-- {
+			if kept[i] < '9' {
+				kept[i]++
+				break
+			}
+			kept[i] = '0'
+		}
+		if i < 0 {
+			kept = append([]byte{'1'}, kept...)
+		}
+	}
+	out := string(kept[:len(kept)-digits])
+	if digits > 0 {
+		out += "." + string(kept[len(kept)-digits:])
+	}
+	if neg {
+		out = "-" + out
+	}
+	return out
 }
 
 var spaceRe = regexp.MustCompile(`\s+`)

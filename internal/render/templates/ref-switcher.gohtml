@@ -1,0 +1,56 @@
+{{- /*
+  Branch/tag switcher. Port of RefSwitcher.astro.
+
+  A <details> popup and no JavaScript at all: the switcher works with scripting off, which is
+  the point of a site that is only ever files on a host. Takes a build.refSwitcher, whose hrefs
+  already point at the same directory on the target ref when that ref has one.
+*/ -}}
+{{define "ref-switcher"}}
+<details class="hf-refsw">
+  <summary class="hf-btn hf-branch-btn" aria-label="Switch {{.Kind}}: {{.Name}}">
+    <svg class="hf-i">{{if eq .Kind "tag"}}<use href="#i-tag" />{{else}}<use href="#i-branch" />{{end}}</svg>
+    <code>{{.Name}}</code>
+    <svg class="hf-i hf-caret"><use href="#i-chev" /></svg>
+  </summary>
+  <div class="hf-refsw-pop" role="region" aria-label="Switch branches and tags">
+    {{- if .Branches}}
+    <div class="hf-refsw-group">
+      {{- /*
+        A group label inside a popover, not a section of the document: rendering it as a
+        heading put stray <h4>s at the very top of every repo page's outline. The list carries
+        the name instead, so a screen reader still announces "Branches, list".
+      */}}
+      <p class="hf-refsw-grouphead" aria-hidden="true">Branches</p>
+      <ul aria-label="Branches">
+        {{- range .Branches}}
+        <li>
+          <a href="{{.URL}}"{{if .IsCurrent}} class="is-current" aria-current="true"{{end}}>
+            <svg class="hf-i"><use href="#i-branch" /></svg>
+            <code>{{.Name}}</code>
+            {{- if .IsDefault}}
+            <span class="hf-refsw-default">default</span>
+            {{- end}}
+          </a>
+        </li>
+        {{- end}}
+      </ul>
+    </div>
+    {{- end}}
+    {{- if .Tags}}
+    <div class="hf-refsw-group">
+      <p class="hf-refsw-grouphead" aria-hidden="true">Tags</p>
+      <ul aria-label="Tags">
+        {{- range .Tags}}
+        <li>
+          <a href="{{.URL}}"{{if .IsCurrent}} class="is-current" aria-current="true"{{end}}>
+            <svg class="hf-i"><use href="#i-tag" /></svg>
+            <code>{{.Name}}</code>
+          </a>
+        </li>
+        {{- end}}
+      </ul>
+    </div>
+    {{- end}}
+  </div>
+</details>
+{{end}}

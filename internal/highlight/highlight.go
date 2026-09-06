@@ -22,6 +22,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
@@ -254,6 +255,21 @@ func highlightLines(src, lexerName string) []string {
 	if lexer == nil {
 		return plainLines(src)
 	}
+	// Tokenising is serialised per lexer.
+	//
+	// chroma's registry hands every caller the SAME lexer value, and building this site with pages
+	// rendering in parallel produced spurious Error tokens around single characters, at random
+	// positions, in large files — a page that still renders, with one letter quietly turned red. It
+	// reproduced only under the race detector's scheduling and never in isolation, which is exactly
+	// the kind of defect not to leave in place because it is hard to catch.
+	//
+	// The lock is per lexer NAME rather than global, so different languages still tokenise
+	// concurrently, and it covers draining the iterator as well as creating it because chroma's
+	// iterators are lazy — the work happens in Tokens(), not in Tokenise().
+	mu := lexerLock(lexerName)
+	mu.Lock()
+	defer mu.Unlock()
+
 	iterator, err := lexer.Tokenise(nil, src)
 	if err != nil {
 		// A tokeniser that cannot read its input still has to produce the file. Uncoloured
@@ -282,6 +298,23 @@ func highlightLines(src, lexerName string) []string {
 		lines = append(lines, "")
 	}
 	return lines[:want]
+}
+
+// lexerLocks guards chroma's shared lexers, one mutex per lexer name. See highlightLines.
+var (
+	lexerLocksMu sync.Mutex
+	lexerLocks   = map[string]*sync.Mutex{}
+)
+
+func lexerLock(name string) *sync.Mutex {
+	lexerLocksMu.Lock()
+	defer lexerLocksMu.Unlock()
+	mu, ok := lexerLocks[name]
+	if !ok {
+		mu = &sync.Mutex{}
+		lexerLocks[name] = mu
+	}
+	return mu
 }
 
 func plainLines(src string) []string {

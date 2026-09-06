@@ -1,0 +1,81 @@
+{{- /*
+  /notes/<slug>/ — one note: its header, then every file it contains, in order.
+  Port of src/pages/notes/[slug]/index.astro.
+
+  A single-file note is the degenerate case of the same layout, so there is one code path:
+  header, then one note-file-view per file. Only a multi-file note also gets the in-page table
+  of contents — a folder note can be four files long, and the file switcher has to be reachable
+  without scrolling.
+*/ -}}
+{{define "page-note"}}
+  {{- $note := .Payload.Note -}}
+  {{- $heat := .Payload.Heat -}}
+  <div class="hf-container">
+    <p class="hf-note-backlink">
+      <a href="{{notesURL}}"><svg class="hf-i" aria-hidden="true"><use href="#i-arrow-left" /></svg> All notes</a>
+    </p>
+
+    <header class="hf-page-head hf-note-head">
+      <h1>
+        <svg class="hf-i" aria-hidden="true"><use href="{{if eq $note.Kind "folder"}}#i-folder{{else}}#i-note{{end}}" /></svg>
+        {{$note.Title}}
+      </h1>
+      {{- if $note.Description}}
+      <p>{{deref $note.Description}}</p>
+      {{- end}}
+
+      <ul class="hf-note-meta">
+        <li>
+          <svg class="hf-i" aria-hidden="true"><use href="#i-history" /></svg>
+          {{- if $note.Date}}
+          <time class="hf-age t-{{$heat}}" datetime="{{deref $note.Date}}">{{relativeTime (deref $note.Date)}}</time>
+          <span class="hf-muted">({{isoDay (deref $note.Date)}})</span>
+          {{- else}}
+          <span class="hf-age t-{{$heat}}">undated</span>
+          {{- end}}
+        </li>
+        <li>
+          <svg class="hf-i" aria-hidden="true"><use href="#i-file" /></svg>
+          <b>{{len $note.Files}}</b> {{plural (len $note.Files) "file" "files"}}
+        </li>
+        <li>
+          <svg class="hf-i" aria-hidden="true"><use href="#i-layers" /></svg>
+          <b>{{formatBytes $note.TotalBytes}}</b>
+        </li>
+        <li>
+          <svg class="hf-i" aria-hidden="true"><use href="{{if eq $note.Kind "folder"}}#i-folder{{else}}#i-note{{end}}" /></svg>
+          {{if eq $note.Kind "folder"}}folder note{{else}}single-file note{{end}}
+        </li>
+      </ul>
+
+      {{- if $note.Tags}}
+      <ul class="hf-note-tags" aria-label="Tags">
+        {{- range $note.Tags}}<li><span class="hf-tag">{{.}}</span></li>{{end}}
+      </ul>
+      {{- end}}
+    </header>
+
+    {{- if gt (len .Payload.Files) 1}}
+    <nav class="hf-card hf-note-toc" aria-labelledby="hf-note-toc-h">
+      <h2 id="hf-note-toc-h">Files in this note</h2>
+      <ol>
+        {{- range .Payload.Files}}
+        <li>
+          <a href="#{{.Anchor}}">
+            <svg class="hf-i" aria-hidden="true"><use href="#i-file" /></svg>
+            {{.File.Path}}
+            {{- if .File.Language}}<small>{{deref .File.Language}}</small>{{end}}
+          </a>
+        </li>
+        {{- end}}
+      </ol>
+    </nav>
+    {{- end}}
+
+    <div class="hf-note-body">
+      {{- range .Payload.Files}}
+      {{template "note-file-view" .}}
+      {{- end}}
+    </div>
+  </div>
+{{end}}

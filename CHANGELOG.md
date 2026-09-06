@@ -2,6 +2,10 @@
 
 ## Bug Fixes
 
+* **File tables were ordered by the build machine's locale data.** `FileTable.astro` sorted names with `localeCompare(name, 'en', { sensitivity: 'base' })` — the exact thing `src/lib/routes.ts` warns against in writing, because ICU data differs between machines and two builds of the same artifact could then emit different HTML. It also read oddly: `config_test.go` sorted before `config.go`. The Go renderer orders by code point everywhere, which is stable, matches git's own tree order, and puts `config.go` first.
+
+* **The command palette offered file results that 404.** The search index listed every blob in a repo's default-branch tree, including paths holding `#` or `%` — which get no blob page, because no static URL can round-trip them. Ingest already said so, raising `repo-path-unservable` with the words "listed in the file table but has no page", and the index listed them anyway. It now applies the same exclusion the route builder does, which is the only way the two can agree.
+
 * **`.cfg` and `.conf` files rendered with no syntax colouring.** Ingest labels them `INI` (`src/lib/ingest/languages.ts:182`) but the highlighter's language map was keyed `'Ini'` (`src/lib/highlight.ts:64`), so the lookup missed and the file fell through to the extension fallback — which rescues `.ini`, because Shiki has a language of that name, and cannot rescue `.cfg` or `.conf`, because it does not. Found while porting the map to Go, where it is now checked in both directions: a name ingest can emit that the map does not cover is a test failure, not an uncoloured file.
 
 ## Other

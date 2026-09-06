@@ -234,10 +234,19 @@ func (r *Renderer) funcs() template.FuncMap {
 			}
 			return *p
 		},
-		"add":  func(a, b int) int { return a + b },
-		"sub":  func(a, b int) int { return a - b },
-		"join": strings.Join,
-		"dict": dict,
+		// Card helpers. topLangs is the "top 3 languages" rule the card shows; langColor is the
+		// neutral fallback for a language the map has no colour for.
+		"topLangs": func(langs []SummaryLang, n int) []SummaryLang {
+			if len(langs) > n {
+				return langs[:n]
+			}
+			return langs
+		},
+		"langColor": LangColor,
+		"add":       func(a, b int) int { return a + b },
+		"sub":       func(a, b int) int { return a - b },
+		"join":      strings.Join,
+		"dict":      dict,
 	}
 }
 

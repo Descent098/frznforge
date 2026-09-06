@@ -1,0 +1,90 @@
+{{- /*
+  One insights chart. Port of InsightsChart.astro.
+
+  Accessibility model, three layers and all of them deliberate:
+    1. <figure> + <figcaption> names the chart in the document outline;
+    2. the <svg> is role="img" with an aria-label summarising the whole series, so a screen
+       reader hears one sentence instead of a bag of coordinates;
+    3. a visually hidden <table> carries every value, because a shape's <title> is a mouse
+       affordance and is explicitly NOT exposed when the SVG is a single image node.
+
+  Colour never carries meaning alone: each series has its own figure, its own caption and its
+  own mark shape — bars, square-marked line, filled area with round markers.
+
+  The `.hf-sr` clamp goes on a WRAPPER, not on the <table>: the clamp works by width, and a CSS
+  table's used width is never below its min-content width, so a <table> carrying the class
+  ignores it and paints a raw grid of numbers under the chart. Takes a build.chartView.
+*/ -}}
+{{define "insights-chart"}}
+<figure class="hf-card hf-chart hf-chart--{{.Tone}}" id="{{.ID}}" aria-labelledby="{{.CapID}}">
+  <figcaption class="hf-card-head" id="{{.CapID}}">
+    <svg class="hf-i" aria-hidden="true"><use href="#i-chart" /></svg>
+    <h2>{{.Heading}}</h2>
+  </figcaption>
+  <div class="hf-card-body">
+    <p class="hf-chart-lede">{{.Caption}}</p>
+
+    {{- if .Empty}}
+    <p class="hf-chart-note">No data in this series.</p>
+    {{- else}}
+    <div class="hf-chart-scroll" tabindex="0" role="group" aria-labelledby="{{.CapID}}">
+      <svg class="hf-chart-svg" style="min-width:{{.W}}px;max-width:{{.MaxW}}px" viewBox="{{.ViewBox}}" role="img" aria-label="{{.Summary}}">
+        <text class="hf-chart-unit" x="4" y="12">{{.ValueLabel}}</text>
+        {{- range .Ticks}}
+        <g>
+          <line class="hf-chart-grid" x1="{{$.AxisX1}}" x2="{{$.AxisX2}}" y1="{{.Y}}" y2="{{.Y}}" />
+          <text class="hf-chart-tick" x="{{$.TickX}}" y="{{.TextY}}" text-anchor="end">{{.Label}}</text>
+        </g>
+        {{- end}}
+        <line class="hf-chart-axis" x1="{{.AxisX1}}" x2="{{.AxisX2}}" y1="{{.BaseY}}" y2="{{.BaseY}}" />
+        {{- if .AreaPath}}
+        <path class="hf-chart-area" d="{{.AreaPath}}" fill="{{.Fill}}" />
+        {{- end}}
+        {{- if .LinePath}}
+        <path class="hf-chart-line" d="{{.LinePath}}" fill="none" stroke="{{.Stroke}}" />
+        {{- end}}
+        {{- range .Bars}}
+        <rect class="hf-chart-bar" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" fill="{{$.Stroke}}" rx="2"><title>{{.Title}}</title></rect>
+        {{- end}}
+        {{- range .Marks}}
+        {{- if eq $.Kind "line"}}
+        <rect class="hf-chart-dot" x="{{.X}}" y="{{.Y}}" width="7" height="7" fill="{{$.Stroke}}" />
+        {{- else}}
+        <circle class="hf-chart-dot" cx="{{.X}}" cy="{{.Y}}" r="3.75" fill="{{$.Stroke}}" />
+        {{- end}}
+        {{- end}}
+        {{- /*
+          Hover targets for the point series. A 7px marker is a miserable thing to hit with a
+          mouse, so the value's <title> lives on a transparent full-height column drawn over it
+          — exactly one titled element per point either way, since bars carry their own.
+        */}}
+        {{- range .Hits}}
+        <rect class="hf-chart-hit" x="{{.X}}" y="{{$.TickTop}}" width="{{.W}}" height="{{$.InnerH}}" fill="transparent"><title>{{.Title}}</title></rect>
+        {{- end}}
+        {{- range .Labels}}
+        <text class="hf-chart-xlab" x="{{.X}}" y="{{$.XLabelY}}" text-anchor="middle">{{.Text}}</text>
+        {{- end}}
+      </svg>
+    </div>
+    {{- end}}
+
+    {{- if .Note}}
+    <p class="hf-chart-note">{{.Note}}</p>
+    {{- end}}
+
+    <div class="hf-sr" id="{{.TableID}}">
+      <table>
+        <caption>{{.Heading}} — {{.ValueLabel}} by month</caption>
+        <thead>
+          <tr><th scope="col">Month</th><th scope="col">{{.ValueLabel}}</th></tr>
+        </thead>
+        <tbody>
+          {{- range .Rows}}
+          <tr><th scope="row">{{.Month}}</th><td>{{.Value}}</td></tr>
+          {{- end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</figure>
+{{end}}

@@ -53,7 +53,12 @@ const cases = {
     in: n,
     out: formatInt(n),
   })),
-  formatBytes: [0, 1, 512, 1023, 1024, 1536, 10240, 1048575, 1048576, 5333293, 65622500].map((n) => ({
+  // 13568 and 3670016 sit on an EXACT half (13.25 KB, 3.5 MB). Go's %.1f rounds a half to
+  // even and toFixed rounds the magnitude up, so without these the two sides disagree on
+  // most of a repository's file table and nothing catches it.
+  formatBytes: [
+    0, 1, 512, 1023, 1024, 1536, 10240, 13568, 1048575, 1048576, 3670016, 5333293, 65622500,
+  ].map((n) => ({
     in: n,
     out: formatBytes(n),
   })),

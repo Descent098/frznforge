@@ -1,0 +1,83 @@
+{{- /*
+  Per-repo Insights. Port of src/pages/repos/[slug]/insights/index.astro.
+
+  The one repo sub-page with a visible <h1>, which is why its header sets OwnHeading.
+
+  The KPI tiles say what they mean: "Months of history" is the SPAN, and its sub-line says how
+  many of those months actually saw a commit rather than letting the headline imply continuous
+  work. The code-size tile leads with lines when the latest checkpoint counted them and demotes
+  the byte size to the sub-line; a checkpoint over the read budget keeps bytes as the headline,
+  because there is nothing else honest to show, and the label follows whichever it is.
+*/ -}}
+{{define "page-insights"}}
+{{- $p := .Payload}}
+<div class="hf-container">
+  {{template "repo-sub-head" $p.Head}}
+
+  <div class="hf-repo-main hf-insights" style="margin-top:16px">
+    <div class="hf-section-head">
+      <h1>Insights</h1>
+      <p>Monthly activity and code size on <code>{{$p.DefaultBranch}}</code> — {{$p.RangeText}}</p>
+    </div>
+
+    {{- if not $p.HasSeries}}
+    <section class="hf-empty">
+      <svg class="hf-i" aria-hidden="true"><use href="#i-chart" /></svg>
+      <p><strong>No insights for this repository.</strong> Nothing on <code>{{$p.DefaultBranch}}</code> produced a monthly series to plot.</p>
+    </section>
+    {{- else}}
+    {{- if $p.Approximate}}
+    <p class="hf-banner">
+      <svg class="hf-i" aria-hidden="true"><use href="#i-bolt" /></svg>
+      <span>
+        Code size is <b>approximate</b>: at least one checkpoint held more content than
+        <code>ingest.insights.maxBytesPerSample</code> allows to be read, so its lines were not counted and
+        its byte total may include binary files — the blobs past the budget were never read, so they could
+        not be classified. Commit and contributor counts are exact.
+      </span>
+    </p>
+    {{- end}}
+
+    <div class="hf-insight-kpis">
+      <div class="hf-kpi hf-kpi--ember">
+        <span class="hf-kpi-label"><svg class="hf-i" aria-hidden="true"><use href="#i-pulse" /></svg> Commits</span>
+        <span class="hf-kpi-value">{{$p.Commits}}</span>
+        <span class="hf-kpi-sub">on <code>{{$p.DefaultBranch}}</code></span>
+      </div>
+      <div class="hf-kpi hf-kpi--ice">
+        <span class="hf-kpi-label"><svg class="hf-i" aria-hidden="true"><use href="#i-people" /></svg> Contributors</span>
+        <span class="hf-kpi-value">{{$p.Contributors}}</span>
+        <span class="hf-kpi-sub">on <code>{{$p.DefaultBranch}}</code>
+          {{- if $p.Elsewhere}} · {{$p.Elsewhere}} more on other branches{{end}}</span>
+      </div>
+      <div class="hf-kpi">
+        <span class="hf-kpi-label"><svg class="hf-i" aria-hidden="true"><use href="#i-history" /></svg> Months of history</span>
+        <span class="hf-kpi-value">{{$p.Months}}</span>
+        <span class="hf-kpi-sub">{{$p.MonthsSub}}</span>
+      </div>
+      <div class="hf-kpi">
+        <span class="hf-kpi-label"><svg class="hf-i" aria-hidden="true"><use href="#i-code" /></svg> {{$p.SizeLabel}}</span>
+        <span class="hf-kpi-value">{{$p.SizeValue}}</span>
+        <span class="hf-kpi-sub">
+          {{- if not $p.SizeSampled}}not sampled
+          {{- else if $p.SizeByLines}}≈{{$p.SizeBytes}} at {{$p.SizeMonth}}
+          {{- else}}at {{$p.SizeMonth}} — over the read budget, may include binaries
+          {{- end -}}
+        </span>
+      </div>
+    </div>
+
+    {{- range $p.Charts}}
+    {{template "insights-chart" .}}
+    {{- end}}
+
+    {{- if $p.NoCodeSize}}
+    <section class="hf-empty">
+      <svg class="hf-i" aria-hidden="true"><use href="#i-code" /></svg>
+      <p><strong>No code-size checkpoints.</strong> Sampling is off, or every checkpoint on <code>{{$p.DefaultBranch}}</code> was vendored or binary.</p>
+    </section>
+    {{- end}}
+    {{- end}}
+  </div>
+</div>
+{{end}}

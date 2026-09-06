@@ -1,0 +1,133 @@
+{{- /*
+  One file of one ref. Port of src/pages/repos/[slug]/blob/[ref]/[...path].astro.
+
+  `.hf-code` is not decoration: internal/highlight emits `<pre class="hf-chroma">` and every
+  token colour in web/css/repo.css is scoped `.hf-code .hf-*`. Without this wrapper the whole
+  file renders in flat body colour — visibly wrong, but wrong in the way nobody files a bug
+  about. The same wrapper carries the counter-based gutter and the `:target` line highlight, so
+  every code view on this page is inside one.
+
+  The markdown preview/source toggle is two radio inputs and CSS. No JavaScript is involved,
+  which is why the source view is in the document even when nobody looks at it.
+*/ -}}
+{{define "page-blob"}}
+{{- $p := .Payload}}
+<div class="hf-container">
+  {{template "repo-sub-head" $p.Head}}
+
+  <div class="hf-repo-main" style="margin-top:16px">
+    <div class="hf-toolbar">
+      <nav class="hf-path-crumb" aria-label="Path">
+        <a href="{{$p.RootURL}}">{{$p.RepoName}}</a>
+        {{- range $p.Crumbs}}
+        <span class="hf-sep">/</span>
+        <a href="{{.URL}}">{{.Name}}</a>
+        {{- end}}
+        <span class="hf-sep">/</span>
+        <strong>{{$p.FileName}}</strong>
+      </nav>
+      <span class="hf-blob-ref"><svg class="hf-i">{{if $p.RefIsTag}}<use href="#i-tag" />{{else}}<use href="#i-branch" />{{end}}</svg> <code>{{$p.RefName}}</code></span>
+    </div>
+
+    <div class="hf-card hf-blob">
+      {{- if eq $p.Mode "markdown"}}
+      <input type="radio" name="hf-mdview" id="hf-md-preview" class="hf-mdview-input" checked />
+      <input type="radio" name="hf-mdview" id="hf-md-source" class="hf-mdview-input" />
+      <div class="hf-blob-head">
+        <div class="hf-blob-meta">
+          {{- if $p.HasLines}}<span><b>{{formatInt $p.Lines}}</b> lines</span>{{end}}
+          <span class="hf-dot">·</span>
+          <span>{{formatBytes $p.Size}}</span>
+          {{- if $p.Language}}<span class="hf-badge hf-lang-badge">{{$p.Language}}</span>{{end}}
+          {{- if $p.TooLarge}}<span class="hf-badge">too large</span>{{end}}
+        </div>
+        <div class="hf-blob-actions">
+          {{- if $p.HasSource}}
+          <span class="hf-seg hf-mdview-seg" role="group" aria-label="View as">
+            <label for="hf-md-preview" class="hf-mdview-lbl" data-for="preview">Preview</label>
+            <label for="hf-md-source" class="hf-mdview-lbl" data-for="source">Source</label>
+          </span>
+          {{- end}}
+          {{- if $p.RawURL}}
+          <a class="hf-btn hf-btn--sm" href="{{$p.RawURL}}">Raw</a>
+          <a class="hf-btn hf-btn--sm" href="{{$p.RawURL}}" download="{{$p.FileName}}"><svg class="hf-i"><use href="#i-download" /></svg> Download</a>
+          {{- end}}
+          <button type="button" class="hf-btn hf-btn--sm" data-copy="{{$p.FilePath}}" aria-label="Copy path"><svg class="hf-i"><use href="#i-copy" /></svg> Copy path</button>
+        </div>
+      </div>
+      <div class="hf-blob-body hf-mdview-preview">
+        {{- /*
+          A heading the chrome owns, so the outline cannot skip a level into content nobody
+          here wrote: a README that opens at `##` renders an h3, and this page's only other
+          heading is the hidden h1 in the header.
+        */}}
+        <h2 class="hf-sr">Preview of {{$p.FilePath}}</h2>
+        <div class="hf-md hf-blob-md">{{$p.Preview}}</div>
+      </div>
+      <div class="hf-blob-body hf-mdview-source">
+        {{- if $p.HasSource}}
+        <div class="hf-code">{{$p.Source}}</div>
+        {{- else}}
+        <div class="hf-code"><pre class="hf-code-plain"><code>{{$p.PlainText}}</code></pre></div>
+        {{- end}}
+      </div>
+      {{- else}}
+      <div class="hf-blob-head">
+        <div class="hf-blob-meta">
+          {{- if $p.HasLines}}<span><b>{{formatInt $p.Lines}}</b> lines</span><span class="hf-dot">·</span>{{end}}
+          <span>{{formatBytes $p.Size}}</span>
+          {{- if $p.Language}}<span class="hf-badge hf-lang-badge">{{$p.Language}}</span>{{end}}
+          {{- if $p.Symlink}}<span class="hf-badge">symlink</span>{{end}}
+          {{- if and $p.Binary (not $p.Symlink)}}<span class="hf-badge">binary</span>{{end}}
+        </div>
+        <div class="hf-blob-actions">
+          {{- if $p.RawURL}}
+          <a class="hf-btn hf-btn--sm" href="{{$p.RawURL}}">Raw</a>
+          <a class="hf-btn hf-btn--sm" href="{{$p.RawURL}}" download="{{$p.FileName}}"><svg class="hf-i"><use href="#i-download" /></svg> Download</a>
+          {{- end}}
+          <button type="button" class="hf-btn hf-btn--sm" data-copy="{{$p.FilePath}}" aria-label="Copy path"><svg class="hf-i"><use href="#i-copy" /></svg> Copy path</button>
+        </div>
+      </div>
+
+      {{- if eq $p.Mode "symlink"}}
+      <div class="hf-blob-body">
+        <div class="hf-empty hf-blob-fallback">
+          <svg class="hf-i"><use href="#i-link" /></svg>
+          <p>
+            <strong>Symbolic link</strong> → {{if $p.SymlinkTarget}}{{if $p.SymlinkURL}}<a href="{{$p.SymlinkURL}}"><code>{{$p.SymlinkTarget}}</code></a>{{else}}<code>{{$p.SymlinkTarget}}</code>{{end}}{{else}}<em>unknown target</em>{{end}}
+          </p>
+        </div>
+      </div>
+      {{- else if eq $p.Mode "image"}}
+      <div class="hf-blob-body hf-blob-image">
+        <img src="{{$p.RawURL}}" alt="{{$p.FileName}}" />
+      </div>
+      {{- else if eq $p.Mode "code"}}
+      <div class="hf-blob-body">
+        <div class="hf-code">{{$p.Code}}</div>
+      </div>
+      {{- else if eq $p.Mode "plain"}}
+      <div class="hf-blob-body">
+        <p class="hf-code-note">{{$p.SkipNote}}</p>
+        <div class="hf-code"><pre class="hf-code-plain"><code>{{$p.PlainText}}</code></pre></div>
+      </div>
+      {{- else}}
+      <div class="hf-blob-body">
+        <div class="hf-empty hf-blob-fallback">
+          <svg class="hf-i"><use href="#i-file" /></svg>
+          {{- if $p.TooLarge}}
+          <p><strong>File too large to display.</strong> {{formatBytes $p.Size}}.</p>
+          {{- else}}
+          <p><strong>Binary file</strong> · {{formatBytes $p.Size}}</p>
+          {{- end}}
+          {{- if $p.RawURL}}
+          <a class="hf-btn" href="{{$p.RawURL}}" download="{{$p.FileName}}"><svg class="hf-i"><use href="#i-download" /></svg> Download</a>
+          {{- end}}
+        </div>
+      </div>
+      {{- end}}
+      {{- end}}
+    </div>
+  </div>
+</div>
+{{end}}

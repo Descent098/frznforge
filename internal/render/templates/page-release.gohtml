@@ -1,0 +1,107 @@
+{{- /*
+  One release. Port of src/pages/repos/[slug]/releases/[tag].astro.
+
+  Downloads mix two very different things: assets uploaded to the provider, which live off this
+  static site and are marked as external links (visually and to a screen reader), and the source
+  zip this build produced with `git archive`, which is local.
+
+  The notes are markdown from the release's origin. For an imported repo that is somebody else's
+  writing, and it is rendered untrusted — tests/e2e/releases.spec.ts asserts that no script,
+  event handler or javascript: URL survives into this page.
+*/ -}}
+{{define "page-release"}}
+{{- $p := .Payload}}
+<div class="hf-container">
+  {{template "repo-sub-head" $p.Head}}
+
+  <div class="hf-repo-main" style="margin-top:16px">
+    <p class="hf-release-backlink"><a href="{{$p.BackURL}}"><svg class="hf-i"><use href="#i-arrow-left" /></svg> All releases</a></p>
+    <article class="hf-card hf-release-card hf-release-page">
+      <header class="hf-release-head">
+        <h1>{{$p.Title}}</h1>
+        {{- if $p.Titled}}
+        <code class="hf-release-tag">{{$p.Tag}}</code>
+        {{- end}}
+        {{- if $p.IsLatest}}
+        <span class="hf-tag hf-release-latest">Latest</span>
+        {{- end}}
+        {{- if $p.Prerelease}}
+        <span class="hf-tag hf-release-pre">Pre-release</span>
+        {{- end}}
+        <span class="hf-age {{heatClass $p.Date}}" title="{{$p.Date}}">{{relativeTime $p.Date}}</span>
+      </header>
+
+      <div class="hf-release-meta">
+        {{- if $p.Author}}
+        <span><svg class="hf-i"><use href="#i-people" /></svg> {{$p.Author}}</span>
+        {{- end}}
+        {{- if $p.CommitURL}}
+        <span><svg class="hf-i"><use href="#i-commit" /></svg> target <a href="{{$p.CommitURL}}"><code>{{$p.CommitShort}}</code></a></span>
+        {{- else if $p.CommitShort}}
+        <span><svg class="hf-i"><use href="#i-commit" /></svg> target <code>{{$p.CommitShort}}</code></span>
+        {{- else}}
+        <span><svg class="hf-i"><use href="#i-tag" /></svg> tag <code>{{$p.Tag}}</code></span>
+        {{- end}}
+        {{- if $p.TreeURL}}
+        <span><svg class="hf-i"><use href="#i-code" /></svg> <a href="{{$p.TreeURL}}">Browse source</a></span>
+        {{- end}}
+        <span class="hf-release-origin">
+          <svg class="hf-i">{{if $p.Provider}}<use href="#i-package" />{{else}}<use href="#i-tag" />{{end}}</svg>
+          {{- if and $p.Provider $p.OriginURL}}
+          <a href="{{$p.OriginURL}}" rel="noopener">{{$p.Origin}} <svg class="hf-i hf-ext-mark"><use href="#i-ext" /></svg></a>
+          {{- else}}
+          {{- $p.Origin}}
+          {{- end -}}
+        </span>
+      </div>
+
+      {{- if $p.HasNotes}}
+      <section aria-labelledby="release-notes-h">
+        {{- /*
+          The notes need a heading of their own, because their content does not have a reliable
+          one: release bodies routinely open at `##`, which renders as an h3 and would step
+          straight from this page's h1. Hidden — on screen the notes are obviously the notes.
+        */}}
+        <h2 class="hf-sr" id="release-notes-h">Release notes</h2>
+        <div class="hf-md hf-release-notes">{{$p.Notes}}</div>
+      </section>
+      {{- end}}
+
+      <footer class="hf-release-assets">
+        <h2>Downloads</h2>
+        {{- if $p.HasAssets}}
+        <ul class="hf-asset-list">
+          {{- range $p.Assets}}
+          <li>
+            {{- if .Local}}
+            <a class="hf-asset hf-asset--local" href="{{.URL}}">
+              <svg class="hf-i"><use href="#i-zip" /></svg>
+              <span class="hf-asset-name">{{.Name}}</span>
+              <span class="hf-asset-type">{{.ContentType}}</span>
+              <span class="hf-asset-size">{{.Size}}</span>
+            </a>
+            {{- else}}
+            <a class="hf-asset" href="{{.URL}}" rel="noopener">
+              <svg class="hf-i"><use href="{{.Icon}}" /></svg>
+              <span class="hf-asset-name">{{.Name}}</span>
+              {{- if .ContentType}}
+              <span class="hf-asset-type">{{.ContentType}}</span>
+              {{- end}}
+              {{- if .Size}}
+              <span class="hf-asset-size">{{.Size}}</span>
+              {{- end}}
+              <svg class="hf-i hf-ext-mark" aria-hidden="true"><use href="#i-ext" /></svg>
+              <span class="hf-sr">(external link)</span>
+            </a>
+            {{- end}}
+          </li>
+          {{- end}}
+        </ul>
+        {{- else}}
+        <p class="hf-muted">No downloadable assets for this release.</p>
+        {{- end}}
+      </footer>
+    </article>
+  </div>
+</div>
+{{end}}

@@ -1,0 +1,39 @@
+{{- /*
+  /orgs/<slug>/repos/ — the repo listing island, scoped to one organization.
+  Port of src/pages/orgs/[slug]/repos/index.astro.
+
+  Same component and the same client-side filter/sort/search as /repos/; only the repo set
+  differs. The island is the shared repo-listing partial, given this page's own base path,
+  which is what keeps tag chips and the no-JS pager inside the organization.
+
+  When the org has no members the island is skipped entirely: its generic "add some repos to
+  frznforge.config.ts" empty state would be the wrong advice here, where the fix is membership,
+  not ingestion.
+*/ -}}
+{{define "page-org-repos"}}
+  {{- $org := .Payload.Org -}}
+  <div class="hf-container">
+    <header class="hf-page-head">
+      <a class="hf-org-back" href="{{.Payload.OrgURL}}" aria-label="Back to the {{$org.Name}} overview">
+        <svg class="hf-i"><use href="#i-arrow-left" /></svg> {{$org.Name}}
+      </a>
+      <h1>{{$org.Name}} repositories</h1>
+      <p>
+        {{.Payload.Count}} repositor{{if eq .Payload.Count 1}}y{{else}}ies{{end}} in this organization ·
+        search, filter and sort. Heat = how recently each repo moved.
+      </p>
+    </header>
+    {{- if .Payload.Listing}}
+    {{template "repo-listing" .Payload.Listing}}
+    {{- else}}
+    <div class="hf-empty hf-card">
+      <svg class="hf-i"><use href="#i-repo" /></svg>
+      <p>
+        <strong>{{$org.Name}} has no repositories yet.</strong> Add <code>org: '{{$org.Slug}}'</code> to a repo
+        source, or list the repo under this organization's <code>repos</code> in
+        <code>frznforge.config.ts</code>, then run <code>npm run ingest</code>.
+      </p>
+    </div>
+    {{- end}}
+  </div>
+{{end}}

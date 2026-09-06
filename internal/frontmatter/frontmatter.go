@@ -1,8 +1,9 @@
 // Package frontmatter parses the YAML frontmatter of hand-written markdown — the port of
 // src/lib/frontmatter.ts.
 //
-// It reads a deliberately small subset of YAML: `key: scalar`, `key: [a, b]`, and `key:`
-// followed by `- item` lines. Anything fancier — nested mappings, anchors, block scalars,
+// It reads a deliberately small subset of YAML: `key: scalar`, `key: [a, b]`, `key:` followed
+// by `- item` lines, and — in Maps, kept apart from Data — `key:` followed by indented
+// `label: scalar` lines. Anything fancier — a mapping nested two deep, anchors, block scalars,
 // multi-document files — makes the parser DROP that key rather than guess at its meaning. A
 // partial parse is worse than a missing one here: a half-understood `tags:` renders a chip
 // reading `[a, b]` to a visitor, and nobody would ever look at it and see a bug.
@@ -32,11 +33,30 @@ type Value struct {
 	IsList bool
 }
 
+// MapEntry is one `label: scalar` pair of a nested mapping. Entries keep the order they were
+// written in: `links:` becomes a row of pills, and a reader who put GitHub first meant it.
+type MapEntry struct {
+	Key   string
+	Value string
+}
+
 // Frontmatter is a parsed block plus the prose after it.
 type Frontmatter struct {
-	// Data holds the keys the parser understood. Unsupported constructs are absent, never
-	// partially parsed.
+	// Data holds the scalar and sequence keys the parser understood. Unsupported constructs
+	// are absent, never partially parsed.
 	Data map[string]Value
+	// Maps holds one-level nested mappings — `forges:` on the profile, `links:` on an
+	// organization — which are a mapping of key to SCALAR and nothing deeper.
+	//
+	// Kept apart from Data rather than folded into Value because Data is a cross-language
+	// contract: testdata/expected.json is dumped from the TypeScript notes parser, which has
+	// no notion of a nested map and drops the key. Notes ingest reads Data and is unchanged;
+	// the site build reads both, which is what puts the profile's forge pills and an
+	// organization's link pills back on the page.
+	//
+	// A key is here only when EVERY line of its block is `key: scalar` at one indentation. One
+	// deeper line and the whole key is dropped, the same rule Data follows.
+	Maps map[string][]MapEntry
 	// Body is everything after the closing delimiter, joined with "\n".
 	Body string
 }
@@ -107,10 +127,11 @@ var (
 func Parse(src string) Frontmatter {
 	split := SplitFile(src)
 	if !split.Present {
-		return Frontmatter{Data: map[string]Value{}, Body: split.Body}
+		return Frontmatter{Data: map[string]Value{}, Maps: map[string][]MapEntry{}, Body: split.Body}
 	}
 	lines := strings.Split(split.Raw, "\n")
 	data := map[string]Value{}
+	maps := map[string][]MapEntry{}
 
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
@@ -170,16 +191,63 @@ func Parse(src string) Frontmatter {
 			}
 		}
 		// Consume the block either way: on the unsupported path its lines must not become keys.
+		blockStart := i + 1
 		for j < len(lines) && leadingSpace.MatchString(lines[j]) && strings.TrimSpace(lines[j]) != "" {
 			j++
 		}
 		i = j - 1
-		if supported && len(items) > 0 {
+		switch {
+		case supported && len(items) > 0:
 			data[key] = Value{List: items, IsList: true}
+		case !supported && len(items) == 0:
+			// Not a sequence. It may still be the one nested shape the site build needs.
+			if entries, ok := parseNestedMap(lines[blockStart:j]); ok {
+				maps[key] = entries
+			}
 		}
 	}
 
-	return Frontmatter{Data: data, Body: split.Body}
+	return Frontmatter{Data: data, Maps: maps, Body: split.Body}
+}
+
+// parseNestedMap reads an indented block as a one-level mapping of key to scalar.
+//
+// ok is false unless EVERY non-blank, non-comment line is `key: scalar` at the same
+// indentation. A second level, a sequence, a flow collection or a bare `key:` fails the whole
+// block: the caller then drops the key, which is this package's rule everywhere else. Half a
+// mapping on a page is a wrong answer nobody would recognise as a bug.
+func parseNestedMap(lines []string) ([]MapEntry, bool) {
+	var out []MapEntry
+	indent := ""
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		lead := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+		if lead == "" {
+			return nil, false // a top-level line: not part of this block at all
+		}
+		if indent == "" {
+			indent = lead
+		} else if lead != indent {
+			return nil, false // a deeper (or shallower) level — outside the subset
+		}
+		m := keyLine.FindStringSubmatch(trimmed)
+		if m == nil {
+			return nil, false
+		}
+		value := strings.TrimSpace(m[2])
+		if value == "" || opensCollection(value) {
+			return nil, false
+		}
+		scalar, ok := parseScalar(value)
+		if !ok {
+			return nil, false
+		}
+		out = append(out, MapEntry{Key: m[1], Value: scalar})
+	}
+	return out, len(out) > 0
 }
 
 // opensCollection reports a block-sequence item that opens a nested collection (`- [a, b]`,

@@ -142,6 +142,70 @@ caps, **21,869 routes / 13,164 HTML pages / 204.2 s render / 7.1 s warm ingest /
 is the corpus that matters for the streaming pipeline (0.4.0 Phase 7), because it is the only one
 where fetch time and render time are the same order of magnitude.
 
+## Measured: the Go renderer (0.4.0)
+
+Same artifact, same machine, same day as the [0.3.0 baseline](#the-030-baseline--040s-reference-point)
+above. One repository, 1,205 emitted files, of which 1,022 are the tree/blob/raw multiplier.
+
+| build | time |
+|---|---:|
+| `astro build`, this artifact | 8.74 s |
+| 0.3.0 render, cold (no highlight memo) | 18.75 s |
+| 0.3.0 render, warm (memo hit) | 6.57 s |
+| **`frznforge build`, 1 worker** | **3.66 s** |
+| **`frznforge build`, default workers** | **1.84 s** |
+
+So the Go build with **no cache of any kind** is 3.6× faster than the TypeScript build *with* its
+highlight memo, and 10× faster than the same build cold.
+
+### The memo is not worth porting
+
+0.4.0's plan reserved judgement on `src/lib/highlight-cache.ts` until there were numbers: the memo
+existed because Shiki was 84% of the render, and the question was whether chroma left anything for
+it to save. It does not. A completely cold Go render is 1.84 s — well inside the 6.57 s the
+TypeScript build achieved *warm*. Porting a cross-run, content-addressed, fingerprint-invalidated
+cache to save a fraction of two seconds would be buying complexity with the one currency this
+rewrite is trying to spend less of.
+
+The cache also has an ongoing cost the numbers above do not show: it is documented as growing
+without bound, because tracking liveness across runs is exactly the invalidation problem it was
+designed to avoid. Deleting it removes that too.
+
+### Where the parallelism actually is
+
+Per-**repo** parallelism is the obvious design and it is not enough. It is bounded by the
+repository count, and the count is frequently one — this project's own site is a single repository
+whose tree/blob/raw pages are 85% of its output. Measured at one repo, per-repo parallelism did
+nothing at all: 3.74 s at one worker, 3.92 s at thirty-two, the difference being pool overhead.
+
+The pool is therefore used at both levels — repositories concurrently, and the tree/blob/raw
+families concurrently *within* a repository — under one shared semaphore, so the two levels cannot
+multiply into N² goroutines. Scaling on the single-repo site:
+
+| workers | 1 | 2 | 4 | 8 | 32 |
+|---|---:|---:|---:|---:|---:|
+| time | 3.66 s | 2.78 s | 2.33 s | 1.87 s | 1.84 s |
+
+It flattens after 8, which is what a workload that is part CPU and part file-write should do.
+
+### The bug this found
+
+Building with pages in parallel produced spurious chroma **Error** tokens — single characters
+wrapped in an error span, at random positions, inside long lines of large files. A page that still
+renders, with one letter quietly turned red.
+
+chroma's registry hands every caller the same lexer value. The corruption reproduced only under
+the race detector's scheduling, never in isolation, and the detector itself reported no race —
+which is the worst combination to leave in place. Tokenising is now serialised per lexer *name*,
+so different languages still run concurrently, and the lock covers draining the iterator as well
+as creating it because chroma's iterators are lazy: the work happens in `Tokens()`, not in
+`Tokenise()`.
+
+It costs about 0.7 s of the 1.8 s on this corpus, because a repository's files cluster into a few
+languages and therefore a few locks. `TestSerialAndParallelAgree` under `-race` is what holds it:
+serial and 32-worker builds must produce byte-identical trees, and before the fix they differed in
+15–21 files per run, a different set each time.
+
 ## Measured: `ingest.branchTrees`, before and after
 
 The problem the cap fixes: tree/blob/raw pages are generated per browsable ref, and nothing

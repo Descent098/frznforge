@@ -1,0 +1,43 @@
+{{- /*
+  One commit — /repos/<slug>/commit/<sha>/. Port of
+  src/pages/repos/[slug]/commit/[sha].astro.
+
+  This is the one repo page with a visible <h1> of its own (the subject), so the header is
+  told not to add the hidden one it draws everywhere else.
+*/ -}}
+{{define "page-commit"}}
+  {{- $p := .Payload -}}
+  {{- $repo := $p.Repo -}}
+  {{- $c := $p.Commit -}}
+  <div class="hf-container">
+    {{- template "repo-header" $p.Head}}
+    <div class="hf-repo-main" style="margin-top:16px">
+      <article class="hf-card hf-commit-page">
+        <header class="hf-commit-page-head">
+          <h1>{{$c.Subject}}</h1>
+          {{- if $c.Body}}<pre class="hf-commit-body">{{$c.Body}}</pre>{{end}}
+          <div class="hf-commit-page-meta"><span class="hf-author"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">{{initials $c.Author.Name}}</span> <b>{{$c.Author.Name}}</b></span><span class="hf-dot">·</span><span>authored <span class="hf-age {{heatClass $c.AuthorDate}}" title="{{$c.AuthorDate}}">{{relativeTime $c.AuthorDate}}</span></span>
+          {{- if not $p.SameAuthor}}<span class="hf-dot">·</span><span>committed by <b>{{$c.Committer.Name}}</b> <span class="hf-age {{heatClass $c.CommitDate}}" title="{{$c.CommitDate}}">{{relativeTime $c.CommitDate}}</span></span>{{end}}</div>
+          <div class="hf-commit-page-refs"><span class="hf-badge">commit <button type="button" data-copy="{{$c.Sha}}" aria-label="Copy full sha {{printf "%.12s" $c.Sha}}"><code>{{printf "%.12s" $c.Sha}}</code> <svg class="hf-i"><use href="#i-copy" /></svg></button></span>
+          {{- if $p.Parents}}<span class="hf-badge">{{if eq (len $p.Parents) 1}}parent{{else}}parents{{end}} {{range $i, $sha := $p.Parents}}{{if $i}}<span class="hf-dot">·</span>{{end}}<a href="{{commitURL $repo.Slug $sha}}"><code>{{printf "%.7s" $sha}}</code></a>{{end}}</span>{{end}}
+          {{- if $p.RootCommit}}<span class="hf-badge">root commit</span>{{end}}</div>
+        </header>
+
+        <div class="hf-commit-page-stats"><b>{{formatInt $c.Stats.FilesChanged}}</b> file{{if ne $c.Stats.FilesChanged 1}}s{{end}} changed<span class="hf-adds">+{{formatInt $c.Stats.Additions}}</span><span class="hf-dels">−{{formatInt $c.Stats.Deletions}}</span></div>
+
+        {{- if $p.Files}}
+        <table class="hf-commit-files">
+          <thead>
+            <tr><th scope="col">File</th><th scope="col" style="text-align:right">Changes</th></tr>
+          </thead>
+          <tbody>
+            {{- range $p.Files}}
+            <tr><td>{{if .Href}}<a class="hf-commit-file-path" href="{{.Href}}"><code>{{.Path}}</code></a>{{else}}<code>{{.Path}}</code>{{end}}</td><td class="hf-commit-file-stats">{{if .Binary}}<span class="hf-muted">binary</span>{{else}}<span class="hf-adds">+{{formatInt .Additions}}</span><span class="hf-dels">−{{formatInt .Deletions}}</span>{{end}}</td></tr>
+            {{- end}}
+          </tbody>
+        </table>
+        {{- end}}
+      </article>
+    </div>
+  </div>
+{{end}}

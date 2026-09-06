@@ -1,0 +1,201 @@
+{{- /*
+  The repository overview — /repos/<slug>/. Port of src/pages/repos/[slug]/index.astro.
+
+  The ref switcher and the file table are defined at the bottom of this file rather than as
+  site-wide partials: they are the overview's own furniture here, and a partial shared with the
+  file browser would tie two page families together for the sake of a table.
+*/ -}}
+{{define "page-repo"}}
+  {{- $p := .Payload -}}
+  {{- $repo := $p.Repo -}}
+  <div class="hf-container">
+    {{- template "repo-header" $p.Head}}
+    {{- if $repo.Empty}}
+    <section class="hf-card hf-empty" style="margin-top:16px">
+      <svg class="hf-i"><use href="#i-repo" /></svg>
+      <p><strong>This repository is empty.</strong> It has no commits on any branch yet.</p>
+    </section>
+    {{- else}}
+    <div class="hf-repo-body" style="margin-top:16px">
+      <div class="hf-repo-main">
+        <div class="hf-toolbar">
+          {{- if $p.CurrentRef}}{{template "repo-overview-refsw" $p}}{{end}}
+          <div class="hf-toolbar-right">
+            {{- if $p.CloneURL}}
+            <details class="hf-clone" data-clone-url="{{$p.CloneURL}}">
+              <summary class="hf-btn hf-btn--primary"><svg class="hf-i"><use href="#i-download" /></svg> Clone <svg class="hf-i hf-caret"><use href="#i-chev" /></svg></summary>
+              <div class="hf-clone-pop" role="region" aria-label="Clone options">
+                {{- /* A popover label, not a document section: a heading here put an <h4> at the
+                       top of the page outline, above the h1. The region's aria-label already
+                       carries the accessible name. */}}
+                <p class="hf-clone-head">Clone <span class="hf-tabs-mini"><span class="is-on">HTTPS</span></span></p>
+                <div class="hf-clone-url"><code>{{$p.CloneURL}}</code><button type="button" aria-label="Copy URL" data-copy="{{$p.CloneURL}}"><svg class="hf-i"><use href="#i-copy" /></svg></button></div>
+                <p>This site is a read-only mirror. Clone from the upstream on {{$p.UpstreamHost}}.</p>
+                {{- with $p.DefaultArchive}}
+                <a class="hf-clone-item" href="{{archiveURL $repo.Slug .Ref}}"><svg class="hf-i"><use href="#i-zip" /></svg> Download ZIP <small>{{formatBytes .Bytes}}</small></a>
+                {{- end}}
+              </div>
+            </details>
+            {{- else}}
+              {{- with $p.DefaultArchive}}
+              <a class="hf-btn" href="{{archiveURL $repo.Slug .Ref}}"><svg class="hf-i"><use href="#i-zip" /></svg> Download ZIP <small class="hf-muted">{{formatBytes .Bytes}}</small></a>
+              {{- end}}
+            {{- end}}
+          </div>
+        </div>
+        {{- with $p.HeadCommit}}
+        <div class="hf-commit-bar"><span class="hf-author"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">{{initials .Author.Name}}</span> {{.Author.Name}}</span><a class="hf-msg" href="{{commitURL $repo.Slug .Sha}}">{{.Subject}}</a><span class="hf-dot">·</span><code class="hf-sha">{{printf "%.7s" .Sha}}</code><span class="hf-dot">·</span><span class="hf-age {{heatClass .CommitDate}}" title="{{.CommitDate}}">{{relativeTime .CommitDate}}</span>
+          {{- if deref $repo.DefaultBranch}}<a class="hf-commits-link" href="{{commitsURL $repo.Slug (deref $repo.DefaultBranch) 1}}"><svg class="hf-i"><use href="#i-history" /></svg> <b>{{formatInt $repo.CommitCount}}</b> commits</a>{{end}}
+        </div>
+        {{- end}}
+        {{- if $p.Files}}
+        {{- template "repo-overview-files" $p}}
+        {{- else}}
+        <div class="hf-card hf-empty">
+          <svg class="hf-i"><use href="#i-folder" /></svg>
+          <p><strong>No files on <code>{{deref $repo.DefaultBranch}}</code>.</strong> The latest commit left the tree empty.</p>
+        </div>
+        {{- end}}
+        {{- if or $p.ReadmeHTML $p.ReadmeText}}
+        <article class="hf-card hf-readme-card">
+          <div class="hf-card-head"><svg class="hf-i"><use href="#i-note" /></svg><h2>README</h2><code>{{$p.Readme.Path}}</code></div>
+          {{- /* A README that is not markdown is shown as committed. It reaches the page as a
+                 plain string so html/template escapes it — the markdown path is the only one
+                 allowed to emit markup, and only after internal/markdown has made it inert. */}}
+          <div class="hf-card-body hf-md">{{if $p.ReadmeHTML}}{{$p.ReadmeHTML}}{{else}}<pre tabindex="0">{{$p.ReadmeText}}</pre>{{end}}</div>
+        </article>
+        {{- end}}
+      </div>
+
+      <aside class="hf-card hf-about" aria-labelledby="about-h">
+        <section class="hf-about-section">
+          <h2 id="about-h">About</h2>
+          {{- if deref $repo.Description}}<p>{{deref $repo.Description}}</p>{{else}}<p class="hf-muted">No description provided.</p>{{end}}
+          {{- if $p.Links}}
+          <ul class="hf-about-links">
+            {{- range $p.Links}}<li><svg class="hf-i"><use href="{{.Icon}}" /></svg><span class="hf-lbl">{{.Label}}</span><a href="{{.URL}}" rel="noopener">{{if .Text}}{{.Text}}{{else}}{{prettyURL .URL}}{{end}}</a></li>{{end}}
+          </ul>
+          {{- end}}
+        </section>
+        {{- if $repo.Tags}}
+        <section class="hf-about-section">
+          <h2>Tags</h2>
+          <div class="hf-about-tags">
+            {{- range $repo.Tags}}<a class="hf-tag" href="{{reposURL}}?tag={{. | urlquery}}">{{.}}</a>{{end}}
+          </div>
+        </section>
+        {{- end}}
+        <section class="hf-about-section">
+          <ul class="hf-about-meta">
+            {{- with $repo.License}}
+              {{- $spdx := deref .Spdx -}}
+              {{- $url := licenseURL $spdx}}
+            <li><svg class="hf-i"><use href="#i-scale" /></svg> {{if $url}}<a href="{{$url}}" rel="noopener"><b>{{$spdx}}</b></a>{{else}}<b>{{if .Spdx}}{{$spdx}}{{else}}Custom{{end}}</b>{{end}}&nbsp;license{{if deref .File}}<span class="hf-muted">&nbsp;· {{deref .File}}</span>{{end}}</li>
+            {{- end}}
+            <li><svg class="hf-i"><use href="#i-pulse" /></svg> <b>{{formatInt $repo.CommitCount}}</b>&nbsp;commits · last <span class="hf-age {{heatClass (deref $repo.UpdatedAt)}}">{{relativeTime (deref $repo.UpdatedAt)}}</span></li>
+            {{- with $p.LatestTag}}
+            <li><svg class="hf-i"><use href="#i-tag" /></svg> <b>{{len $repo.GitTags}}</b>&nbsp;tags · latest <code>{{.Name}}</code></li>
+            {{- end}}
+            {{- if deref $repo.CreatedAt}}
+            <li><svg class="hf-i"><use href="#i-history" /></svg> created <span class="hf-age t-cold" title="{{deref $repo.CreatedAt}}">{{relativeTime (deref $repo.CreatedAt)}}</span></li>
+            {{- end}}
+          </ul>
+        </section>
+        {{- if $repo.Languages}}
+        <section class="hf-about-section">
+          <h2>Languages</h2>
+          {{- /* The colour is interpolated only when the language map has one: the neutral
+                 fallback is a `var(...)` literal, and html/template's CSS filter would reject
+                 it as an action (parentheses can restart CSS parsing). */}}
+          <div class="hf-langbar" aria-hidden="true">
+            {{- range $repo.Languages}}<span style="width:{{.Percent}}%;background:{{if .Color}}{{deref .Color}}{{else}}var(--hf-lang-other){{end}}"></span>{{end}}
+          </div>
+          <div class="hf-lang-legend">
+            <ul>
+              {{- range $repo.Languages}}<li><span><i class="hf-lang-dot" style="background:{{if .Color}}{{deref .Color}}{{else}}var(--hf-lang-other){{end}}"></i><b>{{.Name}}</b></span><i>{{.Percent}}%</i></li>{{end}}
+            </ul>
+          </div>
+        </section>
+        {{- end}}
+        {{- if $repo.Contributors}}
+        <section class="hf-about-section">
+          <h2>Contributors <span class="hf-count hf-count--plain">{{len $repo.Contributors}}</span></h2>
+          <div class="hf-contributors">
+            {{- range $repo.Contributors}}<span class="hf-contributor"{{if deref .Description}} title="{{deref .Description}}"{{end}}>{{template "avatar" dict "Name" .Name "Src" (deref .Avatar) "Size" "sm" "Base" $.Router.Base}}{{if deref .URL}}<a href="{{deref .URL}}" rel="noopener"><strong>{{.Name}}</strong></a>{{else}}<strong>{{.Name}}</strong>{{end}}<small>{{formatInt .Commits}} commit{{if ne .Commits 1}}s{{end}}</small></span>{{end}}
+          </div>
+        </section>
+        {{- end}}
+      </aside>
+    </div>
+    {{- end}}
+  </div>
+{{end}}
+
+{{- /*
+  Branch/tag switcher for the overview toolbar — no JavaScript, just a <details> popup.
+  Port of src/components/RefSwitcher.astro at the tree root, which is the only place the
+  overview uses it: every ref links to its own root, so the path-matching the component does
+  for deeper directories has nothing to do here.
+*/ -}}
+{{define "repo-overview-refsw"}}
+  {{- $repo := .Repo -}}
+  {{- $cur := .CurrentRef -}}
+  <details class="hf-refsw">
+    <summary class="hf-btn hf-branch-btn" aria-label="Switch {{$cur.Kind}}: {{$cur.Name}}">
+      {{- if eq $cur.Kind "tag"}}<svg class="hf-i"><use href="#i-tag" /></svg>
+      {{- else}}<svg class="hf-i"><use href="#i-branch" /></svg>{{end -}}
+      <code>{{$cur.Name}}</code>
+      <svg class="hf-i hf-caret"><use href="#i-chev" /></svg>
+    </summary>
+    <div class="hf-refsw-pop" role="region" aria-label="Switch branches and tags">
+      {{- if .RefBranches}}
+      <div class="hf-refsw-group">
+        {{- /* A group label inside a popover, not a section of the document: as a heading it
+               put stray <h4>s at the very top of every repo page's outline. The list carries
+               the name instead, so a screen reader still announces "Branches, list". */}}
+        <p class="hf-refsw-grouphead" aria-hidden="true">Branches</p>
+        <ul aria-label="Branches">
+          {{- range .RefBranches}}<li><a href="{{treeURL $repo.Slug .Name ""}}"{{if eq .Name $cur.Name}} class="is-current" aria-current="true"{{end}}><svg class="hf-i"><use href="#i-branch" /></svg><code>{{.Name}}</code>{{if .IsDefault}}<span class="hf-refsw-default">default</span>{{end}}</a></li>{{end}}
+        </ul>
+      </div>
+      {{- end}}
+      {{- if .RefTags}}
+      <div class="hf-refsw-group">
+        <p class="hf-refsw-grouphead" aria-hidden="true">Tags</p>
+        <ul aria-label="Tags">
+          {{- range .RefTags}}<li><a href="{{treeURL $repo.Slug .Name ""}}"{{if eq .Name $cur.Name}} class="is-current" aria-current="true"{{end}}><svg class="hf-i"><use href="#i-tag" /></svg><code>{{.Name}}</code></a></li>{{end}}
+        </ul>
+      </div>
+      {{- end}}
+    </div>
+  </details>
+{{end}}
+
+{{- /*
+  The default branch's root directory. Port of src/components/FileTable.astro for the one case
+  the overview needs: no ".." row, because there is nothing above the root.
+
+  A row that is not a link explains itself — a submodule has no page here at all, and a path
+  holding '#' or '%' has no URL a static host can round-trip. Both still list, so the table
+  stays an honest view of the commit.
+*/ -}}
+{{define "repo-overview-files"}}
+  {{- $repo := .Repo -}}
+  <div class="hf-card hf-files">
+    <table>
+      <thead>
+        <tr><th scope="col">Name</th><th scope="col">Last commit</th><th scope="col" style="text-align:right">Updated</th></tr>
+      </thead>
+      <tbody>
+        {{- range .Files}}
+        {{- $dir := eq .Entry.Type "tree"}}
+        <tr>
+          <td>{{if .Href}}<a href="{{.Href}}" class="hf-fname{{if $dir}} is-dir{{end}}">{{if $dir}}<svg class="hf-i"><use href="#i-folder" /></svg>{{else}}<svg class="hf-i"><use href="#i-file" /></svg>{{end}}{{.Entry.Name}}</a>{{else if eq .Why "submodule"}}<span class="hf-fname"><svg class="hf-i"><use href="#i-package" /></svg>{{.Entry.Name}} <small class="hf-muted">(submodule)</small></span>{{else}}<span class="hf-fname{{if $dir}} is-dir{{end}}" title="'{{.Entry.Name}}' contains a character (# or %) that a static URL cannot round-trip, so it has no page here.">{{if $dir}}<svg class="hf-i"><use href="#i-folder" /></svg>{{else}}<svg class="hf-i"><use href="#i-file" /></svg>{{end}}{{.Entry.Name}} <small class="hf-muted">(not linkable)</small></span>{{end}}</td>
+          <td class="hf-fmsg">{{with .Commit}}<a href="{{commitURL $repo.Slug .Sha}}">{{.Subject}}</a>{{end}}</td>
+          <td class="hf-fage">{{if .Commit}}<span class="hf-age {{heatClass .Commit.CommitDate}}" title="{{.Commit.CommitDate}}">{{relativeTime .Commit.CommitDate}}</span>{{else}}<span class="hf-age t-cold">—</span>{{end}}</td>
+        </tr>
+        {{- end}}
+      </tbody>
+    </table>
+  </div>
+{{end}}

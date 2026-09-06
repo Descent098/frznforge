@@ -1,0 +1,48 @@
+{{- /*
+  One page of one branch's history, grouped by day. Port of src/components/CommitList.astro.
+  Shared by the commits index and its /page/N routes, which differ only in the page number.
+
+  Takes a build.commitList. Everything it draws — the day buckets, the branch links, the pager
+  ends — is decided in Go, so this file is markup and nothing else.
+*/ -}}
+{{define "commit-list"}}
+  {{- $repo := .Repo -}}
+  <div class="hf-toolbar">
+    <details class="hf-refsw">
+      <summary class="hf-btn hf-branch-btn" aria-label="Commits on branch {{.RefName}}"><svg class="hf-i"><use href="#i-branch" /></svg> <code>{{.RefName}}</code><svg class="hf-i hf-caret"><use href="#i-chev" /></svg></summary>
+      <div class="hf-refsw-pop" role="region" aria-label="Switch branch">
+        <div class="hf-refsw-group">
+          {{- /* A popover's group label, not a section of the document — see the ref switcher
+                 on the overview. The <ul> carries the name, so a screen reader still announces
+                 "Branches, list". */}}
+          <p class="hf-refsw-grouphead" aria-hidden="true">Branches</p>
+          <ul aria-label="Branches">
+            {{- range .Branches}}<li><a href="{{.URL}}"{{if .IsCurrent}} class="is-current" aria-current="true"{{end}}><svg class="hf-i"><use href="#i-branch" /></svg><code>{{.Name}}</code>{{if .IsDefault}}<span class="hf-refsw-default">default</span>{{end}}</a></li>{{end}}
+          </ul>
+        </div>
+      </div>
+    </details>
+    <span class="hf-muted"><b>{{formatInt .Total}}</b> commit{{if ne .Total 1}}s{{end}}</span>
+  </div>
+
+  <div class="hf-commit-groups">
+    {{- range .Groups}}
+    <section class="hf-commit-group">
+      <h2 class="hf-commit-day"><svg class="hf-i"><use href="#i-history" /></svg> Commits on {{.Label}}</h2>
+      <div class="hf-card hf-commit-list">
+        {{- range .Commits}}
+        <div class="hf-commit-row"><span class="hf-avatar hf-avatar--sm" aria-hidden="true">{{initials .Author.Name}}</span><div class="hf-commit-main"><a class="hf-commit-subject" href="{{commitURL $repo.Slug .Sha}}">{{.Subject}}</a><span class="hf-commit-sub"><span class="hf-commit-author">{{.Author.Name}}</span><span class="hf-dot">·</span><span class="hf-age {{heatClass .CommitDate}}" title="{{.CommitDate}}">{{relativeTime .CommitDate}}</span></span></div><span class="hf-commit-stats" title="{{.Stats.FilesChanged}} file{{if ne .Stats.FilesChanged 1}}s{{end}} changed"><b class="hf-adds">+{{formatInt .Stats.Additions}}</b><b class="hf-dels">−{{formatInt .Stats.Deletions}}</b></span><span class="hf-commit-sha"><button type="button" aria-label="Copy sha {{printf "%.7s" .Sha}}" data-copy="{{.Sha}}"><code>{{printf "%.7s" .Sha}}</code> <svg class="hf-i"><use href="#i-copy" /></svg></button></span></div>
+        {{- end}}
+      </div>
+    </section>
+    {{- end}}
+  </div>
+
+  {{- if gt .PageCount 1}}
+  <nav class="hf-pager" aria-label="Commit pages">
+    <a class="hf-btn hf-btn--sm"{{if .PrevURL}} href="{{.PrevURL}}"{{else}} aria-disabled="true"{{end}}><svg class="hf-i"><use href="#i-arrow-left" /></svg> Newer</a>
+    <span>Page {{.Page}} of {{.PageCount}}</span>
+    <a class="hf-btn hf-btn--sm"{{if .NextURL}} href="{{.NextURL}}"{{else}} aria-disabled="true"{{end}}>Older <svg class="hf-i"><use href="#i-arrow-right" /></svg></a>
+  </nav>
+  {{- end}}
+{{end}}

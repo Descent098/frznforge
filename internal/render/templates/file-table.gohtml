@@ -1,0 +1,116 @@
+{{- /*
+  Two partials for the repo sub-pages: the page header every one of them wears, and the file
+  listing a directory page draws. Ports of RepoHeader.astro and FileTable.astro.
+
+  The header lives HERE, with the tree/blob/releases/insights group, rather than in a shared
+  file of its own: while the 0.4.0 port is split by page family, the repo overview owns its own
+  copy, and a partial two families edit independently is exactly how two families come to
+  disagree about the chrome. When both have landed, one of them becomes the shared partial.
+
+  repo-sub-head takes a build.repoSubHead; file-table takes a build.fileTable.
+*/ -}}
+{{define "repo-sub-head"}}
+<header class="hf-repo-head">
+  {{- /*
+    Every repo sub-page owes a screen reader exactly one <h1>, and it is hidden rather than
+    drawn: the breadcrumb and the tab strip already say all of this on screen. Only Insights
+    draws a visible one, and it sets OwnHeading so this does not become the second.
+  */}}
+  {{- if not .OwnHeading}}
+  <h1 class="hf-sr">{{.Heading}}</h1>
+  {{- end}}
+  <div class="hf-repo-head-row">
+    <nav class="hf-crumb" aria-label="Breadcrumb">
+      <span class="hf-repo-icon"><svg class="hf-i"><use href="#i-repo" /></svg></span>
+      <a href="{{.HomeURL}}">{{.OwnerHandle}}</a>
+      <span class="hf-sep">/</span>
+      {{- if eq .Active "code"}}
+      <strong>{{.Name}}</strong>
+      {{- else}}
+      <a class="hf-crumb-repo" href="{{.RepoURL}}"><strong>{{.Name}}</strong></a>
+      {{- end}}
+      {{- if .Template}}
+      <span class="hf-tag hf-tag--template">Template</span>
+      {{- end}}
+    </nav>
+    <div class="hf-actions">
+      {{- if .Upstream}}
+      <a class="hf-btn" href="{{.Upstream}}" rel="noopener"><svg class="hf-i"><use href="#i-ext" /></svg> Open on {{.UpstreamHost}}</a>
+      {{- end}}
+    </div>
+  </div>
+  {{- if .Desc}}
+  <p class="hf-repo-summary">{{.Desc}}</p>
+  {{- end}}
+  {{- if and .Template (eq .Active "code")}}
+  <p class="hf-banner hf-banner--template"><svg class="hf-i"><use href="#i-copy" /></svg> This is a <b>template repository</b> — clone it, rename it and make it yours rather than contributing back.</p>
+  {{- end}}
+  <div class="hf-badges">
+    {{- if .HasLicense}}
+    {{- if .LicenseURL}}
+    <a class="hf-badge" href="{{.LicenseURL}}" rel="noopener"><svg class="hf-i"><use href="#i-scale" /></svg> <b>{{.LicenseLabel}}</b> license</a>
+    {{- else}}
+    <span class="hf-badge"><svg class="hf-i"><use href="#i-scale" /></svg> <b>{{.LicenseLabel}}</b> license</span>
+    {{- end}}
+    {{- end}}
+    {{- if .DefaultBranch}}
+    <span class="hf-badge"><svg class="hf-i"><use href="#i-branch" /></svg> default <code>{{.DefaultBranch}}</code></span>
+    {{- end}}
+    <span class="hf-badge"><svg class="hf-i"><use href="#i-branch" /></svg> <b>{{.Branches}}</b> {{plural .Branches "branch" "branches"}}</span>
+    <span class="hf-badge"><svg class="hf-i"><use href="#i-tag" /></svg> <b>{{.Tags}}</b> {{plural .Tags "tag" "tags"}}</span>
+    <span class="hf-badge"><svg class="hf-i"><use href="#i-people" /></svg> <b>{{.Contributors}}</b> {{plural .Contributors "contributor" "contributors"}}</span>
+  </div>
+  <nav class="hf-tabs" aria-label="Repository sections">
+    <a href="{{.RepoURL}}"{{if eq .Active "code"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-code" /></svg> Code</a>
+    {{- if and (not .Empty) .CommitsURL}}
+    <a href="{{.CommitsURL}}"{{if eq .Active "commits"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-history" /></svg> Commits <span class="hf-count">{{formatInt .CommitCount}}</span></a>
+    {{- end}}
+    {{- if not .Empty}}
+    <a href="{{.BranchesURL}}"{{if eq .Active "branches"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-branch" /></svg> Branches <span class="hf-count">{{.Branches}}</span></a>
+    <a href="{{.TagsURL}}"{{if eq .Active "tags"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-tag" /></svg> Tags <span class="hf-count">{{.Tags}}</span></a>
+    <a href="{{.ReleasesURL}}"{{if eq .Active "releases"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-package" /></svg> Releases <span class="hf-count">{{.Releases}}</span></a>
+    {{- end}}
+    {{- if .ShowInsights}}
+    <a href="{{.InsightsURL}}"{{if eq .Active "insights"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-chart" /></svg> Insights</a>
+    {{- end}}
+  </nav>
+</header>
+{{end}}
+
+{{- /*
+  A row may not be a link for one of two reasons, and both still list: a submodule has no page
+  on this site at all, and a path holding `#` or `%` has no URL a static host can round-trip
+  (ingest raised repo-path-unservable). Listing them keeps the tree an honest view of the
+  commit; a dead link would be worse than none.
+*/ -}}
+{{define "file-table"}}
+<div class="hf-card hf-files">
+  <table>
+    <thead>
+      <tr><th scope="col">Name</th><th scope="col">Last commit</th><th scope="col" style="text-align:right">Updated</th></tr>
+    </thead>
+    <tbody>
+      {{- if .ParentURL}}
+      <tr class="hf-parent">
+        <td colspan="3"><a href="{{.ParentURL}}" aria-label="Up a level">..</a></td>
+      </tr>
+      {{- end}}
+      {{- range .Rows}}
+      <tr>
+        <td>
+          {{- if .URL}}
+          <a href="{{.URL}}" class="hf-fname{{if .IsDir}} is-dir{{end}}"><svg class="hf-i">{{if .IsDir}}<use href="#i-folder" />{{else}}<use href="#i-file" />{{end}}</svg>{{.Name}}</a>
+          {{- else if eq .Why "submodule"}}
+          <span class="hf-fname"><svg class="hf-i"><use href="#i-package" /></svg>{{.Name}} <small class="hf-muted">(submodule)</small></span>
+          {{- else}}
+          <span class="hf-fname{{if .IsDir}} is-dir{{end}}" title="{{.Title}}"><svg class="hf-i">{{if .IsDir}}<use href="#i-folder" />{{else}}<use href="#i-file" />{{end}}</svg>{{.Name}} <small class="hf-muted">(not linkable)</small></span>
+          {{- end}}
+        </td>
+        <td class="hf-fmsg">{{if .CommitURL}}<a href="{{.CommitURL}}">{{.Subject}}</a>{{end}}</td>
+        <td class="hf-fage"><span class="hf-age {{heatClass .Date}}"{{if .Date}} title="{{.Date}}"{{end}}>{{relativeTime .Date}}</span></td>
+      </tr>
+      {{- end}}
+    </tbody>
+  </table>
+</div>
+{{end}}

@@ -3,7 +3,8 @@
  *  1. create the fixture git repos under tests/.tmp/e2e (local ones in repos/, the stand-in
  *     "provider" ones in origins/)
  *  2. run the real ingest pipeline on them → tests/.tmp/e2e/data
- *  3. `astro build` with FRZNFORGE_OUT_DIR pointing at that data → tests/.tmp/e2e/dist
+ *  3. render that artifact → tests/.tmp/e2e/dist, with Astro or (FRZNFORGE_E2E_ENGINE=go)
+ *     the Go build — see buildSite at the bottom
  * The webServer in playwright.config.ts then serves that dist.
  *
  * Nothing here touches the network — see `remoteDeps` for how the provider repos are faked.
@@ -398,21 +399,37 @@ export default async function globalSetup() {
   // these children fall back to the schema default and would read and write the developer's
   // real `.frznforge-cache`, leaving the suite non-hermetic and dropping fixture entries into
   // the actual site's cache.
-  execFileSync('npx', ['astro', 'build', '--outDir', DIST], {
-    cwd: ROOT,
-    stdio: 'pipe',
-    shell: true,
-    env: { ...process.env, FRZNFORGE_OUT_DIR: DATA, FRZNFORGE_CACHE_DIR: CACHE },
-  });
+  buildSite(DIST, { FRZNFORGE_OUT_DIR: DATA, FRZNFORGE_CACHE_DIR: CACHE });
 
   // The same artifact again, deployed under a sub-path: `FRZNFORGE_BASE` flows through
   // resolveConfig → astro.config.ts → Astro's `base` → import.meta.env.BASE_URL, which is
   // everything the site reads. `base-path.spec.ts` drives this dist (served with the
   // matching prefix by serve.ts on port 4398) and asserts no root-absolute URL leaked.
-  execFileSync('npx', ['astro', 'build', '--outDir', DIST_BASE], {
-    cwd: ROOT,
-    stdio: 'pipe',
-    shell: true,
-    env: { ...process.env, FRZNFORGE_OUT_DIR: DATA, FRZNFORGE_CACHE_DIR: CACHE, FRZNFORGE_BASE: '/mysite' },
-  });
+  buildSite(DIST_BASE, { FRZNFORGE_OUT_DIR: DATA, FRZNFORGE_CACHE_DIR: CACHE, FRZNFORGE_BASE: '/mysite' });
+}
+
+/**
+ * Render the fixture artifact into `outDir`, with whichever engine is being tested.
+ *
+ * `FRZNFORGE_E2E_ENGINE=go` runs the Go build instead of Astro. Both read the SAME artifact —
+ * the one this file just ingested, via `FRZNFORGE_OUT_DIR` — and the same site settings, so the
+ * specs that run against the result are comparing engines and nothing else. That is the point:
+ * the suite is the invariant across the 0.4.0 rewrite, and it must not be edited to accommodate
+ * either side.
+ *
+ * The switch is temporary. When Astro goes (Phase 9) the Astro branch goes with it and this
+ * becomes a single command.
+ */
+function buildSite(outDir: string, extraEnv: Record<string, string>): void {
+  const env = { ...process.env, ...extraEnv };
+  if (process.env.FRZNFORGE_E2E_ENGINE === 'go') {
+    execFileSync('go', ['run', './cmd/frznforge', 'build', `--out=${outDir}`], {
+      cwd: ROOT,
+      stdio: 'pipe',
+      shell: true,
+      env,
+    });
+    return;
+  }
+  execFileSync('npx', ['astro', 'build', '--outDir', outDir], { cwd: ROOT, stdio: 'pipe', shell: true, env });
 }

@@ -205,7 +205,7 @@ type BrowsableRef struct {
 // BrowsableRefs lists every ref with a browsable tree: the default branch first, then the ref
 // trees (branches, then tags), each group in code-point name order.
 func BrowsableRefs(repo *model.Repo) []BrowsableRef {
-	out := make([]BrowsableRef, 0, 1+len(repo.RefTrees))
+	out := make([]BrowsableRef, 0, 1+repo.RefTrees.Len())
 	if repo.DefaultBranch != nil && *repo.DefaultBranch != "" {
 		name := *repo.DefaultBranch
 		head := ""
@@ -220,10 +220,7 @@ func BrowsableRefs(repo *model.Repo) []BrowsableRef {
 			Commit: head, Tree: repo.Tree, Files: repo.Files,
 		})
 	}
-	rest := make([]model.RefTree, 0, len(repo.RefTrees))
-	for _, rt := range repo.RefTrees {
-		rest = append(rest, rt)
-	}
+	rest := repo.RefTrees.All()
 	// Branches before tags, then by name. Code-point order, never a locale-aware compare:
 	// localeCompare depends on the build machine's ICU data, so two machines would emit
 	// different HTML from the same artifact.
@@ -450,7 +447,7 @@ func (r Router) HostedFiles(data *model.ForgeData) []HostedFileRoute {
 		}
 		files := repo.Files
 		if repo.DefaultBranch == nil || site.Ref != *repo.DefaultBranch {
-			if rt, ok := repo.RefTrees[site.Ref]; ok {
+			if rt, ok := repo.RefTrees.Get(site.Ref); ok {
 				files = rt.Files
 			} else {
 				files = map[string]model.FileInfo{}

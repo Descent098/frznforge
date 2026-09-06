@@ -1,0 +1,86 @@
+{{- /*
+  Hero band for one organization's overview. Port of src/components/OrgHeader.astro.
+
+  Deliberately mirrors the owner profile hero — same hf-hero shell, same KPI grid columns — so
+  an organization reads as "a profile for a group of repos" rather than as a different kind of
+  page. Everything here comes from the artifact plus the optional content/orgs/<slug>.md, so an
+  org with no markdown file still renders a complete header.
+
+  Takes a build.orgHeader; the emitter has already done every aggregate.
+*/ -}}
+{{define "org-header"}}
+<section class="hf-hero" aria-labelledby="org-name">
+  {{template "avatar" dict "Name" .Org.Name "Src" .AvatarSrc "Size" "xl" "Eager" true "Base" .Base}}
+  <div class="hf-hero-id">
+    <div class="hf-hero-name">
+      <h1 id="org-name">{{.Org.Name}}</h1>
+      <span class="hf-handle">@{{.Org.Slug}}</span>
+    </div>
+    {{- if .Description}}
+    <p class="hf-hero-bio">{{.Description}}</p>
+    {{- end}}
+    <ul class="hf-hero-meta">
+      <li>
+        {{- /*
+          #i-layers, not #i-people: the sidebar and the command palette already mark
+          organizations with it, and a frznforge organization is a stack of repositories —
+          there are no accounts or members behind it for a people glyph to stand for.
+        */}}
+        <svg class="hf-i"><use href="#i-layers" /></svg>
+        Organization · {{formatInt .RepoCount}} member repositor{{if eq .RepoCount 1}}y{{else}}ies{{end}}
+      </li>
+    </ul>
+    <div class="hf-hero-links">
+      {{- range $i, $url := .Sites}}
+      <a class="hf-pill{{if eq $i 0}} hf-pill--accent{{end}}" href="{{$url}}"><svg class="hf-i"><use href="#i-globe" /></svg> {{prettyURL $url}}</a>
+      {{- end}}
+      {{- range .Links}}
+      <a class="hf-pill" href="{{.URL}}"><svg class="hf-i"><use href="#i-link" /></svg> {{.Label}}</a>
+      {{- end}}
+    </div>
+  </div>
+
+  <div class="hf-hero-kpis" aria-label="{{.Org.Name}} statistics">
+    <div class="hf-kpi hf-kpi--ember">
+      <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-repo" /></svg> Repositories</div>
+      <div class="hf-kpi-value">{{formatInt .RepoCount}}</div>
+      <div class="hf-kpi-sub">
+        {{- if gt .TouchedRecent 0}}<span class="t-hot">{{.TouchedRecent}} touched</span> {{.HotWindow}}
+        {{- else}}none touched {{.HotWindow}}{{end}}
+        {{- if gt .Templates 0}} · {{.Templates}} template{{if ne .Templates 1}}s{{end}}{{end}}
+      </div>
+    </div>
+    <div class="hf-kpi hf-kpi--ember">
+      <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-commit" /></svg> Commits this year</div>
+      <div class="hf-kpi-value">{{formatInt .CommitsYear}}</div>
+      <div class="hf-kpi-sub">
+        {{- if gt .CommitsRecent 0}}<span class="t-hot">+{{formatInt .CommitsRecent}}</span> in the last {{.HotDays}} days
+        {{- else}}none in the last {{.HotDays}} days{{end}}
+      </div>
+    </div>
+    <div class="hf-kpi hf-kpi--ice">
+      <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-history" /></svg> Years of history</div>
+      <div class="hf-kpi-value">{{.Years}}</div>
+      <div class="hf-kpi-sub">
+        {{- if .FirstCommit}}first commit <span class="t-cold">{{monthYear .FirstCommit}}</span>
+        {{- else}}no commits yet{{end}}
+      </div>
+    </div>
+    <div class="hf-kpi hf-kpi-langs">
+      <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-code" /></svg> Top languages</div>
+      {{- if .Languages}}
+      <div class="hf-langbar" aria-hidden="true">
+        {{- range .Languages}}<span style="width:{{.Percent}}%;background:{{.Color}}"></span>{{end}}
+      </div>
+      <div class="hf-lang-legend">
+        <ul>
+          {{- range .Languages}}<li><i class="hf-lang-dot" style="background:{{.Color}}"></i><b>{{.Name}}</b><i>{{.Percent}}%</i></li>{{end}}
+        </ul>
+      </div>
+      {{- else}}
+      <div class="hf-kpi-sub">No code detected yet.</div>
+      {{- end}}
+    </div>
+  </div>
+</section>
+{{end}}

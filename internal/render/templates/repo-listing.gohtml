@@ -1,0 +1,116 @@
+{{- /*
+  `<hf-repo-listing>` — search / filter / sort / paginate for a repo listing.
+  Port of src/components/RepoListing.astro.
+
+  Takes a build.RepoListingData. Rendered by /repos/ and, with its own basePath, by an
+  organization's /orgs/<slug>/repos/ — that second caller is why this is a partial with an
+  explicit payload rather than part of page-repos.
+
+  What is here and why it is here rather than in the script is documented on
+  build.RepoListingData; the short version is that the server renders the whole default view,
+  and web/js/hf-repo-listing.js adopts it instead of rebuilding it.
+*/ -}}
+{{define "repo-listing"}}
+<hf-repo-listing
+  data-base-path="{{.BasePath}}"
+  data-page-size="{{.PageSize}}"
+  data-now="{{.NowMillis}}"
+  data-heat="{{.HeatJSON}}">
+  <div class="hf-listing" id="listing-top">
+    <div class="hf-listing-toolbar">
+      <label class="hf-input hf-input--search">
+        <svg class="hf-i"><use href="#i-search" /></svg>
+        <input
+          type="search"
+          placeholder="Search repositories…"
+          value="{{.Query.Q}}"
+          aria-label="Search repositories"
+          data-hf-q
+        />
+      </label>
+      <label class="hf-select">
+        <span>Sort</span>
+        <select aria-label="Sort repositories" data-hf-sort>
+          {{- range .Sorts}}<option value="{{.Key}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+        </select>
+      </label>
+      <div class="hf-seg" role="group" aria-label="Repository kind">
+        {{- range .Kinds}}<button type="button"{{if .Active}} class="is-active"{{end}} data-hf-kind="{{.Key}}">{{.Label}}{{.Suffix}}</button>{{end}}
+      </div>
+      <span class="hf-listing-count" aria-live="polite" data-hf-count>{{.Total}} of {{.RepoCount}}</span>
+      <button type="button" class="hf-btn hf-btn--ghost hf-btn--sm" data-hf-clear hidden>Clear</button>
+    </div>
+
+    {{- if or .Languages .Tags}}
+    <div class="hf-facets">
+      {{- if .Languages}}
+      <div class="hf-facet-group">
+        <span class="hf-facet-label">Language</span>
+        {{- range .Languages}}<button type="button" class="hf-chip" aria-pressed="false" data-hf-facet="languages" data-hf-value="{{.Name}}">{{.Name}} <small>{{.Count}}</small></button>{{end}}
+      </div>
+      {{- end}}
+      {{- if .Tags}}
+      <div class="hf-facet-group">
+        <span class="hf-facet-label">Tags</span>
+        {{- range .Tags}}<button type="button" class="hf-chip" aria-pressed="false" data-hf-facet="tags" data-hf-value="{{.Name}}">{{.Name}} <small>{{.Count}}</small></button>{{end}}
+      </div>
+      {{- end}}
+    </div>
+    {{- end}}
+
+    <div class="hf-empty" data-hf-empty{{if .Items}} hidden{{end}}>
+      <svg class="hf-i"><use href="#i-repo" /></svg>
+      {{- if eq .RepoCount 0}}
+      <p><strong>No repositories yet.</strong> Add some to <code>frznforge.config.ts</code> and run <code>npm run ingest</code>.</p>
+      {{- else}}
+      <p><strong>Nothing matches.</strong> Try fewer filters.</p>
+      <button type="button" class="hf-btn hf-btn--ghost hf-btn--sm" data-hf-clear>Clear filters</button>
+      {{- end}}
+    </div>
+
+    <div class="hf-repo-grid hf-repo-grid--listing" data-hf-grid{{if not .Items}} hidden{{end}}>
+      {{- $base := .BasePath}}
+      {{- range .Items}}{{template "repo-card" (dict "Repo" . "TagHref" $base)}}{{end}}
+    </div>
+
+    <nav class="hf-pager" aria-label="Pagination" data-hf-pager{{if le .PageCount 1}} hidden{{end}}>
+      <a class="hf-btn hf-btn--ghost hf-btn--sm" href="{{.BasePath}}" aria-disabled="true" data-hf-prev>← Prev</a>
+      <span data-hf-pageinfo>Page {{.Page}} of {{.PageCount}}</span>
+      <a class="hf-btn hf-btn--ghost hf-btn--sm" href="?page=2" aria-disabled="{{if le .PageCount 1}}true{{else}}false{{end}}" data-hf-next>Next →</a>
+    </nav>
+  </div>
+
+  <script type="application/json" data-hf-repos>{{.Repos}}</script>
+
+  {{- /*
+    The card and its repeated parts, cloned by the element. This is the one definition of that
+    markup besides repo-card.gohtml itself; tests/e2e/web-components.spec.ts compares a card the
+    server rendered against one the browser built from these, so the two cannot silently drift.
+  */}}
+  <template data-hf-card>
+    <article class="hf-repo-card" data-slug>
+      <div class="hf-repo-top">
+        <span class="hf-repo-icon"><svg class="hf-i"><use href="#i-repo" /></svg></span>
+        <a class="hf-repo-name"></a>
+        <span class="hf-tag hf-tag--template">Template</span>
+      </div>
+      <p class="hf-repo-desc"></p>
+      <div class="hf-repo-tags"></div>
+      <div class="hf-repo-foot">
+        <span class="hf-langs"></span>
+        <span class="hf-age"></span>
+      </div>
+    </article>
+  </template>
+  <template data-hf-card-tag><a class="hf-tag"></a></template>
+  <template data-hf-card-lang><span><i class="hf-lang-dot"></i></span></template>
+  <template data-hf-card-nolang><span class="hf-muted"></span></template>
+</hf-repo-listing>
+
+{{- /*
+  Loaded beside the element rather than through Page.ExtraScripts: the organization listing
+  renders this same partial, and a script the CALLER has to remember to add is a listing that
+  works on one page and is inert on the other.
+*/}}
+<script type="module" src="{{withBase "/js/hf-repo-listing.js"}}"></script>
+{{end}}

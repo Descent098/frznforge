@@ -1,0 +1,48 @@
+{{- /*
+  One row of the releases index. Port of ReleaseCard.astro.
+
+  The notes are a plain-text summary here, not rendered markdown: release bodies routinely open
+  with a heading or a table and would dwarf the card. The full markdown lives on the release
+  page. Takes a build.releaseCard.
+*/ -}}
+{{define "release-card"}}
+<article class="hf-card hf-release-card">
+  <header class="hf-release-head">
+    <h2><a href="{{.URL}}">{{.Title}}</a></h2>
+    {{- if .Titled}}
+    <code class="hf-release-tag">{{.Tag}}</code>
+    {{- end}}
+    {{- if .IsLatest}}
+    <span class="hf-tag hf-release-latest">Latest</span>
+    {{- end}}
+    {{- if .Prerelease}}
+    <span class="hf-tag hf-release-pre">Pre-release</span>
+    {{- end}}
+    <span class="hf-age {{heatClass .Date}}" title="{{.Date}}">{{relativeTime .Date}}</span>
+  </header>
+
+  <div class="hf-release-meta">
+    {{- if .CommitURL}}
+    <span><svg class="hf-i"><use href="#i-commit" /></svg> <a href="{{.CommitURL}}"><code>{{.CommitShort}}</code></a></span>
+    {{- end}}
+    {{- if .Assets}}
+    <span><svg class="hf-i"><use href="#i-download" /></svg> {{.Assets}} {{plural .Assets "download" "downloads"}}</span>
+    {{- end}}
+    <span class="hf-release-origin">
+      <svg class="hf-i">{{if .Provider}}<use href="#i-package" />{{else}}<use href="#i-tag" />{{end}}</svg>
+      {{- .Origin -}}
+    </span>
+  </div>
+
+  {{- if .Summary}}
+  <p class="hf-release-summary">{{.Summary}}</p>
+  {{- end}}
+
+  <footer class="hf-release-more">
+    <a class="hf-btn hf-btn--sm" href="{{.URL}}"><svg class="hf-i"><use href="#i-package" /></svg> Release notes</a>
+    {{- if .ArchiveURL}}
+    <a class="hf-btn hf-btn--sm hf-btn--ghost" href="{{.ArchiveURL}}"><svg class="hf-i"><use href="#i-zip" /></svg> Source code (zip)</a>
+    {{- end}}
+  </footer>
+</article>
+{{end}}

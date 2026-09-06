@@ -1,0 +1,37 @@
+{{- /*
+  Every branch — /repos/<slug>/branches/. Port of
+  src/pages/repos/[slug]/branches/index.astro.
+
+  A branch past `ingest.branchTrees` has history and commit counts but no file browser, so its
+  name is plain text rather than a link: shipping the href regardless meant a 404 for the
+  visitor, explained only by a line in the build log. The banner says how many.
+*/ -}}
+{{define "page-branches"}}
+  {{- $p := .Payload -}}
+  {{- $repo := $p.Repo -}}
+  <div class="hf-container">
+    {{- template "repo-header" $p.Head}}
+    <div class="hf-repo-main" style="margin-top:16px">
+      {{- if $p.Capped}}
+      <p class="hf-banner"><svg class="hf-i" aria-hidden="true"><use href="#i-bolt" /></svg><span>{{if eq $p.Capped 1}}One branch is{{else}}{{$p.Capped}} branches are{{end}} listed but <b>not browsable</b>: past <code>ingest.branchTrees</code>, no file browser is generated. History and commit counts are complete either way.</span></p>
+      {{- end}}
+      <div class="hf-card hf-reflist">
+        <table>
+          <thead>
+            <tr><th scope="col">Branch</th><th scope="col">Last commit</th><th scope="col" style="text-align:right">Commits</th><th scope="col" style="text-align:right">Updated</th></tr>
+          </thead>
+          <tbody>
+            {{- range $p.Rows}}
+            <tr>
+              <td>{{if .Browsable}}<a class="hf-ref-name" href="{{.TreeURL}}"><svg class="hf-i"><use href="#i-branch" /></svg><code>{{.Branch.Name}}</code></a>{{else}}<span class="hf-ref-name"><svg class="hf-i"><use href="#i-branch" /></svg><code>{{.Branch.Name}}</code></span>{{end}}{{if .IsDefault}}<span class="hf-tag hf-ref-default">default</span>{{end}}{{if not .Browsable}}<span class="hf-tag hf-ref-nobrowse" title="Past ingest.branchTrees — no file browser was generated for this branch">not browsable</span>{{end}}</td>
+              <td class="hf-fmsg">{{with .Head}}<a href="{{commitURL $repo.Slug .Sha}}">{{.Subject}}</a>{{end}}</td>
+              <td class="hf-ref-count"><a href="{{.CommitsURL}}">{{formatInt .CommitCount}}</a></td>
+              <td class="hf-fage"><span class="hf-age {{heatClass .Branch.LastCommitDate}}" title="{{.Branch.LastCommitDate}}">{{relativeTime .Branch.LastCommitDate}}</span></td>
+            </tr>
+            {{- end}}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{{end}}

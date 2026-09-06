@@ -1,0 +1,15 @@
+{{- /*
+  The repository index at /repos/. Port of src/pages/repos/index.astro.
+
+  The page itself is only a heading: everything else is the reusable listing partial, which the
+  organization page family renders too. .Payload is a build.reposPage.
+*/ -}}
+{{define "page-repos"}}
+  <div class="hf-container">
+    <header class="hf-page-head">
+      <h1>Repositories</h1>
+      <p>{{.Payload.Count}} repositor{{if eq .Payload.Count 1}}y{{else}}ies{{end}} · search, filter and sort. Heat = how recently each repo moved.</p>
+    </header>
+    {{template "repo-listing" .Payload.Listing}}
+  </div>
+{{end}}

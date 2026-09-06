@@ -1,0 +1,55 @@
+{{- /*
+  /orgs/<slug>/ — one organization's overview. Port of src/pages/orgs/[slug]/index.astro.
+
+  The owner profile page for a group: the same hero + KPI band, the rendered body of
+  content/orgs/<slug>.md when that file exists, and a pinned or member repo grid. The markdown
+  file is optional — membership and name come from the artifact — so every branch below has to
+  work with no content at all.
+*/ -}}
+{{define "page-org"}}
+  {{- $org := .Payload.Header.Org -}}
+  <div class="hf-container">
+    {{template "org-header" .Payload.Header}}
+
+    {{- if .Payload.Body}}
+    <section class="hf-two-col hf-two-col--single" style="margin-top:16px">
+      <article class="hf-card hf-readme" aria-labelledby="org-about-h">
+        {{- /*
+          The same heading as the profile page: the chrome owns an h2 so the org's own markdown
+          cannot step h1 → h3 by opening at `##`, which this project's own organization page does.
+        */}}
+        <h2 class="hf-sr" id="org-about-h">About {{$org.Name}}</h2>
+        <div class="hf-md">{{.Payload.Body}}</div>
+      </article>
+    </section>
+    {{- end}}
+
+    <section aria-labelledby="org-repos-h" style="margin-top:28px">
+      <div class="hf-section-head">
+        <h2 id="org-repos-h">{{.Payload.Heading}}</h2>
+        <p>Heat = how recently each repo moved</p>
+        {{- if gt .Payload.RepoCount 0}}
+        <a class="hf-more" href="{{.Payload.ReposURL}}">
+          View all {{.Payload.RepoCount}} repositor{{if eq .Payload.RepoCount 1}}y{{else}}ies{{end}} →
+        </a>
+        {{- end}}
+      </div>
+      {{- if .Payload.Shown}}
+      <div class="hf-repo-grid">
+        {{- range .Payload.Shown}}
+        {{template "repo-card" (dict "Repo" . "TagHref" $.Payload.TagHref)}}
+        {{- end}}
+      </div>
+      {{- else}}
+      <div class="hf-empty hf-card">
+        <svg class="hf-i"><use href="#i-repo" /></svg>
+        <p>
+          <strong>No repositories in this organization yet.</strong> Add its slug to a repo source
+          (<code>org: '{{$org.Slug}}'</code>) or list the repo under <code>organizations</code> in
+          <code>frznforge.config.ts</code>, then run <code>npm run ingest</code>.
+        </p>
+      </div>
+      {{- end}}
+    </section>
+  </div>
+{{end}}

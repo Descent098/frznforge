@@ -1,0 +1,14 @@
+{{- /*
+  A branch's commit history — /repos/<slug>/commits/<ref>/ and its /page/N routes. Port of
+  src/pages/repos/[slug]/commits/[ref]/index.astro and page/[page].astro, which differ only in
+  the page number and so share one template here.
+*/ -}}
+{{define "page-commits"}}
+  {{- $p := .Payload -}}
+  <div class="hf-container">
+    {{- template "repo-header" $p.Head}}
+    <div class="hf-repo-main" style="margin-top:16px">
+      {{- template "commit-list" $p.List}}
+    </div>
+  </div>
+{{end}}

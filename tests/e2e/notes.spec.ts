@@ -129,7 +129,9 @@ test.describe('one note', () => {
 
     const code = page.locator('.hf-note-file .hf-code');
     await expect(code).toBeVisible();
-    await expect(code.locator('.shiki')).toHaveCount(1);
+    // `pre`, not the highlighter's own class: 0.4.0 swapped Shiki for chroma, and a spec that
+    // names the library rather than the guarantee has to be edited every time that changes.
+    await expect(code.locator('pre')).toHaveCount(1);
     expect(await code.locator('.line').count()).toBeGreaterThan(10);
     // The gutter is CSS counters on `.line`, and every line is anchorable — with an id
     // namespaced by the note file's section anchor, so a multi-file note cannot emit the same

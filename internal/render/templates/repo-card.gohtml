@@ -1,0 +1,44 @@
+{{- /*
+  One repo card. Port of src/components/RepoCard.astro.
+
+  SHARED by three page families — the profile page, the repo listing and an organization's
+  overview — which is why it is a partial rather than living inside one of them. It is also
+  mirrored by `<hf-repo-listing>`, which rebuilds the same markup in the browser from the
+  `<template>` the listing emits; tests/e2e/web-components.spec.ts compares the two.
+
+  Takes a dict:
+    Repo      a render.RepoSummary
+    TagHref   base path for tag chips, ending in "/" (the listing scopes these to an org)
+*/ -}}
+{{define "repo-card"}}
+  {{- $repo := .Repo -}}
+  {{- $heat := heat (deref $repo.UpdatedAt) -}}
+  <article class="hf-repo-card heat-{{$heat}}" data-slug="{{$repo.Slug}}">
+    <div class="hf-repo-top">
+      <span class="hf-repo-icon"><svg class="hf-i"><use href="#i-repo" /></svg></span>
+      <a class="hf-repo-name" href="{{repoURL $repo.Slug}}">{{$repo.Name}}</a>
+      {{- if $repo.Template}}<span class="hf-tag hf-tag--template">Template</span>{{end}}
+    </div>
+    <p class="hf-repo-desc">
+      {{- if $repo.Description}}{{deref $repo.Description}}
+      {{- else if $repo.Empty}}Empty repository.
+      {{- else}}No description.{{end -}}
+    </p>
+    <div class="hf-repo-tags">
+      {{- range $repo.Tags}}<a class="hf-tag" href="{{$.TagHref}}?tag={{. | urlquery}}">{{.}}</a>{{end -}}
+    </div>
+    <div class="hf-repo-foot">
+      <span class="hf-langs">
+        {{- $langs := topLangs $repo.Languages 3 -}}
+        {{- if $langs -}}
+          {{- range $langs}}<span><i class="hf-lang-dot" style="background: {{langColor .}}"></i>{{.Name}} {{.Percent}}%</span>{{end -}}
+        {{- else -}}
+          <span class="hf-muted">{{if $repo.Empty}}No commits{{else}}No code detected{{end}}</span>
+        {{- end -}}
+      </span>
+      <span class="hf-age t-{{$heat}}" title="{{deref $repo.UpdatedAt}}">
+        {{- if $repo.UpdatedAt}}{{relativeTime (deref $repo.UpdatedAt)}}{{else}}never{{end -}}
+      </span>
+    </div>
+  </article>
+{{end}}

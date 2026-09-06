@@ -14,8 +14,10 @@ test.describe('file browser', () => {
     await page.locator('.hf-files a.hf-fname', { hasText: 'index.ts' }).click();
     await expect(page).toHaveURL(/\/repos\/alpha\/blob\/main\/src\/index\.ts\/$/);
 
-    // highlighted code with line ids emitted by shiki
-    await expect(page.locator('.hf-code .shiki')).toBeVisible();
+    // Highlighted code with line ids. Matched as `pre` rather than by the highlighter's own
+    // class — 0.4.0 swapped Shiki for chroma, and the line ids below are the part that is
+    // actually ours to guarantee.
+    await expect(page.locator('.hf-code pre')).toBeVisible();
     await expect(page.locator('.hf-code .line#L1')).toBeVisible();
     await expect(page.locator('.hf-blob-meta')).toContainText('20 lines');
     await expect(page.locator('.hf-lang-badge')).toHaveText('TypeScript');
@@ -51,7 +53,7 @@ test.describe('file browser', () => {
     // toggle to source (radio-input CSS trick, no JS involved)
     await page.locator('label[for="hf-md-source"]').click();
     await expect(page.locator('.hf-mdview-preview')).toBeHidden();
-    await expect(page.locator('.hf-mdview-source .shiki')).toBeVisible();
+    await expect(page.locator('.hf-mdview-source pre')).toBeVisible();
     await expect(page.locator('.hf-mdview-source')).toContainText('# Guide');
   });
 

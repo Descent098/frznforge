@@ -277,7 +277,7 @@ func minimalRepo(slug string) Repo {
 		ExtraCommits: map[string]Commit{},
 		Tree:         []TreeEntry{},
 		Files:        map[string]FileInfo{},
-		RefTrees:     map[string]RefTree{},
+		RefTrees:     *NewRefTreeMap(),
 		Archives:     []Archive{},
 		Languages:    []LanguageStat{},
 		Contributors: []Contributor{},

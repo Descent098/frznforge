@@ -1,0 +1,41 @@
+{{- /*
+  One directory of one ref. Port of src/pages/repos/[slug]/tree/[ref]/[...path].astro.
+
+  The README below the listing is GitHub's convention and is rendered at the repo's trust level
+  — an imported repo's README is somebody else's writing.
+*/ -}}
+{{define "page-tree"}}
+{{- $p := .Payload}}
+<div class="hf-container">
+  {{template "repo-sub-head" $p.Head}}
+
+  <div class="hf-repo-main" style="margin-top:16px">
+    <div class="hf-toolbar">
+      {{template "ref-switcher" $p.Switcher}}
+      <nav class="hf-path-crumb" aria-label="Path">
+        <a href="{{$p.RootURL}}">{{$p.RepoName}}</a>
+        {{- range $p.Crumbs}}
+        <span class="hf-sep">/</span>
+        {{if .Last}}<strong>{{.Name}}</strong>{{else}}<a href="{{.URL}}">{{.Name}}</a>{{end}}
+        {{- end}}
+      </nav>
+    </div>
+
+    {{template "file-table" $p.Files}}
+
+    {{- with $p.Readme}}
+    <article class="hf-card hf-readme-card">
+      <div class="hf-card-head">
+        <svg class="hf-i"><use href="#i-note" /></svg>
+        <h2>README</h2>
+        <code>{{.Path}}</code>
+      </div>
+      <div class="hf-card-body hf-md">{{if .IsMarkdown}}{{.HTML}}{{else}}<pre tabindex="0">{{.Text}}</pre>{{end}}</div>
+    </article>
+    {{- end}}
+    {{- if $p.NoReadme}}
+    <p class="hf-dir-noreadme hf-muted">No README in this directory.</p>
+    {{- end}}
+  </div>
+</div>
+{{end}}

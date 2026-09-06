@@ -1,0 +1,182 @@
+{{- /*
+  The owner profile page at /. Port of src/pages/index.astro, with the contribution graph
+  (src/components/ContributionGraph.astro) as the partial below.
+
+  .Payload is a build.profilePayload: every derived value — the KPI figures, the pill list, the
+  activity rows, the graph — is computed in Go, so this file is markup and conditionals only.
+*/ -}}
+{{define "page-profile"}}
+  {{- $p := .Payload -}}
+  <div class="hf-container">
+    <section class="hf-hero" aria-labelledby="owner-name">
+      {{template "avatar" dict "Name" .Cfg.Owner.Name "Src" .Cfg.Owner.Avatar "Size" "xl" "Eager" true "Base" .Router.Base}}
+      <div class="hf-hero-id">
+        <div class="hf-hero-name">
+          <h1 id="owner-name">{{.Cfg.Owner.Name}}</h1>
+          <span class="hf-handle">@{{.Cfg.Owner.Handle}}</span>
+        </div>
+        {{- if $p.Bio}}
+        <p class="hf-hero-bio">{{$p.Bio}}</p>
+        {{- end}}
+        <ul class="hf-hero-meta">
+          {{- if $p.Location}}<li><svg class="hf-i"><use href="#i-pin" /></svg> {{$p.Location}}</li>{{end}}
+          {{- if $p.Workplace}}<li><svg class="hf-i"><use href="#i-briefcase" /></svg> {{$p.Workplace}}</li>{{end}}
+          {{- if $p.School}}<li><svg class="hf-i"><use href="#i-school" /></svg> {{$p.School}}</li>{{end}}
+          {{- if $p.Email}}<li><svg class="hf-i"><use href="#i-mail" /></svg> <a href="mailto:{{$p.Email}}">{{$p.Email}}</a></li>{{end}}
+        </ul>
+        <div class="hf-hero-links">
+          {{- range $p.Links}}<a class="{{.Class}}" href="{{.Href}}" rel="me"><svg class="hf-i"><use href="{{.Icon}}" /></svg> {{.Label}}</a>{{end}}
+        </div>
+      </div>
+
+      <div class="hf-hero-kpis" aria-label="Profile statistics">
+        <div class="hf-kpi hf-kpi--ember">
+          <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-repo" /></svg> Repositories</div>
+          <div class="hf-kpi-value">{{formatInt $p.RepoCount}}</div>
+          <div class="hf-kpi-sub">
+            {{- if gt $p.TouchedRecently 0}}<span class="t-hot">{{$p.TouchedRecently}} touched</span> {{$p.HotWindow}}
+            {{- else}}none touched {{$p.HotWindow}}{{end}}
+            {{- if gt $p.Templates 0}} · {{$p.Templates}} template{{if ne $p.Templates 1}}s{{end}}{{end -}}
+          </div>
+        </div>
+        <div class="hf-kpi hf-kpi--ember">
+          <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-commit" /></svg> Commits this year</div>
+          <div class="hf-kpi-value">{{formatInt $p.CommitsThisYear}}</div>
+          <div class="hf-kpi-sub">
+            {{- if gt $p.CommitsRecent 0}}<span class="t-hot">+{{formatInt $p.CommitsRecent}}</span> in the last {{$p.HotDays}} days
+            {{- else}}none in the last {{$p.HotDays}} days{{end -}}
+          </div>
+        </div>
+        <div class="hf-kpi hf-kpi--ice">
+          <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-history" /></svg> Years of history</div>
+          <div class="hf-kpi-value">{{$p.Years}}</div>
+          <div class="hf-kpi-sub">
+            {{- if $p.FirstCommit}}first commit <span class="t-cold">{{monthYear $p.FirstCommit}}</span>
+            {{- else}}no commits yet{{end -}}
+          </div>
+        </div>
+        <div class="hf-kpi hf-kpi-langs">
+          <div class="hf-kpi-label"><svg class="hf-i"><use href="#i-code" /></svg> Top languages</div>
+          {{- if $p.Languages}}
+          <div class="hf-langbar" aria-hidden="true">
+            {{- range $p.Languages}}<span style="width:{{.Percent}}%;background:{{.Dot}}"></span>{{end -}}
+          </div>
+          <div class="hf-lang-legend">
+            <ul>
+              {{- range $p.Languages}}<li><i class="hf-lang-dot" style="background:{{.Dot}}"></i><b>{{.Name}}</b><i>{{.Percent}}%</i></li>{{end -}}
+            </ul>
+          </div>
+          {{- else}}
+          <div class="hf-kpi-sub">No code detected yet.</div>
+          {{- end}}
+        </div>
+      </div>
+    </section>
+
+    {{- /*
+      Two columns, collapsing to one when there is no activity to show. The empty <div> in the
+      no-README case is deliberate: the activity card is the SECOND grid cell, and dropping the
+      first would move it under the hero's left rail.
+    */}}
+    <section class="hf-two-col{{if not $p.Activity}} hf-two-col--single{{end}}" style="margin-top:16px">
+      {{- if $p.HasReadme}}
+      <article class="hf-card hf-readme" aria-labelledby="profile-readme-h">
+        {{- /*
+          The card owns an h2 so the outline cannot skip a level into the body: user markdown
+          starts wherever the author started it, and a profile.md opening with `## …` would
+          otherwise step h1 → h3. Hidden, because on screen the card is obviously the README.
+        */}}
+        <h2 class="hf-sr" id="profile-readme-h">Profile README</h2>
+        <div class="hf-md">{{$p.Readme}}</div>
+      </article>
+      {{- else}}
+      <div></div>
+      {{- end}}
+      {{- if $p.Activity}}
+      <aside class="hf-card hf-activity" aria-labelledby="activity-h">
+        <div class="hf-card-head">
+          <svg class="hf-i"><use href="#i-pulse" /></svg>
+          <h2 id="activity-h">Recent activity</h2>
+        </div>
+        <ul class="hf-activity-list">
+          {{- range $p.Activity}}
+          <li>
+            <span class="hf-act-icon t-{{.Heat}}"><svg class="hf-i"><use href="{{.Icon}}" /></svg></span>
+            {{- if .IsTag}}
+            <span class="hf-act-text">Tagged <code>{{.Tag}}</code> in <a href="{{.URL}}">{{.Repo}}</a></span>
+            {{- else}}
+            <span class="hf-act-text">Pushed {{.Count}} commit{{if ne .Count 1}}s{{end}} to <a href="{{.URL}}">{{.Repo}}</a>/<code>{{.Branch}}</code></span>
+            {{- end}}
+            <span class="hf-age t-{{.Heat}}" title="{{.Date}}">{{.Age}}</span>
+          </li>
+          {{- end}}
+        </ul>
+      </aside>
+      {{- end}}
+    </section>
+
+    <section aria-labelledby="pinned-h" style="margin-top:28px">
+      <div class="hf-section-head">
+        <h2 id="pinned-h">{{if $p.Pinned}}Pinned{{else}}Repositories{{end}}</h2>
+        <p>Heat = how recently each repo moved</p>
+        <a class="hf-more" href="{{reposURL}}">View all {{$p.RepoCount}} repositor{{if eq $p.RepoCount 1}}y{{else}}ies{{end}} →</a>
+      </div>
+      {{- if $p.Cards}}
+      <div class="hf-repo-grid">
+        {{- range $p.Cards}}{{template "repo-card" (dict "Repo" . "TagHref" reposURL)}}{{end}}
+      </div>
+      {{- else}}
+      <div class="hf-empty hf-card">
+        <svg class="hf-i"><use href="#i-repo" /></svg>
+        <p><strong>No repositories yet.</strong> Add some to <code>frznforge.config.ts</code> and run <code>npm run ingest</code>.</p>
+      </div>
+      {{- end}}
+    </section>
+
+    {{- if $p.ShowGraph}}
+    <div style="margin-top:16px">
+      {{template "page-profile-contrib" $p.Graph}}
+    </div>
+    {{- end}}
+  </div>
+{{end}}
+
+{{- /*
+  The contribution heat map. Port of src/components/ContributionGraph.astro: pure HTML and CSS,
+  no script — hue is recency (fire → ice), intensity is the commit-count quartile.
+
+  Takes a build.contribGraph.
+*/ -}}
+{{define "page-profile-contrib"}}
+<section class="hf-card hf-contrib" aria-labelledby="contrib-h">
+  <div class="hf-contrib-head">
+    <h2 id="contrib-h">{{formatInt .Total}} contributions in the last year</h2>
+    <p>Recent weeks burn ember; older ones cool to ice.</p>
+    <span class="hf-legend" aria-hidden="true">Less<i style="--c: var(--hf-canvas-2)"></i><i style="--c: rgba(47, 134, 199, 0.42)"></i><i style="--c: var(--hf-ice)"></i><i style="--c: var(--hf-amber)"></i><i style="--c: var(--hf-ember)"></i>More</span>
+  </div>
+  {{- /*
+    Focusable: the 52-week grid is wider than a phone, so this is a scrollable region. Firefox
+    and Safari do not make scrollers keyboard-reachable on their own and there is nothing
+    focusable inside — without tabindex the graph cannot be scrolled without a mouse (axe
+    `scrollable-region-focusable`, WCAG 2.1.1).
+  */}}
+  <div class="hf-contrib-scroll" tabindex="0" role="group" aria-labelledby="contrib-h">
+    <div class="hf-contrib-months" aria-hidden="true" style="grid-template-columns: repeat(52, 1fr);">
+      {{- range .Months}}<span style="grid-column: {{.Col}} / {{.EndCol}}">{{.Label}}</span>{{end -}}
+    </div>
+    <div class="hf-contrib-grid" role="img" aria-label="Contribution heat map: {{formatInt .Total}} commits in the last 52 weeks">
+      {{- range $week := .Weeks}}{{range $week}}
+        {{- if . -}}
+          {{- if gt .Level 0}}<i class="{{.Family}} c-{{.Level}}" title="{{.Day}}: {{.Count}} commit{{if ne .Count 1}}s{{end}}"></i>
+          {{- else}}<i title="{{.Day}}: {{.Count}} commit{{if ne .Count 1}}s{{end}}"></i>{{end}}
+        {{- else}}<i class="is-future"></i>{{end}}
+      {{- end}}{{end -}}
+    </div>
+  </div>
+  <div class="hf-contrib-foot">
+    {{- if gt .LongestStreak 0}}<span>Longest streak <b>{{.LongestStreak}} day{{if ne .LongestStreak 1}}s{{end}}</b></span>{{end}}
+    {{- with .BusiestDay}}<span>Busiest day <b>{{.Day}}</b> · {{.Count}} commits</span>{{end}}
+    {{- if eq .Total 0}}<span>No commits in the last year.</span>{{end}}
+  </div>
+</section>
+{{end}}

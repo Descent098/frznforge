@@ -1,0 +1,711 @@
+{
+  "repos": [
+    {
+      "slug": "alpha",
+      "name": "alpha",
+      "description": "A static site generator",
+      "tags": [
+        "ssg",
+        "cli"
+      ],
+      "template": false,
+      "empty": false,
+      "languages": [
+        {
+          "name": "Go",
+          "percent": 80,
+          "color": "#00ADD8"
+        },
+        {
+          "name": "CSS",
+          "percent": 20,
+          "color": null
+        }
+      ],
+      "commitCount": 12,
+      "createdAt": "2024-01-01T00:00:00Z",
+      "updatedAt": "2026-09-01T00:00:00Z"
+    },
+    {
+      "slug": "bravo",
+      "name": "Bravo",
+      "description": null,
+      "tags": [
+        "cli"
+      ],
+      "template": false,
+      "empty": false,
+      "languages": [
+        {
+          "name": "Go",
+          "percent": 100,
+          "color": "#00ADD8"
+        }
+      ],
+      "commitCount": 3,
+      "createdAt": "2023-06-01T00:00:00Z",
+      "updatedAt": "2025-01-01T00:00:00Z"
+    },
+    {
+      "slug": "charlie",
+      "name": "charlie",
+      "description": "Templates and things",
+      "tags": [
+        "template"
+      ],
+      "template": true,
+      "empty": false,
+      "languages": [
+        {
+          "name": "TypeScript",
+          "percent": 100,
+          "color": "#3178c6"
+        }
+      ],
+      "commitCount": 40,
+      "createdAt": "2025-01-01T00:00:00Z",
+      "updatedAt": "2026-09-01T00:00:00Z"
+    },
+    {
+      "slug": "delta",
+      "name": "Delta",
+      "description": "no languages here",
+      "tags": [],
+      "template": false,
+      "empty": false,
+      "languages": [],
+      "commitCount": 1,
+      "createdAt": null,
+      "updatedAt": null
+    },
+    {
+      "slug": "echo",
+      "name": "alpha",
+      "description": "duplicate display name",
+      "tags": [
+        "ssg"
+      ],
+      "template": false,
+      "empty": true,
+      "languages": [],
+      "commitCount": 0,
+      "createdAt": "2022-01-01T00:00:00Z",
+      "updatedAt": "2026-09-01T00:00:00Z"
+    },
+    {
+      "slug": "foxtrot",
+      "name": "FOXTROT",
+      "description": "SHOUTING",
+      "tags": [
+        "cli",
+        "ssg"
+      ],
+      "template": true,
+      "empty": false,
+      "languages": [
+        {
+          "name": "Rust",
+          "percent": 55.5,
+          "color": "#dea584"
+        },
+        {
+          "name": "Go",
+          "percent": 44.5,
+          "color": "#00ADD8"
+        }
+      ],
+      "commitCount": 7,
+      "createdAt": "2024-06-01T00:00:00Z",
+      "updatedAt": "2024-06-02T00:00:00Z"
+    }
+  ],
+  "facets": {
+    "languages": [
+      {
+        "name": "Go",
+        "count": 3
+      },
+      {
+        "name": "CSS",
+        "count": 1
+      },
+      {
+        "name": "Rust",
+        "count": 1
+      },
+      {
+        "name": "TypeScript",
+        "count": 1
+      }
+    ],
+    "tags": [
+      {
+        "name": "cli",
+        "count": 3
+      },
+      {
+        "name": "ssg",
+        "count": 3
+      },
+      {
+        "name": "template",
+        "count": 1
+      }
+    ],
+    "templates": 2
+  },
+  "sorts": {
+    "updated-desc": [
+      "alpha",
+      "echo",
+      "charlie",
+      "bravo",
+      "foxtrot",
+      "delta"
+    ],
+    "updated-asc": [
+      "delta",
+      "foxtrot",
+      "bravo",
+      "alpha",
+      "echo",
+      "charlie"
+    ],
+    "created-desc": [
+      "charlie",
+      "foxtrot",
+      "alpha",
+      "bravo",
+      "echo",
+      "delta"
+    ],
+    "created-asc": [
+      "delta",
+      "echo",
+      "bravo",
+      "alpha",
+      "foxtrot",
+      "charlie"
+    ],
+    "name-asc": [
+      "alpha",
+      "echo",
+      "bravo",
+      "charlie",
+      "delta",
+      "foxtrot"
+    ],
+    "name-desc": [
+      "foxtrot",
+      "delta",
+      "charlie",
+      "bravo",
+      "echo",
+      "alpha"
+    ]
+  },
+  "matches": [
+    {
+      "slug": "alpha",
+      "query": true,
+      "filters": true
+    },
+    {
+      "slug": "bravo",
+      "query": true,
+      "filters": true
+    },
+    {
+      "slug": "charlie",
+      "query": true,
+      "filters": false
+    },
+    {
+      "slug": "delta",
+      "query": true,
+      "filters": false
+    },
+    {
+      "slug": "echo",
+      "query": true,
+      "filters": false
+    },
+    {
+      "slug": "foxtrot",
+      "query": false,
+      "filters": true
+    }
+  ],
+  "listings": [
+    {
+      "name": "default",
+      "query": {
+        "q": "",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "alpha",
+        "echo",
+        "charlie",
+        "bravo",
+        "foxtrot",
+        "delta"
+      ],
+      "total": 6,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "page-size-2",
+      "query": {
+        "q": "",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 2
+      },
+      "items": [
+        "alpha",
+        "echo"
+      ],
+      "total": 6,
+      "page": 1,
+      "pageCount": 3
+    },
+    {
+      "name": "page-2-of-2",
+      "query": {
+        "q": "",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 2,
+        "pageSize": 2
+      },
+      "items": [
+        "charlie",
+        "bravo"
+      ],
+      "total": 6,
+      "page": 2,
+      "pageCount": 3
+    },
+    {
+      "name": "page-clamped-high",
+      "query": {
+        "q": "",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 99,
+        "pageSize": 2
+      },
+      "items": [
+        "foxtrot",
+        "delta"
+      ],
+      "total": 6,
+      "page": 3,
+      "pageCount": 3
+    },
+    {
+      "name": "page-clamped-low",
+      "query": {
+        "q": "",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 0,
+        "pageSize": 2
+      },
+      "items": [
+        "alpha",
+        "echo"
+      ],
+      "total": 6,
+      "page": 1,
+      "pageCount": 3
+    },
+    {
+      "name": "sort-updated-asc",
+      "query": {
+        "q": "",
+        "sort": "updated-asc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "delta",
+        "foxtrot",
+        "bravo",
+        "alpha",
+        "echo",
+        "charlie"
+      ],
+      "total": 6,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "sort-created-desc",
+      "query": {
+        "q": "",
+        "sort": "created-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "charlie",
+        "foxtrot",
+        "alpha",
+        "bravo",
+        "echo",
+        "delta"
+      ],
+      "total": 6,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "sort-created-asc",
+      "query": {
+        "q": "",
+        "sort": "created-asc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "delta",
+        "echo",
+        "bravo",
+        "alpha",
+        "foxtrot",
+        "charlie"
+      ],
+      "total": 6,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "sort-name-asc",
+      "query": {
+        "q": "",
+        "sort": "name-asc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "alpha",
+        "echo",
+        "bravo",
+        "charlie",
+        "delta",
+        "foxtrot"
+      ],
+      "total": 6,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "sort-name-desc",
+      "query": {
+        "q": "",
+        "sort": "name-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "foxtrot",
+        "delta",
+        "charlie",
+        "bravo",
+        "echo",
+        "alpha"
+      ],
+      "total": 6,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "kind-template",
+      "query": {
+        "q": "",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "template",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "charlie",
+        "foxtrot"
+      ],
+      "total": 2,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "kind-normal",
+      "query": {
+        "q": "",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "normal",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "alpha",
+        "echo",
+        "bravo",
+        "delta"
+      ],
+      "total": 4,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "lang-go",
+      "query": {
+        "q": "",
+        "sort": "updated-desc",
+        "languages": [
+          "Go"
+        ],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "alpha",
+        "bravo",
+        "foxtrot"
+      ],
+      "total": 3,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "lang-two",
+      "query": {
+        "q": "",
+        "sort": "updated-desc",
+        "languages": [
+          "Go",
+          "CSS"
+        ],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "alpha"
+      ],
+      "total": 1,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "tag-cli",
+      "query": {
+        "q": "",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [
+          "cli"
+        ],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "alpha",
+        "bravo",
+        "foxtrot"
+      ],
+      "total": 3,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "tag-two",
+      "query": {
+        "q": "",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [
+          "cli",
+          "ssg"
+        ],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "alpha",
+        "foxtrot"
+      ],
+      "total": 2,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "text-single",
+      "query": {
+        "q": "static",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "alpha"
+      ],
+      "total": 1,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "text-multi",
+      "query": {
+        "q": "static site",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "alpha"
+      ],
+      "total": 1,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "text-case",
+      "query": {
+        "q": "SHOUTING",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "foxtrot"
+      ],
+      "total": 1,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "text-by-slug",
+      "query": {
+        "q": "foxtrot",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "foxtrot"
+      ],
+      "total": 1,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "text-by-language",
+      "query": {
+        "q": "rust",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "foxtrot"
+      ],
+      "total": 1,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "text-no-match",
+      "query": {
+        "q": "zzz-nothing",
+        "sort": "updated-desc",
+        "languages": [],
+        "tags": [],
+        "kind": "all",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [],
+      "total": 0,
+      "page": 1,
+      "pageCount": 1
+    },
+    {
+      "name": "combined",
+      "query": {
+        "q": "a",
+        "sort": "updated-desc",
+        "languages": [
+          "Go"
+        ],
+        "tags": [
+          "cli"
+        ],
+        "kind": "normal",
+        "page": 1,
+        "pageSize": 50
+      },
+      "items": [
+        "alpha",
+        "bravo"
+      ],
+      "total": 2,
+      "page": 1,
+      "pageCount": 1
+    }
+  ]
+}

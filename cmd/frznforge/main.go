@@ -2,8 +2,12 @@
 // static site.
 //
 // It is being built up phase by phase (docs/dev/plans/version-0.4.0-phased.md). Today it
-// carries two commands:
+// carries:
 //
+//   - `ingest`, the git-and-network half: it scans the configured repositories and writes
+//     forge.json plus its blob and archive stores. Its acceptance bar is byte identity with
+//     `npm run ingest` for the same repositories at the same commits.
+//   - `build`, the pure half: artifact in, static site out, reading no git and no network.
 //   - `verify`, the wedge the rest of the rewrite is checked against: it proves Go reads and
 //     re-emits the artifact byte for byte, so every later claim about the Go ingest being
 //     correct is a diff rather than an opinion.
@@ -17,7 +21,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
+	"frznforge/internal/build"
 	"frznforge/internal/config"
 	"frznforge/internal/model"
 )
@@ -25,6 +32,17 @@ import (
 const usage = `frznforge — static forge site generator
 
 Usage
+  frznforge ingest [--no-cache] [--backfill-metadata] [--root=<dir>] [--out=<dir>]
+                                    Scan the configured repositories into
+                                    <ingest.outDir>/forge.json plus blobs/ and archives/.
+                                    --no-cache ignores the provider, freshness and scan
+                                    caches for this run; --backfill-metadata spends the
+                                    provider quota only on repos that have no metadata yet.
+
+  frznforge build [--out=<dir>] [-v]
+                                    Render the artifact in data/ into a static site.
+                                    Reads no network and no git: the artifact is the input.
+
   frznforge verify [<forge.json>]   Read an artifact, validate it, re-serialize it, and
                                     compare byte for byte with the file on disk.
                                     Defaults to data/forge.json.
@@ -50,6 +68,10 @@ func run(args []string) error {
 		return nil
 	}
 	switch args[0] {
+	case "ingest":
+		return ingestCmd(args[1:])
+	case "build":
+		return buildCmd(args[1:])
 	case "verify":
 		path := filepath.Join("data", "forge.json")
 		if len(args) > 1 {
@@ -61,6 +83,28 @@ func run(args []string) error {
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usage)
 	}
+}
+
+// buildCmd renders the artifact into a static site.
+func buildCmd(args []string) error {
+	opts := build.Options{Root: "."}
+	for _, a := range args {
+		switch {
+		case a == "-v" || a == "--verbose":
+			opts.Verbose = true
+		case strings.HasPrefix(a, "--out="):
+			opts.OutDir = strings.TrimPrefix(a, "--out=")
+		default:
+			return fmt.Errorf("build: unknown flag %q", a)
+		}
+	}
+	res, err := build.Run(opts)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("built %d files (%.1f MB) in %s\n",
+		res.Routes, float64(res.Bytes)/(1024*1024), res.Elapsed.Round(time.Millisecond))
+	return nil
 }
 
 func configCmd(args []string) error {

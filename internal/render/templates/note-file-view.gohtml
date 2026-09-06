@@ -1,0 +1,94 @@
+{{- /*
+  One file of a note, rendered as a card. Port of src/components/NoteFileView.astro.
+
+  The note-side mirror of the repo blob viewer: same .hf-blob card, same meta row, same
+  Raw / Download / Copy path affordances, same line gutter, same binary / too-large fallback,
+  and the same no-JS Preview/Source radio toggle for markdown.
+
+  The radios MUST stay leading siblings of .hf-blob-head and of both body divs: web/css/notes.css
+  hides the inactive view with `.hf-nv-input--source:checked ~ .hf-nv-preview`, and a wrapper
+  around any of the three would break every one of those rules at once.
+
+  Takes a build.noteFileView — the emitter decides Mode, because the choice is a chain of five
+  conditions over the artifact and the blob rather than a presentational one.
+*/ -}}
+{{define "note-file-view"}}
+  {{- $toggle := eq .Mode "md-toggle" -}}
+  <section class="hf-note-file" id="{{.Anchor}}" aria-labelledby="{{.Anchor}}-name">
+    <div class="hf-card hf-blob">
+      {{- if $toggle}}
+      <input type="radio" name="hf-nv-{{.Group}}" id="{{.PreviewID}}" class="hf-mdview-input hf-nv-input hf-nv-input--preview" checked />
+      <input type="radio" name="hf-nv-{{.Group}}" id="{{.SourceID}}" class="hf-mdview-input hf-nv-input hf-nv-input--source" />
+      {{- end}}
+
+      <div class="hf-blob-head hf-note-file-head">
+        <h2 class="hf-note-file-name" id="{{.Anchor}}-name">
+          <svg class="hf-i" aria-hidden="true"><use href="#i-file" /></svg>
+          <a href="#{{.Anchor}}">{{.File.Path}}</a>
+        </h2>
+        <div class="hf-blob-meta">
+          {{- if .HasLines}}<span><b>{{formatInt .LineCount}}</b> lines</span><span class="hf-dot">·</span>{{end}}
+          <span>{{formatBytes .File.Size}}</span>
+          {{- if .File.Language}}<span class="hf-badge hf-lang-badge">{{deref .File.Language}}</span>{{end}}
+          {{- if .File.Binary}}<span class="hf-badge">binary</span>{{end}}
+          {{- if .File.TooLarge}}<span class="hf-badge">too large</span>{{end}}
+        </div>
+        <div class="hf-blob-actions">
+          {{- if $toggle}}
+          <span class="hf-seg hf-mdview-seg" role="group" aria-label="View {{.File.Path}} as">
+            <label for="{{.PreviewID}}" class="hf-mdview-lbl hf-nv-lbl hf-nv-lbl--preview">Preview</label>
+            <label for="{{.SourceID}}" class="hf-mdview-lbl hf-nv-lbl hf-nv-lbl--source">Source</label>
+          </span>
+          {{- end}}
+          {{- if .Raw}}
+          <a class="hf-btn hf-btn--sm" href="{{.Raw}}">Raw</a>
+          <a class="hf-btn hf-btn--sm" href="{{.Raw}}" download="{{.File.Name}}"><svg class="hf-i" aria-hidden="true"><use href="#i-download" /></svg> Download</a>
+          {{- end}}
+          <button type="button" class="hf-btn hf-btn--sm" data-copy="{{.File.Path}}" aria-label="Copy path of {{.File.Path}}"><svg class="hf-i" aria-hidden="true"><use href="#i-copy" /></svg> Copy path</button>
+        </div>
+      </div>
+
+      {{- if $toggle}}
+      <div class="hf-blob-body hf-nv-preview">
+        <div class="hf-md hf-blob-md">{{.MdPreview}}</div>
+      </div>
+      <div class="hf-blob-body hf-nv-source">
+        <div class="hf-code">{{.MdSource}}</div>
+      </div>
+      {{- else if eq .Mode "md-only"}}
+      {{- /* Too large to highlight: the preview still renders, there is just nothing to
+             toggle to, so no radios are emitted and no toggle is offered. */}}
+      <div class="hf-blob-body">
+        <div class="hf-md hf-blob-md">{{.MdPreview}}</div>
+      </div>
+      {{- else if eq .Mode "image"}}
+      <div class="hf-blob-body hf-blob-image">
+        <img src="{{.Raw}}" alt="{{.File.Name}}" />
+      </div>
+      {{- else if eq .Mode "code"}}
+      <div class="hf-blob-body">
+        <div class="hf-code">{{.CodeHTML}}</div>
+      </div>
+      {{- else if eq .Mode "plain"}}
+      <div class="hf-blob-body">
+        <p class="hf-code-note">Syntax highlighting skipped — file exceeds {{formatInt .MaxLines}} lines / {{formatBytes .MaxBytes}}.</p>
+        <div class="hf-code"><pre class="hf-code-plain"><code>{{.Text}}</code></pre></div>
+      </div>
+      {{- else}}
+      <div class="hf-blob-body">
+        <div class="hf-empty hf-blob-fallback">
+          <svg class="hf-i" aria-hidden="true"><use href="#i-file" /></svg>
+          {{- if .File.TooLarge}}
+          <p><strong>File too large to display.</strong> {{formatBytes .File.Size}}.</p>
+          {{- else}}
+          <p><strong>Binary file</strong> · {{formatBytes .File.Size}}</p>
+          {{- end}}
+          {{- if .Raw}}
+          <a class="hf-btn" href="{{.Raw}}" download="{{.File.Name}}"><svg class="hf-i" aria-hidden="true"><use href="#i-download" /></svg> Download</a>
+          {{- end}}
+        </div>
+      </div>
+      {{- end}}
+    </div>
+  </section>
+{{end}}

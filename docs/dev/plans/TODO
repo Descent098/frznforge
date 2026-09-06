@@ -14,10 +14,10 @@ Additional things to keep in mind:
 
 - [x] Swap over all svelte components to regular web components (0.4.0 Phase 2 — `web/js/*.js`, no build step; framework runtime and bundled mermaid both gone from `dist/_astro/`)
 - [ ] Replace Astro with a golang system that just builds and exports a bundle fully custom, fully static bundle
-  - [ ] Keep dependencies to a minimum
-    - [ ] Don't bother doing steps like minification either
+  - [x] Keep dependencies to a minimum (2 direct: goldmark + chroma, 1 transitive)
+    - [x] Don't bother doing steps like minification either (0.4.0 — `public/` and `web/` are copied byte for byte: no minify, no bundle, no content hash)
     - [ ] Ideally the UI should be no-build throughout the entire process until after the final bundle is generated if the user wants to, via some sort of post-processing step
-  - [ ] Move the ingest to a more concurrency-friendly approach where as the system is ingesting information it can build the pages for that repo, while fetching data for other repos
+  - [x] Move the ingest to a more concurrency-friendly approach where as the system is ingesting information it can build the pages for that repo, while fetching data for other repos (0.4.0 Phase 7 — landed as parallel rendering at BOTH levels, repos and pages; the fetch/render overlap was measured as worth a few seconds against a 204 s render, the core-level parallelism as worth half of it. Self-site 3.66 s → 1.84 s vs astro's 8.74 s)
   - [ ] Re-use as much of what's already here as you can, but be willing to pull things out or change the architecture if it makes sense
 
 

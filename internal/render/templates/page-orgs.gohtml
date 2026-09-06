@@ -1,0 +1,90 @@
+{{- /*
+  /orgs/ — one card per organization. Port of src/pages/orgs/index.astro.
+
+  Always built, even with no organizations, exactly like /repos/: routes.OrgRoutes lists it
+  unconditionally and the sync test asserts the build against that list. Only the sidebar entry
+  hides at count 0.
+*/ -}}
+{{define "page-orgs"}}
+  {{- $count := len .Payload.Cards -}}
+  <div class="hf-container">
+    <header class="hf-page-head">
+      <h1>Organizations</h1>
+      <p>
+        {{$count}} organization{{if ne $count 1}}s{{end}} · groups of repositories with their own overview.
+        Heat = how recently anything inside the group moved.
+      </p>
+    </header>
+
+    {{- /*
+      An orgs markdown file is only ever reached through an organization's slug, so one typo in
+      the filename silently discards the whole file — prose, links, pins. The Astro page only
+      console.warn'd; a warning nobody reads is not a symptom, so it is on the page.
+    */}}
+    {{- if .Payload.Unmatched}}
+    <p class="hf-banner">
+      <svg class="hf-i"><use href="#i-layers" /></svg>
+      <span>
+        No organization claims
+        {{- range $i, $id := .Payload.Unmatched}}{{if $i}},{{end}} <code>content/orgs/{{$id}}.md</code>{{end}} —
+        nothing renders {{plural (len .Payload.Unmatched) "it" "them"}}. Check the slug against
+        <code>organizations</code> in <code>frznforge.config.ts</code>.
+      </span>
+    </p>
+    {{- end}}
+
+    {{- if .Payload.Cards}}
+    <ul class="hf-org-grid">
+      {{- range .Payload.Cards}}
+      <li>
+        <article class="hf-org-card heat-{{.Heat}}" data-slug="{{.Org.Slug}}">
+          <div class="hf-org-top">
+            {{template "avatar" dict "Name" .Org.Name "Src" .AvatarSrc "Size" "md" "Base" .Base}}
+            <h2><a href="{{.URL}}">{{.Org.Name}}</a></h2>
+            <span class="hf-handle">@{{.Org.Slug}}</span>
+          </div>
+          <p class="hf-org-desc">{{if .Description}}{{.Description}}{{else}}No description.{{end}}</p>
+          <ul class="hf-org-facts">
+            <li>
+              <svg class="hf-i"><use href="#i-repo" /></svg>
+              <b>{{formatInt .Count}}</b> repositor{{if eq .Count 1}}y{{else}}ies{{end}}
+            </li>
+            <li>
+              {{- /*
+                Every card carries this link, so the org name has to reach the accessible name —
+                but WCAG 2.5.3 needs the visible text to survive inside it, or "click Browse the
+                listing" fails as a speech command. Hence the visible label first, the org
+                appended.
+              */}}
+              <a href="{{.ReposURL}}" aria-label="Browse the listing for {{.Org.Name}}">Browse the listing →</a>
+            </li>
+          </ul>
+          <div class="hf-org-foot">
+            <span class="hf-langs">
+              {{- if .Languages}}
+              {{- range .Languages}}<span><i class="hf-lang-dot" style="background:{{.Color}}"></i>{{.Name}} {{.Percent}}%</span>{{end}}
+              {{- else}}
+              <span class="hf-muted">{{if .Count}}No code detected{{else}}No repositories{{end}}</span>
+              {{- end}}
+            </span>
+            <span class="hf-age t-{{.Heat}}" title="{{.UpdatedAt}}">{{if .UpdatedAt}}{{relativeTime .UpdatedAt}}{{else}}never{{end}}</span>
+          </div>
+        </article>
+      </li>
+      {{- end}}
+    </ul>
+    {{- else}}
+    <div class="hf-empty hf-card">
+      {{- /* #i-layers everywhere organizations appear: sidebar, palette, hero, here. */}}
+      <svg class="hf-i"><use href="#i-layers" /></svg>
+      <p>
+        <strong>No organizations yet.</strong> Add one to <code>organizations</code> in
+        <code>frznforge.config.ts</code> — it needs a <code>slug</code> and a <code>name</code> —
+        then list its members there with <code>repos: ['my-repo']</code> or set
+        <code>org: 'my-org'</code> on a repo source. Prose and links come from
+        <code>content/orgs/&lt;slug&gt;.md</code>. Run <code>npm run ingest</code> to pick the change up.
+      </p>
+    </div>
+    {{- end}}
+  </div>
+{{end}}

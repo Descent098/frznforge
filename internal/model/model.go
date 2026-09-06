@@ -373,11 +373,12 @@ type Repo struct {
 	// Tree is a flat listing of the default-branch HEAD tree, sorted by path.
 	Tree  []TreeEntry         `json:"tree"`
 	Files map[string]FileInfo `json:"files"`
-	// RefTrees are the trees of NON-default refs, keyed by ref name.
-	RefTrees     map[string]RefTree `json:"refTrees"`
-	Archives     []Archive          `json:"archives"`
-	Languages    []LanguageStat     `json:"languages"`
-	Contributors []Contributor      `json:"contributors"`
+	// RefTrees are the trees of NON-default refs, keyed by ref name. An ordered map, not a
+	// plain one — see reftreemap.go for the divergence that costs.
+	RefTrees     RefTreeMap     `json:"refTrees"`
+	Archives     []Archive      `json:"archives"`
+	Languages    []LanguageStat `json:"languages"`
+	Contributors []Contributor  `json:"contributors"`
 	// Insights is null for an empty repo and when ingest.insights.enabled is false.
 	Insights *RepoInsights `json:"insights"`
 	Readme   *Readme       `json:"readme"`

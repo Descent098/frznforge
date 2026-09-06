@@ -1,0 +1,71 @@
+{{- /*
+  The header every repository page wears: breadcrumb, description, badges and the section
+  tabs. Port of src/components/RepoHeader.astro.
+
+  Takes the dict build.repoHead(b, repo, active) returns, NOT a Page — a partial cannot reach
+  the site config or work out the upstream's hostname, the release count or whether an insights
+  page was built, and those last two decide what the tab strip shows. Keys:
+
+    Repo Active Heading OwnHeading Handle UpstreamHost Releases ShowInsights
+
+  Every repo sub-page renders this, so `Active` is the only thing most callers change.
+
+  The visually hidden <h1> is the page's only heading: the repo name on screen is a <strong>
+  inside the breadcrumb <nav>, so without it a screen-reader user pressing `1` or `H` on a
+  branches, tags, commits or blob page finds nothing at all. A page that draws its own visible
+  <h1> (the commit page, insights) sets OwnHeading so there is still exactly one.
+*/ -}}
+{{define "repo-header"}}
+  {{- $repo := .Repo -}}
+  {{- $active := .Active -}}
+  {{- $upstream := deref $repo.Links.Upstream -}}
+  <header class="hf-repo-head">
+    {{- if not .OwnHeading}}<h1 class="hf-sr">{{.Heading}}</h1>{{end}}
+    <div class="hf-repo-head-row">
+      <nav class="hf-crumb" aria-label="Breadcrumb">
+        <span class="hf-repo-icon"><svg class="hf-i"><use href="#i-repo" /></svg></span>
+        <a href="{{homeURL}}">{{.Handle}}</a>
+        <span class="hf-sep">/</span>
+        {{- if eq $active "code"}}<strong>{{$repo.Name}}</strong>
+        {{- else}}<a class="hf-crumb-repo" href="{{repoURL $repo.Slug}}"><strong>{{$repo.Name}}</strong></a>{{end}}
+        {{- if $repo.Template}}<span class="hf-tag hf-tag--template">Template</span>{{end}}
+      </nav>
+      <div class="hf-actions">
+        {{- if $upstream}}<a class="hf-btn" href="{{$upstream}}" rel="noopener"><svg class="hf-i"><use href="#i-ext" /></svg> Open on {{.UpstreamHost}}</a>{{end}}
+      </div>
+    </div>
+    {{- if deref $repo.Description}}<p class="hf-repo-summary">{{deref $repo.Description}}</p>{{end}}
+    {{- if and $repo.Template (eq $active "code")}}
+    <p class="hf-banner hf-banner--template"><svg class="hf-i"><use href="#i-copy" /></svg> This is a <b>template repository</b> — clone it, rename it and make it yours rather than contributing back.</p>
+    {{- end}}
+    <div class="hf-badges">
+      {{- with $repo.License}}
+        {{- $spdx := deref .Spdx -}}
+        {{- $url := licenseURL $spdx -}}
+        {{- if $url}}<a class="hf-badge" href="{{$url}}" rel="noopener"><svg class="hf-i"><use href="#i-scale" /></svg> <b>{{$spdx}}</b> license</a>
+        {{- else}}<span class="hf-badge"><svg class="hf-i"><use href="#i-scale" /></svg> <b>{{if .Spdx}}{{$spdx}}{{else}}Custom{{end}}</b> license</span>{{end}}
+      {{- end}}
+      {{- if deref $repo.DefaultBranch}}<span class="hf-badge"><svg class="hf-i"><use href="#i-branch" /></svg> default <code>{{deref $repo.DefaultBranch}}</code></span>{{end}}
+      {{- $branches := len $repo.Branches}}
+      <span class="hf-badge"><svg class="hf-i"><use href="#i-branch" /></svg> <b>{{$branches}}</b> {{plural $branches "branch" "branches"}}</span>
+      {{- $tags := len $repo.GitTags}}
+      <span class="hf-badge"><svg class="hf-i"><use href="#i-tag" /></svg> <b>{{$tags}}</b> {{plural $tags "tag" "tags"}}</span>
+      {{- $people := len $repo.Contributors}}
+      <span class="hf-badge"><svg class="hf-i"><use href="#i-people" /></svg> <b>{{$people}}</b> {{plural $people "contributor" "contributors"}}</span>
+    </div>
+    <nav class="hf-tabs" aria-label="Repository sections">
+      <a href="{{repoURL $repo.Slug}}"{{if eq $active "code"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-code" /></svg> Code</a>
+      {{- if and (not $repo.Empty) (deref $repo.DefaultBranch)}}
+      <a href="{{commitsURL $repo.Slug (deref $repo.DefaultBranch) 1}}"{{if eq $active "commits"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-history" /></svg> Commits <span class="hf-count">{{formatInt $repo.CommitCount}}</span></a>
+      {{- end}}
+      {{- if not $repo.Empty}}
+      <a href="{{branchesURL $repo.Slug}}"{{if eq $active "branches"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-branch" /></svg> Branches <span class="hf-count">{{len $repo.Branches}}</span></a>
+      <a href="{{tagsURL $repo.Slug}}"{{if eq $active "tags"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-tag" /></svg> Tags <span class="hf-count">{{len $repo.GitTags}}</span></a>
+      <a href="{{releasesURL $repo.Slug}}"{{if eq $active "releases"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-package" /></svg> Releases <span class="hf-count">{{.Releases}}</span></a>
+      {{- end}}
+      {{- if .ShowInsights}}
+      <a href="{{insightsURL $repo.Slug}}"{{if eq $active "insights"}} aria-current="page"{{end}}><svg class="hf-i"><use href="#i-chart" /></svg> Insights</a>
+      {{- end}}
+    </nav>
+  </header>
+{{end}}

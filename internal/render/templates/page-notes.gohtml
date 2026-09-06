@@ -1,0 +1,81 @@
+{{- /*
+  /notes/ — every gist-style note, newest first (the artifact's own order).
+  Port of src/pages/notes/index.astro.
+
+  Deliberately a plain static list rather than an island: notes are a handful of hand-written
+  files, they arrive pre-sorted, and Ctrl+K already indexes their titles and tags. Nothing on
+  this page needs JavaScript.
+
+  The page always exists, even with no notes (routes.NotesRoutes lists it unconditionally), so
+  the empty state has to say where notes come from.
+*/ -}}
+{{define "page-notes"}}
+  {{- $count := len .Data.Notes -}}
+  <div class="hf-container">
+    <header class="hf-page-head">
+      <h1>Notes</h1>
+      <p>
+        {{$count}} note{{if ne $count 1}}s{{end}} · snippets, cheatsheets and small
+        multi-file gists. Newest first; heat = how recently each one was written.
+      </p>
+    </header>
+
+    {{- if not .Payload.Cards}}
+    <div class="hf-empty">
+      <svg class="hf-i" aria-hidden="true"><use href="#i-note" /></svg>
+      <p>
+        <strong>No notes yet.</strong> Drop a markdown file into <code>content/notes/</code> for a
+        single-file note, or a folder of files for a multi-file one, then run
+        <code>npm run ingest</code>.
+      </p>
+    </div>
+    {{- else}}
+    <ul class="hf-note-list">
+      {{- range .Payload.Cards}}
+      {{- $note := .Note}}
+      <li>
+        <article class="hf-note-card heat-{{.Heat}}">
+          <div class="hf-note-card-top">
+            <span class="hf-note-card-icon" aria-hidden="true">
+              <svg class="hf-i"><use href="{{if eq $note.Kind "folder"}}#i-folder{{else}}#i-note{{end}}" /></svg>
+            </span>
+            <h2 class="hf-note-card-title"><a href="{{noteURL $note.Slug}}">{{$note.Title}}</a></h2>
+            {{- if $note.Date}}
+            <time class="hf-age t-{{.Heat}}" datetime="{{deref $note.Date}}" title="{{isoDay (deref $note.Date)}}">{{relativeTime (deref $note.Date)}}</time>
+            {{- else}}
+            <span class="hf-age t-{{.Heat}}">undated</span>
+            {{- end}}
+          </div>
+
+          {{- if $note.Description}}
+          <p class="hf-note-desc">{{deref $note.Description}}</p>
+          {{- end}}
+
+          {{- if $note.Tags}}
+          <ul class="hf-note-tags" aria-label="Tags for {{$note.Title}}">
+            {{- range $note.Tags}}<li><span class="hf-tag">{{.}}</span></li>{{end}}
+          </ul>
+          {{- end}}
+
+          <ul class="hf-note-files" aria-label="Files in {{$note.Title}}">
+            <li class="hf-note-kind">
+              {{- if eq $note.Kind "folder"}}{{len $note.Files}} {{plural (len $note.Files) "file" "files"}}
+              {{- else}}single file{{end}} · {{formatBytes $note.TotalBytes}}
+            </li>
+            {{- range .Shown}}
+            <li>
+              <code>{{.Path}}</code>
+              {{- if .Language}}<span class="hf-badge hf-lang-badge">{{deref .Language}}</span>{{end}}
+            </li>
+            {{- end}}
+            {{- if gt .Hidden 0}}
+            <li class="hf-note-more">+{{.Hidden}} more</li>
+            {{- end}}
+          </ul>
+        </article>
+      </li>
+      {{- end}}
+    </ul>
+    {{- end}}
+  </div>
+{{end}}

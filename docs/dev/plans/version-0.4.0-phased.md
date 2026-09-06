@@ -368,38 +368,55 @@ Tests
 
 ---
 
-## Phase 4 — Go renderer I: the shell, the site-wide pages, and the parity harness
+## Phase 4 — Go renderer I: the shell, the site-wide pages, and the parity harness ✅ *(done 2026-09-06)*
 
 Goal: the first HTML out of Go, and the instrument that judges all of it.
 
 Ships
-- [ ] `internal/routes`: a port of `src/lib/routes.ts` (496 lines) — `withBase`, `refSlug` /
+- [x] `internal/routes`: a port of `src/lib/routes.ts` (496 lines) — `withBase`, `refSlug` /
       `refFromSlug`, `encodePathSegments`, `isRawServable`, every URL builder, `allRoutes`.
       `allRoutes(data)` is not decoration: it is the list the emitted file set is checked
       against, and it is how the sync tests already assert "everything in the artifact has a
       page" without running a build.
-- [ ] `internal/render`: an `html/template` set. Base layout, `Sidebar`, `IconSprite`,
+- [x] `internal/render`: an `html/template` set. Base layout, `Sidebar`, `IconSprite`,
       `Avatar`, `OrgHeader` as partials. Contextual escaping is stdlib and free; the one thing
       to get right is that pre-rendered markdown and highlighted code are `template.HTML` and
       nothing else is.
-- [ ] Frontmatter and content: port `src/lib/frontmatter.ts` (336 lines) and read
+- [x] Frontmatter and content: port `src/lib/frontmatter.ts` (336 lines) and read
       `content/profile.md` and `content/orgs/*.md` as a directory walk. Astro content
       collections (`src/content.config.ts`) get no successor and need none — the collection was
       a loader plus a zod schema, and both halves already exist elsewhere.
-- [ ] Page families: `/` (profile), `/repos/`, `/orgs/`, `/orgs/<slug>/`,
+- [x] Page families: `/` (profile), `/repos/`, `/orgs/`, `/orgs/<slug>/`,
       `/orgs/<slug>/repos/`, `/notes/`, `/notes/<slug>/`, `/notes/<slug>/raw/<path>`, `/404`,
       and `/search-index.json` (port `src/lib/search.ts`, 165 lines).
-- [ ] Static assets: `public/`, `web/js/` and `web/css/` copied verbatim into `dist/`. **This
+- [x] Static assets: `public/`, `web/js/` and `web/css/` copied verbatim into `dist/`. **This
       is the no-build guarantee the TODO asks for** — no transform, no rename, no hash, byte
       for byte. Write it into `docs/dev/architecture.md` as a rule, because it is the kind of
       thing a later convenience quietly breaks.
-- [ ] **`tools/parity`**: build the e2e fixture artifact once, render it with `astro build` and
+- [x] **`tools/parity`**: build the e2e fixture artifact once, render it with `astro build` and
       with `frznforge build`, parse both into a DOM, strip the Astro-only runtime scaffold,
       and compare the trees route by route — printing a per-family report with counts and the
       first differing node path. The comparison is structural, per oracle 2: element order and
       nesting, tag names, meaning-carrying attributes, normalized text. Attribute order and
       insignificant whitespace are not differences.
-- [ ] The strip list is short, *reviewed*, and lives in one file with a comment per entry:
+*As built (2026-09-06): `tests/parity/compare.mjs`.* Written in Node driving Chromium rather
+than in Go, for one reason: HTML parsing is the whole problem, and a hand-rolled tokenizer would
+disagree with a browser on exactly the malformed markup this exists to catch. Playwright is
+already a dependency, and Chromium's parser is the same one that will render these pages — which
+makes "the same DOM" mean what a reader would mean by it. It also keeps `golang.org/x/net/html`
+out of the shipped module.
+
+Proven before being trusted: it reports **clean** on two documents that differ only by Astro's
+scaffolding, and **fails** on a single dropped character in a class name.
+
+A **second declared exception** turned up immediately and is now written down beside the code
+blocks: **stylesheet links and external scripts, stripped on both sides**. Astro emits one hashed
+bundle per page; the Go build links `web/css` and `web/js` verbatim. The two lists cannot be
+mapped onto each other, and that difference *is* the no-build rule working. What actually matters
+— that the CSS and the scripts load and do their job — is what the Playwright suite tests, on the
+real site.
+
+- [x] The strip list is short, *reviewed*, and lives in one file with a comment per entry:
       `<meta name="generator">`, `_astro/` script and link tags, `astro-island` /
       `astro-slot` wrappers and their `uid`/`opts`/`props` attributes, and Astro's scoped
       class hashes (`astro-xxxxxxxx`). A strip rule is how a real difference hides, so every
@@ -407,51 +424,51 @@ Ships
       what it claims to.
 
 Done when
-- [ ] Every route in these families is structurally equal to Astro's, or appears in a short
+- [x] Every route in these families is structurally equal to Astro's, or appears in a short
       exceptions file with a stated reason.
-- [ ] `frznforge build --no-ingest` on this repository's artifact emits exactly the file set
+- [x] `frznforge build --no-ingest` on this repository's artifact emits exactly the file set
       `allRoutes` predicts for these families — no extras, no gaps.
 
 Tests
-- [ ] Go ports of `tests/unit/{base-path,repo-path-encoding,search,listing,format}.test.ts`.
-- [ ] The parity harness itself gets a test: a deliberately corrupted page must make it fail.
+- [x] Go ports of `tests/unit/{base-path,repo-path-encoding,search,listing,format}.test.ts`.
+- [x] The parity harness itself gets a test: a deliberately corrupted page must make it fail.
       An oracle nobody has watched fail is not an oracle.
 
 ---
 
-## Phase 5 — Go renderer II: the multiplier families, markdown and highlighting
+## Phase 5 — Go renderer II: the multiplier families, markdown and highlighting ✅ *(done 2026-09-06)*
 
 Goal: the other 90% of the pages. Tree, blob and raw are 87–90% of every build measured
 (`performance.md`), so this is where both the correctness risk and the performance prize sit.
 
 Ships
-- [ ] **Markdown — goldmark.** CommonMark + GFM (tables, strikethrough, autolinks, task lists)
+- [x] **Markdown — goldmark.** CommonMark + GFM (tables, strikethrough, autolinks, task lists)
       plus the four frznforge behaviours in `src/lib/markdown.ts` (197 lines): the `safeUrl`
       sanitizer (`:69`), the trusted-source rule (`isTrustedSource`, `:190`) that decides
       whether raw HTML in a README is allowed through, mermaid fences left as
       `<pre class="mermaid">` for the client renderer (`containsMermaid`, `:182`), and
       `focusableCodeBlocks` (`:163`). goldmark's AST transformers do all four without string
       post-processing; do it that way.
-- [ ] **Highlighting — chroma**, per the owner decision: class-based tokens, with light and
+- [x] **Highlighting — chroma**, per the owner decision: class-based tokens, with light and
       dark rules hand-written into `repo.css` beside the existing tokens and driven by the same
       `[data-theme]` attribute. `internal/highlight` carries the language map — the
       `LANGUAGE_TO_SHIKI` table at `src/lib/highlight.ts:8-66` becomes `LANGUAGE_TO_CHROMA`,
       keyed by the same artifact language names the ingest language map emits, so a name that
       exists on one side and not the other is a test failure rather than an uncoloured file.
-- [ ] `countLines` keeps its editor rule (`src/lib/highlight.ts:208`) and the trailing-newline
+- [x] `countLines` keeps its editor rule (`src/lib/highlight.ts:208`) and the trailing-newline
       trim, so the gutter numbers and the "N lines" label still agree. That pairing is
       load-bearing in two places — blob pages, and the insights code-size series, whose schema
       comment cites the same rule — and it is easy to lose in a port.
-- [ ] **A wrapper the blob page owes the highlighter.** `internal/highlight` emits
+- [x] **A wrapper the blob page owes the highlighter.** `internal/highlight` emits
       `<pre class="hf-chroma">`, and every colour rule added to `web/css/repo.css` is scoped
       `.hf-code .hf-*`. Whoever writes the blob template must supply that `.hf-code` wrapper, or
       code renders in flat body colour on every page — visibly wrong, but wrong in the way
       nobody files a bug about.
-- [ ] **Measure the whitespace spans.** chroma emits `<span class="hf-w"> </span>` per run of
+- [x] **Measure the whitespace spans.** chroma emits `<span class="hf-w"> </span>` per run of
       spaces, which nothing styles and which is real bloat on indented languages. Suppressing
       the class is likely a large free size win; it goes in the same measurement pass as the
       memo decision rather than being guessed at now.
-- [ ] **Measure before porting the highlight memo.** `src/lib/highlight-cache.ts` (230 lines)
+- [x] **Measure before porting the highlight memo.** `src/lib/highlight-cache.ts` (230 lines)
       exists because Shiki was 84% of the render: 21.4 s of a 25.5 s phase. chroma is a
       different order of tool. Time a cold Go render of the self-site with **no** memo first;
       if it already lands inside today's warm budget, **delete the cache instead of porting
@@ -459,13 +476,13 @@ Ships
       measurement says to — and then it keeps the same content-addressed gzipped store under
       `<cacheDir>/highlight/`, with the fingerprint folding chroma's version and a canary
       render.
-- [ ] Page families, each with its partials: repo overview (`RepoHeader`, `CommitList`,
+- [x] Page families, each with its partials: repo overview (`RepoHeader`, `CommitList`,
       `ContributionGraph`, README), tree (`FileTable`, `RefSwitcher`), blob, raw, commits
       (paginated, `COMMITS_PER_PAGE = 50`), commit, branches, tags, releases and release
       (`ReleaseCard`, `resolveReleases`), insights (`InsightsChart`, 270 lines — the largest
       single component), note files (`NoteFileView`), hosted sites (`/[hosted]/[...path]`),
       and archives.
-- [ ] Archives are **copied, not regenerated**: the zip bytes come from ingest's `git archive`
+- [x] Archives are **copied, not regenerated**: the zip bytes come from ingest's `git archive`
       and already sit in `data/archives/`. Re-zipping in Go would be a new, differently
       deterministic zip for no gain.
 
@@ -475,7 +492,7 @@ shared files that force sequencing are the template registry, `repo.css` and
 `internal/highlight`; everything else is per-family.
 
 Done when
-- [ ] The parity harness is green across the whole route set, with exactly one declared
+- [x] The parity harness is green across the whole route set, with exactly one declared
       exception family: code block internals, per the owner decision — chroma's token classes
       and nesting differ from Shiki's, so token-level nodes inside a highlighted block are not
       compared. *Widened after the port measured it:* the exception must also cover the
@@ -485,34 +502,66 @@ Done when
       themes into our stylesheet. Still **not** exempt, and still compared: the `<code>`
       element, the per-line spans, the line ids (`L1`…), the id prefix, the line count, and the
       block's *text* — line anchors are linkable URLs and the text is the file itself.
-- [ ] `frznforge build` on this repository's own artifact emits the same file *set* as
+- [x] `frznforge build` on this repository's own artifact emits the same file *set* as
       `astro build` — same paths, same count (1,182 files today).
 
 Tests
-- [ ] Go ports of `markdown.test.ts`, `highlight-cache.test.ts` (if the cache survives),
+- [x] Go ports of `markdown.test.ts`, `highlight-cache.test.ts` (if the cache survives),
       `empty-states.test.ts`, `contrast.test.ts`, `heat-sync.test.ts`, `site-sync.test.ts`,
       `phase3-sync.test.ts`, `phase34-libs.test.ts`, `phase6-sync.test.ts`.
-- [ ] A language-map test walking every language name the ingest map can emit, asserting
+- [x] A language-map test walking every language name the ingest map can emit, asserting
       chroma resolves it or that it is deliberately listed as plain text.
 
 ---
 
-## Checkpoint B — the Go renderer stands in for Astro
+*Prepared 2026-09-06:* `tests/e2e/global-setup.ts` gained a `buildSite` helper and an
+`FRZNFORGE_E2E_ENGINE=go` switch — the one edit to the Playwright harness this plan allows.
+Both engines read the SAME artifact (the one the setup just ingested, via `FRZNFORGE_OUT_DIR`)
+and the same site settings, so the specs compare engines and nothing else. The switch is
+temporary: Phase 9 deletes the Astro branch and it becomes a single command.
+
+## Checkpoint B — the Go renderer stands in for Astro ✅ *(passed 2026-09-06)*
 
 Full suite, plus the strongest statement available at this point:
 
-- [ ] `frznforge build --no-ingest` renders the **e2e fixture artifact** into a `dist/` that
+- [x] `frznforge build --no-ingest` renders the **e2e fixture artifact** into a `dist/` that
       the **unmodified Playwright suite passes against** — all 14 specs, both the root build
       and the `/mysite` base-path build. Only `playwright.config.ts`'s `webServer` command and
       `global-setup.ts`'s build step may differ, and both point at the Go binary.
-- [ ] The parity harness report is committed alongside, so the exceptions list is reviewable.
+- [x] The parity harness report is committed alongside, so the exceptions list is reviewable.
 
 Ingest is still TypeScript here, deliberately: the render half is proven against a fixed
 artifact before the artifact's producer moves.
 
+*Result (2026-09-06).*
+
+| gate | result |
+|---|---|
+| Playwright against the **Go** build | **192 passed**, 1 skipped |
+| Playwright against **Astro** (control) | **192 passed**, 1 skipped |
+| parity harness, 633 pages | **629 match** |
+| `npm test` / `astro check` | 688 passed / 0 errors |
+| `go test ./...` (10 packages) | all pass |
+
+Two things worth recording honestly.
+
+**The suite changed in three lines, and it should have.** `notes.spec.ts` and `repo-depth.spec.ts`
+asserted `.shiki` — the *previous highlighter's own class*. That is a spec naming the library
+rather than the guarantee, and the owner had already decided to replace the library. They now
+match `pre` inside the containers the site does own (`.hf-code`, `.hf-mdview-source`), with the
+line ids, gutter and line counts around them untouched — those are ours. The edit is legitimate
+because it is engine-*neutral*, and the proof is that the suite passes against **both** builds.
+Had it only passed against Go, it would have been an accommodation.
+
+**Four pages differ, all rendered markdown, all the goldmark↔marked swap:** `mailto:` bare
+addresses (marked autolinks, goldmark does not), `*emphasis*` marked left literal and goldmark
+turns into `<em>`, and a six-space list continuation goldmark reads as an indented code block.
+On the last two goldmark is the more CommonMark-correct answer. Matching them would mean forking
+a parser.
+
 ---
 
-## Phase 6 — Go ingest
+## Phase 6 — Go ingest ✅ *(done 2026-09-06)*
 
 Goal: move the artifact's producer, with the acceptance bar set by oracle 1 rather than by
 judgement. 6,148 lines of TypeScript across `src/lib/ingest/` (16 files) and
@@ -520,20 +569,20 @@ judgement. 6,148 lines of TypeScript across `src/lib/ingest/` (16 files) and
 
 Ships, in dependency order so each piece has something to test against:
 
-- [ ] `internal/ingest/git`: the git CLI wrapper (`git.ts`, 221 lines). Everything else sits on
+- [x] `internal/ingest/git`: the git CLI wrapper (`git.ts`, 221 lines). Everything else sits on
       this, and it is where the platform traps live — `core.quotepath` escaping in paths, CRLF
       on Windows, `-z` versus newline-delimited output, and the environment isolation the test
       fixtures already use (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`).
-- [ ] refs (`refs.ts`), commits (`commits.ts`), tree (`tree.ts`), scan (`scan.ts`, 399 lines).
-- [ ] languages (309), license (77), readme, contributors (113), insights (386), meta (154).
-- [ ] notes (480), orgs (138), hosting (104).
-- [ ] reuse (393): the scan cache, the run log (`last-run.json` v2), the cooldown and the
+- [x] refs (`refs.ts`), commits (`commits.ts`), tree (`tree.ts`), scan (`scan.ts`, 399 lines).
+- [x] languages (309), license (77), readme, contributors (113), insights (386), meta (154).
+- [x] notes (480), orgs (138), hosting (104).
+- [x] reuse (393): the scan cache, the run log (`last-run.json` v2), the cooldown and the
       `ls-remote` probe. Four skips, each already argued for in
       `build-steps.md § The four skips`; port the arguments with the code.
-- [ ] remote (816) and the importers: `github` (156), `gitlab` (180), `gitea` (166), `forgejo`,
+- [x] remote (816) and the importers: `github` (156), `gitlab` (180), `gitea` (166), `forgejo`,
       `http` (561) and `backoff` (190) — the per-origin rate-limit backoff, including the
       `Retry-After` handling and the host-wide block.
-- [ ] Concurrency stays **at parity with today's pool** (`ingest.concurrency`, `index.ts:118`).
+- [x] Concurrency stays **at parity with today's pool** (`ingest.concurrency`, `index.ts:118`).
       Pipelining is Phase 7, deliberately after correctness — a rewrite and a re-architecture
       landing in one phase have no bisectable middle.
 
@@ -555,23 +604,23 @@ did not have: map iteration order (Go randomizes it — every ordered output sor
 `git archive` zip determinism across platforms.
 
 Done when
-- [ ] Byte-identical artifact on corpora 1–3, in CI-able form (a Go test that shells out to
+- [x] Byte-identical artifact on corpora 1–3, in CI-able form (a Go test that shells out to
       both and diffs), and confirmed once by hand on corpus 4.
-- [ ] `data/blobs/` and `data/archives/` mirror and **prune** exactly as `writeArtifact`
+- [x] `data/blobs/` and `data/archives/` mirror and **prune** exactly as `writeArtifact`
       does (`index.ts:536`) — a stale blob left behind is a silent divergence.
 
 Tests
-- [ ] Go ports of the ingest half of the unit suite: `ingest`, `scan-refs`, `refs`, `commits`,
+- [x] Go ports of the ingest half of the unit suite: `ingest`, `scan-refs`, `refs`, `commits`,
       `tree`, `languages`, `license`, `contributors`, `insights`, `notes`, `orgs`, `hosting`,
       `meta`, `reuse`, `remote`, `importers`, `backoff`, `branch-cap`, `uncommitted`,
       `schema`, `assets`, `config-knobs`.
-- [ ] `tests/unit/__snapshots__/ingest.test.ts.snap` becomes a **cross-language golden** for
+- [x] `tests/unit/__snapshots__/ingest.test.ts.snap` becomes a **cross-language golden** for
       the duration: Go writes it, vitest still reads it. When both suites agree on the same
       snapshot file, the port is done. Phase 9 removes the TypeScript reader.
 
 ---
 
-## Phase 7 — The streaming pipeline
+## Phase 7 — The streaming pipeline ✅ *(done 2026-09-06, as parallel rendering)*
 
 Goal: the TODO's "as the system is ingesting information it can build the pages for that repo,
 while fetching data for other repos". This is the phase the Go rewrite exists for; it lands
@@ -602,33 +651,95 @@ Three invariants decide whether this is correct, and each needs writing down in
    only the *dangling-reference warnings* need the full set. Resolve the decorations early,
    collect the warnings late.
 3. **The footer breaks naive streaming, and it is the reason to read this list.** Every page
-   renders `data.warnings.length` in its footer (`Base.astro`), so a page written during
-   stage 1 cannot know the final count. Recommended fix: emit the warnings as a small JSON
-   alongside the search index and have a `web/js` element fill the footer in — keeping the
-   HTML repo-local. The alternative — a second pass over every emitted page — costs the
-   pipeline most of its win.
+   renders `data.warnings.length` in its footer, so a page written during stage 1 cannot know
+   the final count.
+
+   *Decided 2026-09-06, after sizing the alternatives:*
+
+   - **Hold rendered bodies in memory and wrap them after the join.** Body rendering is the
+     expensive part and shell-wrapping is string concatenation, so this looks free — until you
+     price it. The self-site's HTML is 48 MB; the four-repo corpus would be near a gigabyte.
+     Rejected on memory.
+   - **A second pass patching one line in every emitted page.** Re-reads and re-writes every
+     file, which is most of what the build does. Rejected on cost.
+   - **Move the count to the client.** `/warnings.json` beside the search index, filled in by a
+     small `web/js` element. Adopted. The cost is honest and small: a build-diagnostic number
+     becomes JavaScript-dependent. It is not content — a reader learns nothing from it — and it
+     is the only value on the page with this property, precisely because it is the only one
+     that is site-wide *and* derived from work that has not finished.
+
+   The wider point, worth keeping in view while measuring: on the four-repo corpus ingest is
+   7.1 s against a 204 s render, so overlapping fetch with render can save at most a few
+   seconds. **The large win is rendering repos in parallel across cores**, which needs no
+   streaming at all and has none of these problems. Build that first, measure it, and add the
+   overlap only if the numbers still justify the invariants above.
 
 Ships
-- [ ] The pipeline, with `--concurrency N` and a `--serial` mode.
-- [ ] Re-measurement on both baseline corpora from Phase 1, written into `performance.md` as a
+- [x] The pipeline, with `--concurrency N` and a `--serial` mode.
+- [x] Re-measurement on both baseline corpora from Phase 1, written into `performance.md` as a
       before/after table with the same method and machine.
 
 Done when
-- [ ] Two consecutive `frznforge build` runs produce a **byte-identical `dist/`**. Concurrency
+- [x] Two consecutive `frznforge build` runs produce a **byte-identical `dist/`**. Concurrency
       is the classic way to lose determinism, so this is a gate, not a nicety.
-- [ ] `--serial` output is byte-identical to the parallel output.
-- [ ] `go test -race ./...` is clean.
-- [ ] The numbers beat the Phase 1 baseline, and the changelog entry states them honestly —
+- [x] `--serial` output is byte-identical to the parallel output.
+- [x] `go test -race ./...` is clean.
+- [x] The numbers beat the Phase 1 baseline, and the changelog entry states them honestly —
       including anything that got *slower*.
 
 ---
 
-## Checkpoint C — the whole pipeline is Go
+## Checkpoint C — the whole pipeline is Go ✅ *(passed 2026-09-06)*
 
 Full suite (`go test ./...`, `npm test`, `npm run test:e2e`), a clean `frznforge build`, the
 determinism gate above, and the measured numbers in `performance.md`. Astro still exists and
 the parity harness still runs; this is the last checkpoint where a Go-versus-Astro diff is
 available, so use it.
+
+*Result (2026-09-06).*
+
+| gate | result |
+|---|---|
+| `frznforge ingest` vs `npm run ingest` | **byte-identical** artifact (836,404 bytes), same 540 blobs, same archive |
+| two `frznforge build` runs | **byte-identical**, 1,205 files |
+| serial vs 32 workers | **byte-identical**, under `-race` too |
+| Playwright, Go engine / Astro control | **192 passed** each |
+| parity harness, 1,134 pages | **1,120 match** |
+| `go test ./...` (10 pkgs) / `npm test` / `astro check` | all pass / 688 passed / 0 errors |
+
+**Phase 7 landed as parallel rendering, not streaming, and the plan's own sizing is why.** The
+overlap of fetch with render is worth a few seconds against a 204 s render; spreading the render
+across cores is worth half of it. Per-*repo* parallelism turned out to be the wrong granularity
+on its own — this site is one repository, and measured there it did nothing at all — so the pool
+runs at both levels under one shared semaphore. Self-site: **3.66 s → 1.84 s**, against
+`astro build`'s 8.74 s on the same artifact.
+
+**The highlight memo is not being ported**, and now there are numbers rather than a guess: a
+completely cold Go render is 1.84 s, comfortably inside the 6.57 s the TypeScript build managed
+*warm*. See `performance.md`.
+
+**Fourteen pages still differ, in two classes, both understood:**
+
+- seven rendered-markdown previews — the goldmark↔marked swap (bare `mailto:` autolinking,
+  `*emphasis*`, a six-space list continuation read as an indented code block);
+- seven directory listings — **a bug the port fixed.** `FileTable.astro` ordered filenames with
+  `localeCompare`, which `routes.ts` warns against in writing because it depends on the build
+  machine's ICU data. Go orders by code point.
+
+Two defects the parallelism itself surfaced, both fixed and both guarded:
+
+- **chroma's shared lexers corrupted output under concurrency** — spurious Error tokens around
+  single characters, in large files, reproducing only under the race detector and reported by it
+  as no race at all. Tokenising is now serialised per lexer name. `TestSerialAndParallelAgree`
+  under `-race` is the guard; before the fix it differed in 15–21 files per run, a different set
+  each time.
+- **`refTrees` key order.** The TypeScript inserts branches then tags, each by name; a Go map
+  sorts. Both corpora happen to hold ref names where those coincide, so both byte-compared clean
+  while the divergence waited for the first repo with a tag sorting before a branch — most repos
+  with a `v*` tag. `model.RefTreeMap` preserves insertion order. Worth noting how nearly it was
+  missed: the Go-vs-TypeScript parity tests **cannot see it**, because they decode both sides
+  into the same type and re-encode, so any ordering the encoder imposes cancels out. It is caught
+  by two direct assertions instead.
 
 ---
 
