@@ -14,7 +14,7 @@ import { getNoteRoutes, notesIndexUrl } from '../../../lib/routes';
 import { formatBytes, heatClass, heatFor, isoDay, relativeTime } from '../../../lib/format';
 import { getConfig, getData } from '../../../lib/site';
 import type { Note } from '../../../lib/data/schema';
-import '../../../styles/notes.css';
+import '../../../../web/css/notes.css';
 
 export async function getStaticPaths() {
   const data = await getData();

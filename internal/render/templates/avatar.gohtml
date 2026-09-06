@@ -1,0 +1,29 @@
+{{- /*
+  A person's or organization's picture, falling back to their initials (schema v8).
+  Port of src/components/Avatar.astro.
+
+  One partial so the fallback rule lives in exactly one place: every avatar on the site had
+  been initials-only, and a configured image must not change the box it sits in — the sizes,
+  radii and the ember→ice gradient of `.hf-avatar` are load-bearing in the sidebar, the profile
+  hero, org headers and commit lists alike.
+
+  Images are decorative: the name is always adjacent in the markup, so an empty `alt` is
+  correct and a repeated name would just be noise to a screen reader.
+
+  Takes a dict: Name, Src (public/-relative or empty), Size ("sm"|"md"|"xl"), Class, Eager,
+  Base (the deploy base, since a partial cannot reach the Router).
+*/ -}}
+{{define "avatar"}}
+  {{- $size := or .Size "md" -}}
+  {{- $cls := "hf-avatar" -}}
+  {{- if ne $size "md" }}{{ $cls = printf "%s hf-avatar--%s" $cls $size }}{{ end -}}
+  {{- if .Class }}{{ $cls = printf "%s %s" $cls .Class }}{{ end -}}
+  {{- /* Intrinsic box, so the image reserves its space before it loads (no layout shift). */ -}}
+  {{- $px := 34 -}}
+  {{- if eq $size "xl" }}{{ $px = 128 }}{{ else if eq $size "sm" }}{{ $px = 24 }}{{ end -}}
+  {{- if .Src -}}
+    <img class="{{$cls}} hf-avatar--img" src="{{.Base}}{{.Src}}" alt="" width="{{$px}}" height="{{$px}}" loading="{{if .Eager}}eager{{else}}lazy{{end}}" decoding="async" />
+  {{- else -}}
+    <span class="{{$cls}}" aria-hidden="true">{{initials .Name}}</span>
+  {{- end -}}
+{{end}}

@@ -8,6 +8,9 @@
     "dist",
     "docs",
     "tests/.tmp",
-    "data"
+    "data",
+    // Vendored, pre-built browser code. `allowJs` is on, so without this TypeScript parses
+    // all 3.5 MB of minified mermaid on every `astro check` — which crashes it outright.
+    "web/vendor"
   ]
 }

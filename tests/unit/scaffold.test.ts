@@ -445,10 +445,10 @@ describe.runIf(buildProof)('a scaffolded directory really builds', () => {
     const dir = path.join(tmp, 'real-site');
     await scaffold({ dir });
 
-    for (const name of ['src', 'scripts', 'public']) {
+    for (const name of ['src', 'scripts', 'web', 'public']) {
       await fs.cp(path.join(REPO_ROOT, name), path.join(dir, name), { recursive: true });
     }
-    for (const name of ['package.json', 'astro.config.mjs', 'svelte.config.js', 'tsconfig.json']) {
+    for (const name of ['package.json', 'astro.config.ts', 'tsconfig.json']) {
       await fs.copyFile(path.join(REPO_ROOT, name), path.join(dir, name));
     }
     const modules = path.join(dir, 'node_modules');

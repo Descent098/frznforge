@@ -11,7 +11,7 @@ import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import { getOrgRoutes, orgReposUrl, unmatchedOrgContent } from '../../lib/routes';
 import { aggregateLanguages, formatInt, getConfig, getData, heatFor, initials, relativeTime } from '../../lib/site';
-import '../../styles/orgs.css';
+import '../../../web/css/orgs.css';
 
 const data = await getData();
 const now = new Date();

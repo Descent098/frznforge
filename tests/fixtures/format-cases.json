@@ -1,0 +1,609 @@
+{
+  "now": "2026-09-06T12:00:00Z",
+  "heat": {
+    "hot": 7,
+    "warm": 30,
+    "neutral": 180,
+    "cool": 365
+  },
+  "relativeTime": [
+    {
+      "in": "2026-09-06T12:00:00Z",
+      "out": "just now"
+    },
+    {
+      "in": "2026-09-06T11:59:59Z",
+      "out": "just now"
+    },
+    {
+      "in": "2026-09-06T11:59:30Z",
+      "out": "just now"
+    },
+    {
+      "in": "2026-09-06T11:59:01Z",
+      "out": "just now"
+    },
+    {
+      "in": "2026-09-06T11:59:00Z",
+      "out": "1 minute ago"
+    },
+    {
+      "in": "2026-09-06T11:58:59Z",
+      "out": "1 minute ago"
+    },
+    {
+      "in": "2026-09-06T11:58:01Z",
+      "out": "1 minute ago"
+    },
+    {
+      "in": "2026-09-06T11:00:01Z",
+      "out": "59 minutes ago"
+    },
+    {
+      "in": "2026-09-06T11:00:00Z",
+      "out": "1 hour ago"
+    },
+    {
+      "in": "2026-09-06T10:59:59Z",
+      "out": "1 hour ago"
+    },
+    {
+      "in": "2026-09-06T10:00:00Z",
+      "out": "2 hours ago"
+    },
+    {
+      "in": "2026-09-05T12:00:01Z",
+      "out": "23 hours ago"
+    },
+    {
+      "in": "2026-09-05T12:00:00Z",
+      "out": "1 day ago"
+    },
+    {
+      "in": "2026-09-05T11:59:59Z",
+      "out": "1 day ago"
+    },
+    {
+      "in": "2026-09-04T12:00:00Z",
+      "out": "2 days ago"
+    },
+    {
+      "in": "2026-08-30T12:00:01Z",
+      "out": "6 days ago"
+    },
+    {
+      "in": "2026-08-30T12:00:00Z",
+      "out": "1 week ago"
+    },
+    {
+      "in": "2026-08-30T11:59:59Z",
+      "out": "1 week ago"
+    },
+    {
+      "in": "2026-08-23T12:00:00Z",
+      "out": "2 weeks ago"
+    },
+    {
+      "in": "2026-08-07T01:30:55Z",
+      "out": "1 month ago"
+    },
+    {
+      "in": "2026-08-07T01:30:54Z",
+      "out": "1 month ago"
+    },
+    {
+      "in": "2026-07-07T15:01:48Z",
+      "out": "2 months ago"
+    },
+    {
+      "in": "2025-09-06T06:10:48Z",
+      "out": "1 year ago"
+    },
+    {
+      "in": "2025-09-06T06:10:47Z",
+      "out": "1 year ago"
+    },
+    {
+      "in": "2024-09-06T00:21:36Z",
+      "out": "2 years ago"
+    },
+    {
+      "in": "2016-09-06T01:48:00Z",
+      "out": "10 years ago"
+    },
+    {
+      "in": "2026-08-30T12:00:00Z",
+      "out": "1 week ago"
+    },
+    {
+      "in": "2026-08-07T12:00:00Z",
+      "out": "4 weeks ago"
+    },
+    {
+      "in": "2026-03-10T12:00:00Z",
+      "out": "5 months ago"
+    },
+    {
+      "in": "2025-09-06T12:00:00Z",
+      "out": "1 year ago"
+    }
+  ],
+  "relativeTimeShort": [
+    {
+      "in": "2026-09-06T12:00:00Z",
+      "out": "now"
+    },
+    {
+      "in": "2026-09-06T11:59:59Z",
+      "out": "now"
+    },
+    {
+      "in": "2026-09-06T11:59:30Z",
+      "out": "now"
+    },
+    {
+      "in": "2026-09-06T11:59:01Z",
+      "out": "now"
+    },
+    {
+      "in": "2026-09-06T11:59:00Z",
+      "out": "1m"
+    },
+    {
+      "in": "2026-09-06T11:58:59Z",
+      "out": "1m"
+    },
+    {
+      "in": "2026-09-06T11:58:01Z",
+      "out": "1m"
+    },
+    {
+      "in": "2026-09-06T11:00:01Z",
+      "out": "59m"
+    },
+    {
+      "in": "2026-09-06T11:00:00Z",
+      "out": "1h"
+    },
+    {
+      "in": "2026-09-06T10:59:59Z",
+      "out": "1h"
+    },
+    {
+      "in": "2026-09-06T10:00:00Z",
+      "out": "2h"
+    },
+    {
+      "in": "2026-09-05T12:00:01Z",
+      "out": "23h"
+    },
+    {
+      "in": "2026-09-05T12:00:00Z",
+      "out": "1d"
+    },
+    {
+      "in": "2026-09-05T11:59:59Z",
+      "out": "1d"
+    },
+    {
+      "in": "2026-09-04T12:00:00Z",
+      "out": "2d"
+    },
+    {
+      "in": "2026-08-30T12:00:01Z",
+      "out": "6d"
+    },
+    {
+      "in": "2026-08-30T12:00:00Z",
+      "out": "1w"
+    },
+    {
+      "in": "2026-08-30T11:59:59Z",
+      "out": "1w"
+    },
+    {
+      "in": "2026-08-23T12:00:00Z",
+      "out": "2w"
+    },
+    {
+      "in": "2026-08-07T01:30:55Z",
+      "out": "0mo"
+    },
+    {
+      "in": "2026-08-07T01:30:54Z",
+      "out": "0mo"
+    },
+    {
+      "in": "2026-07-07T15:01:48Z",
+      "out": "1mo"
+    },
+    {
+      "in": "2025-09-06T06:10:48Z",
+      "out": "0y"
+    },
+    {
+      "in": "2025-09-06T06:10:47Z",
+      "out": "0y"
+    },
+    {
+      "in": "2024-09-06T00:21:36Z",
+      "out": "1y"
+    },
+    {
+      "in": "2016-09-06T01:48:00Z",
+      "out": "9y"
+    },
+    {
+      "in": "2026-08-30T12:00:00Z",
+      "out": "1w"
+    },
+    {
+      "in": "2026-08-07T12:00:00Z",
+      "out": "0mo"
+    },
+    {
+      "in": "2026-03-10T12:00:00Z",
+      "out": "5mo"
+    },
+    {
+      "in": "2025-09-06T12:00:00Z",
+      "out": "0y"
+    }
+  ],
+  "heatFor": [
+    {
+      "in": "2026-09-06T12:00:00Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-06T11:59:59Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-06T11:59:30Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-06T11:59:01Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-06T11:59:00Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-06T11:58:59Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-06T11:58:01Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-06T11:00:01Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-06T11:00:00Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-06T10:59:59Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-06T10:00:00Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-05T12:00:01Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-05T12:00:00Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-05T11:59:59Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-09-04T12:00:00Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-08-30T12:00:01Z",
+      "out": "hot"
+    },
+    {
+      "in": "2026-08-30T12:00:00Z",
+      "out": "warm"
+    },
+    {
+      "in": "2026-08-30T11:59:59Z",
+      "out": "warm"
+    },
+    {
+      "in": "2026-08-23T12:00:00Z",
+      "out": "warm"
+    },
+    {
+      "in": "2026-08-07T01:30:55Z",
+      "out": "neutral"
+    },
+    {
+      "in": "2026-08-07T01:30:54Z",
+      "out": "neutral"
+    },
+    {
+      "in": "2026-07-07T15:01:48Z",
+      "out": "neutral"
+    },
+    {
+      "in": "2025-09-06T06:10:48Z",
+      "out": "cold"
+    },
+    {
+      "in": "2025-09-06T06:10:47Z",
+      "out": "cold"
+    },
+    {
+      "in": "2024-09-06T00:21:36Z",
+      "out": "cold"
+    },
+    {
+      "in": "2016-09-06T01:48:00Z",
+      "out": "cold"
+    },
+    {
+      "in": "2026-08-30T12:00:00Z",
+      "out": "warm"
+    },
+    {
+      "in": "2026-08-07T12:00:00Z",
+      "out": "neutral"
+    },
+    {
+      "in": "2026-03-10T12:00:00Z",
+      "out": "cool"
+    },
+    {
+      "in": "2025-09-06T12:00:00Z",
+      "out": "cold"
+    }
+  ],
+  "formatInt": [
+    {
+      "in": 0,
+      "out": "0"
+    },
+    {
+      "in": 1,
+      "out": "1"
+    },
+    {
+      "in": 12,
+      "out": "12"
+    },
+    {
+      "in": 999,
+      "out": "999"
+    },
+    {
+      "in": 1000,
+      "out": "1,000"
+    },
+    {
+      "in": 1001,
+      "out": "1,001"
+    },
+    {
+      "in": 12345,
+      "out": "12,345"
+    },
+    {
+      "in": 999999,
+      "out": "999,999"
+    },
+    {
+      "in": 1000000,
+      "out": "1,000,000"
+    },
+    {
+      "in": 1234567890,
+      "out": "1,234,567,890"
+    }
+  ],
+  "formatBytes": [
+    {
+      "in": 0,
+      "out": "0 B"
+    },
+    {
+      "in": 1,
+      "out": "1 B"
+    },
+    {
+      "in": 512,
+      "out": "512 B"
+    },
+    {
+      "in": 1023,
+      "out": "1023 B"
+    },
+    {
+      "in": 1024,
+      "out": "1.0 KB"
+    },
+    {
+      "in": 1536,
+      "out": "1.5 KB"
+    },
+    {
+      "in": 10240,
+      "out": "10.0 KB"
+    },
+    {
+      "in": 1048575,
+      "out": "1024.0 KB"
+    },
+    {
+      "in": 1048576,
+      "out": "1.0 MB"
+    },
+    {
+      "in": 5333293,
+      "out": "5.1 MB"
+    },
+    {
+      "in": 65622500,
+      "out": "62.6 MB"
+    }
+  ],
+  "initials": [
+    {
+      "in": "Kieran Wood",
+      "out": "KW"
+    },
+    {
+      "in": "kieran",
+      "out": "K"
+    },
+    {
+      "in": "Kieran  Middle   Wood",
+      "out": "KW"
+    },
+    {
+      "in": "  spaced  ",
+      "out": "S"
+    },
+    {
+      "in": "X",
+      "out": "X"
+    },
+    {
+      "in": "ünicode nÄme",
+      "out": "ÜN"
+    },
+    {
+      "in": "日本 語",
+      "out": "日語"
+    }
+  ],
+  "licenseUrl": [
+    {
+      "in": "MIT",
+      "out": "https://choosealicense.com/licenses/mit/"
+    },
+    {
+      "in": "mit",
+      "out": "https://choosealicense.com/licenses/mit/"
+    },
+    {
+      "in": "Apache-2.0",
+      "out": "https://choosealicense.com/licenses/apache-2.0/"
+    },
+    {
+      "in": "GPL-3.0-only",
+      "out": "https://choosealicense.com/licenses/gpl-3.0/"
+    },
+    {
+      "in": "GPL-3.0-or-later",
+      "out": "https://choosealicense.com/licenses/gpl-3.0/"
+    },
+    {
+      "in": "AGPL-3.0-only",
+      "out": "https://choosealicense.com/licenses/agpl-3.0/"
+    },
+    {
+      "in": "LGPL-2.1-only",
+      "out": "https://choosealicense.com/licenses/lgpl-2.1/"
+    },
+    {
+      "in": "CC0-1.0",
+      "out": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "in": "CC-BY-4.0",
+      "out": "https://creativecommons.org/licenses/by/4.0/"
+    },
+    {
+      "in": "CC-BY-NC-SA-4.0",
+      "out": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+    },
+    {
+      "in": "BSD-3-Clause",
+      "out": "https://choosealicense.com/licenses/bsd-3-clause/"
+    },
+    {
+      "in": "Unlicense",
+      "out": "https://choosealicense.com/licenses/unlicense/"
+    },
+    {
+      "in": "Custom",
+      "out": null
+    },
+    {
+      "in": "NOT-A-LICENSE",
+      "out": null
+    },
+    {
+      "in": "",
+      "out": null
+    }
+  ],
+  "prettyUrl": [
+    {
+      "in": "https://kieranwood.ca/",
+      "out": "kieranwood.ca"
+    },
+    {
+      "in": "http://example.com",
+      "out": "example.com"
+    },
+    {
+      "in": "https://example.com/path/",
+      "out": "example.com/path"
+    },
+    {
+      "in": "ftp://files.example.com/",
+      "out": "files.example.com"
+    },
+    {
+      "in": "example.com",
+      "out": "example.com"
+    }
+  ],
+  "monthYear": [
+    {
+      "in": "2020-09-01T00:00:00Z",
+      "out": "Sep 2020"
+    },
+    {
+      "in": "2026-01-31T23:59:59Z",
+      "out": "Jan 2026"
+    },
+    {
+      "in": "2026-12-01T00:00:00Z",
+      "out": "Dec 2026"
+    },
+    {
+      "in": "",
+      "out": "—"
+    }
+  ],
+  "isoDay": [
+    {
+      "in": "2026-08-23T14:02:11Z",
+      "out": "2026-08-23"
+    },
+    {
+      "in": "2026-08-23",
+      "out": "2026-08-23"
+    },
+    {
+      "in": "",
+      "out": "—"
+    }
+  ]
+}

@@ -10,14 +10,14 @@
 import { getCollection } from 'astro:content';
 import Base from '../../../layouts/Base.astro';
 import OrgHeader from '../../../components/OrgHeader.astro';
-import RepoCard from '../../../components/RepoCard.svelte';
+import RepoCard from '../../../components/RepoCard.astro';
 import type { Organization, Repo } from '../../../lib/data/schema';
 import { summarize } from '../../../lib/listing';
 import MermaidRenderer from '../../../components/MermaidRenderer.astro';
 import { containsMermaid, renderMarkdown } from '../../../lib/markdown';
 import { getOrgRoutes, orgReposUrl } from '../../../lib/routes';
 import { getConfig, getData } from '../../../lib/site';
-import '../../../styles/orgs.css';
+import '../../../../web/css/orgs.css';
 
 export async function getStaticPaths() {
   const data = await getData();

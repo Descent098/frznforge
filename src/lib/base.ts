@@ -5,22 +5,21 @@
  * deployed under `/mysite` prefixes every link, and a root deploy emits exactly the URLs
  * it always has.
  *
- * Browser-safe by construction: the value comes from `import.meta.env.BASE_URL`, which
- * Astro derives from `site.base` (via astro.config.ts) and Vite inlines statically into
- * server AND island bundles — no config import, no node built-ins, so Svelte islands can
- * use it. The guarded read matters because this module is also loaded entirely outside
- * Vite (`npm run measure` under tsx, the Playwright suite), where `import.meta.env` does
- * not exist; there the base is '' unless a test sets one.
+ * This is the **build** half. The value comes from `import.meta.env.BASE_URL`, which Astro
+ * derives from `site.base` (via astro.config.ts) and Vite inlines statically. The guarded
+ * read matters because this module is also loaded entirely outside Vite (`npm run measure`
+ * under tsx, the Playwright suite), where `import.meta.env` does not exist; there the base is
+ * '' unless a test sets one.
+ *
+ * The **browser** half is `web/js/base.js`: nothing inlines anything into a file that is
+ * served verbatim, so it reads the base off `<html data-base>`, which the site shell stamps.
+ * The two halves share `normalize()` — imported from there, below — so "what counts as a
+ * base" is one regex rather than two that can disagree.
  */
 
-let override: string | null = null;
+import { normalize } from '../../web/js/base.js';
 
-/** Normalise any spelling to '' (root) or '/prefix' with no trailing slash. */
-function normalize(value: string): string {
-  const trimmed = value.trim().replace(/\/+$/, '');
-  if (trimmed === '' || trimmed === '/') return '';
-  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-}
+let override: string | null = null;
 
 /** `''` for a root deploy, `'/mysite'` (leading slash, no trailing slash) otherwise. */
 export function siteBase(): string {

@@ -17,10 +17,13 @@ Notes for working *on* frznforge. If you are trying to publish a site with it, s
   `SCHEMA_VERSION` and updates [data-model.md](./data-model.md) and the snapshots, in the same
   change.
 - `src/lib/ingest/*` reads git through the CLI only, never the working tree.
-- `src/lib/format.ts` and `src/lib/listing.ts` are used by Svelte islands and must stay free of
-  node and config imports.
-- Plain CSS only, `hf-` prefix, tokens at the top of `src/styles/global.css` and
-  `src/styles/repo.css`.
+- `web/` is served verbatim to the browser: plain ES modules, no transpile, no bundler,
+  relative imports carrying their `.js` extension. `web/js/{format,listing,search,base}.js`
+  are the single implementations; `src/lib/*.ts` re-export them and add the artifact-typed
+  helpers the browser never needs. Anything in `web/js/` must stay free of node and config
+  imports — it is loaded straight by a browser.
+- Plain CSS only, `hf-` prefix, tokens at the top of `web/css/global.css` and
+  `web/css/repo.css`.
 - `npm test`, `npm run test:e2e` and `npm run check` all stay green, and no test touches the
   network.
 

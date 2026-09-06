@@ -1,0 +1,79 @@
+{
+  "site": {
+    "title": "frznforge"
+  },
+  "owner": {
+    "name": "Kieran Wood",
+    "handle": "kieran",
+    "profile": "./content/profile.md"
+  },
+  "theme": {
+    "palette": "hearth",
+    "heat": {
+      "hot": 7,
+      "warm": 30,
+      "neutral": 180,
+      "cool": 365
+    }
+  },
+  "markdown": {
+    "mermaid": true
+  },
+  "content": {
+    "orgs": "./content/orgs"
+  },
+  "repos": [
+    {
+      "type": "local",
+      "path": ".",
+      "slug": "frznforge",
+      "org": "canadian-coding"
+    }
+  ],
+  "notes": {
+    "dir": "./content/notes",
+    "useMtime": false
+  },
+  "organizations": [
+    {
+      "slug": "canadian-coding",
+      "name": "Canadian Coding",
+      "description": "Small, sturdy, source-available tools that keep working when the server doesn't.",
+      "repos": [
+        "frznforge"
+      ]
+    }
+  ],
+  "contributors": [],
+  "hosting": {
+    "sites": [],
+    "maxFileBytes": 20971520
+  },
+  "ingest": {
+    "outDir": "./data",
+    "maxBlobBytes": 524288,
+    "maxCommits": null,
+    "maxCommitAgeDays": null,
+    "concurrency": 4,
+    "tagTrees": 25,
+    "branchTrees": 10,
+    "archives": true,
+    "cacheDir": "./.frznforge-cache",
+    "fetch": "auto",
+    "failOnDegraded": false,
+    "reuse": {
+      "enabled": true,
+      "maxAgeMinutes": 2,
+      "skipUnchanged": false,
+      "cooldownSeconds": null
+    },
+    "insights": {
+      "enabled": true,
+      "samples": 24,
+      "maxBytesPerSample": 20971520
+    }
+  },
+  "listing": {
+    "pageSize": 50
+  }
+}

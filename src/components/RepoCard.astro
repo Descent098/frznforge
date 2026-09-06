@@ -1,0 +1,55 @@
+---
+/**
+ * One repo card. Server-rendered for the initial page of a listing (and anywhere else a card
+ * is wanted); `<hf-repo-listing>` rebuilds the same markup in the browser from the
+ * `#hf-repo-card` template this component's parent emits, so the two must not drift.
+ *
+ * Was RepoCard.svelte until 0.4.0.
+ */
+import type { RepoSummary } from '../lib/listing';
+import { withBase } from '../lib/base';
+import { DEFAULT_HEAT, heatFor, relativeTime, type HeatThresholds } from '../lib/format';
+
+interface Props {
+  repo: RepoSummary;
+  /** Reference time in ms (build time), so server + client render identically. */
+  now: number;
+  /** Base path for tag filter links. */
+  tagHref?: (tag: string) => string;
+  /** Recency-accent day boundaries (`theme.heat`), passed down like `now`. */
+  heatDays?: HeatThresholds;
+}
+const {
+  repo,
+  now,
+  tagHref = (t: string) => withBase(`/repos/?tag=${encodeURIComponent(t)}`),
+  heatDays = DEFAULT_HEAT,
+} = Astro.props;
+
+const nowDate = new Date(now);
+const heat = heatFor(repo.updatedAt, nowDate, heatDays);
+const langs = repo.languages.slice(0, 3);
+---
+<article class={`hf-repo-card heat-${heat}`} data-slug={repo.slug}>
+  <div class="hf-repo-top">
+    <span class="hf-repo-icon"><svg class="hf-i"><use href="#i-repo" /></svg></span>
+    <a class="hf-repo-name" href={withBase(`/repos/${repo.slug}/`)}>{repo.name}</a>
+    {repo.template && <span class="hf-tag hf-tag--template">Template</span>}
+  </div>
+  <p class="hf-repo-desc">{repo.description ?? (repo.empty ? 'Empty repository.' : 'No description.')}</p>
+  <div class="hf-repo-tags">
+    {repo.tags.map((tag) => <a class="hf-tag" href={tagHref(tag)}>{tag}</a>)}
+  </div>
+  <div class="hf-repo-foot">
+    <span class="hf-langs">
+      {langs.length > 0
+        ? langs.map((l) => (
+            <span><i class="hf-lang-dot" style={`background: ${l.color ?? 'var(--hf-lang-other)'}`}></i>{l.name} {l.percent}%</span>
+          ))
+        : <span class="hf-muted">{repo.empty ? 'No commits' : 'No code detected'}</span>}
+    </span>
+    <span class={`hf-age t-${heat}`} title={repo.updatedAt ?? ''}>
+      {repo.updatedAt ? relativeTime(repo.updatedAt, nowDate) : 'never'}
+    </span>
+  </div>
+</article>

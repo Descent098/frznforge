@@ -100,8 +100,12 @@ Re-run without --dry-run to write these files.
 ## 2. The engine has to be in the same directory
 
 `new` writes the files **you** author. It does not write the generator: `src/`, `scripts/`,
-`public/`, `astro.config.ts`, `svelte.config.js`, `tsconfig.json` and `package.json` all come
-from a frznforge checkout and belong in the same directory as your `frznforge.config.ts`.
+`web/`, `public/`, `astro.config.ts`, `tsconfig.json` and `package.json` all come from a
+frznforge checkout and belong in the same directory as your `frznforge.config.ts`.
+
+`web/` is the browser half — the custom elements, the shared listing/format modules and the
+vendored mermaid build. It is served verbatim, so a site without it builds fine and then has
+a dead listing and no command palette.
 
 That is not an accident of packaging, it is how the config is loaded: `frznforge.config.ts`
 does `import { defineConfig } from './src/lib/config/schema'`, and the loader resolves the
@@ -116,7 +120,7 @@ brings you engine updates. Your content and the engine share one git history.
 
 ```sh
 npm run frznforge -- new ../my-site
-cp -r src scripts public package.json astro.config.ts svelte.config.js tsconfig.json ../my-site/
+cp -r src scripts web public package.json astro.config.ts tsconfig.json ../my-site/
 cd ../my-site && npm install
 ```
 

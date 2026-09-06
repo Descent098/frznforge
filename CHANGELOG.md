@@ -1,3 +1,23 @@
+# 0.4.0 (unreleased)
+
+## Bug Fixes
+
+* **`.cfg` and `.conf` files rendered with no syntax colouring.** Ingest labels them `INI` (`src/lib/ingest/languages.ts:182`) but the highlighter's language map was keyed `'Ini'` (`src/lib/highlight.ts:64`), so the lookup missed and the file fell through to the extension fallback — which rescues `.ini`, because Shiki has a language of that name, and cannot rescue `.cfg` or `.conf`, because it does not. Found while porting the map to Go, where it is now checked in both directions: a name ingest can emit that the map does not cover is a test failure, not an uncoloured file.
+
+## Other
+
+* **The Go engine's foundation is in.** `frznforge verify` reads and re-emits the artifact byte for byte; the config moved to JSONC with `frznforge config migrate` carrying every comment across; routes, display helpers, frontmatter, markdown (goldmark) and highlighting (chroma) are ported. Each is pinned to the implementation it replaces by a golden generated *from* that implementation — 256 routes at two deploy bases, 145 formatting cases against the browser's own copy, 35 frontmatter cases, 85 language names. Two dependencies, both pure Go.
+
+* **The site no longer ships a framework.** The three Svelte islands are now plain web components — `<hf-repo-listing>` and `<hf-command-palette>` — served from a new `web/` folder with no build step of any kind: no transpile, no bundler, no hashing. The listing is *progressive enhancement* rather than hydration, so the server renders the complete first page and the element adopts that DOM instead of re-rendering it. `dist/_astro/` went from **102 files / 3,495,584 bytes to 2 files / 64,281 bytes** — stylesheets only, zero JavaScript — and with Astro no longer inlining its island runtime into every page, `dist/` fell from 65.6 MB to 62.0 MB across the same 633 pages. All 187 existing Playwright tests pass unedited.
+
+* **Mermaid is vendored instead of bundled.** It was the only dependency that genuinely needed a bundler: Vite split it into ~97 chunks totalling 3.42 MB, which was 98% of everything in `dist/_astro/`. `web/vendor/mermaid/` now holds the ESM build mermaid publishes for browsers, loaded lazily by relative import, so a diagram-free page still fetches none of it and the published pages still call no third-party host.
+
+* **Shared browser/build logic has one implementation.** `web/js/{format,listing,search,base}.js` are plain JavaScript with JSDoc types, imported by the browser directly and re-exported by `src/lib/{format,listing,search,base}.ts`, which add only the helpers that take artifact types. The old rule — "`format.ts` and `listing.ts` must stay browser-safe" — is replaced by there being nothing to keep in sync.
+
+  *Migration:* `web/` is part of the engine. If you assembled your site by copying the engine into it, copy `web/` too, and drop `svelte.config.js` — `docs/user/starting-a-site.md` has the updated list. Without it the site builds, then serves a dead listing and no command palette.
+
+* **Dependency updates, scoped to what survives the rewrite.** Updated `@playwright/test` (1.62.1 → 1.63.0) and `@types/node` (26.4.0 → 26.4.1). Astro (7.2.9 → 7.3.1) and vitest (4 → 5) were deliberately *not* updated: 0.4.0 replaces Astro with a Go build and ports the vitest suite to Go, and until then Astro's output is the reference the new renderer is compared against — moving it mid-migration would move the reference. TypeScript 7 stays deferred here for the same reason it was deferred in 0.3.0, and the deferral is re-opened once `@astrojs/check` and `@astrojs/svelte`, which pin `typescript: ^5 || ^6`, leave the repository.
+
 # 0.3.0 (2026-08-31)
 
 ## Features

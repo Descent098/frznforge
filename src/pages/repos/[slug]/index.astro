@@ -1,4 +1,5 @@
 ---
+import CopyScript from '../../../components/CopyScript.astro';
 import Base from '../../../layouts/Base.astro';
 import Avatar from '../../../components/Avatar.astro';
 import RepoHeader from '../../../components/RepoHeader.astro';
@@ -205,15 +206,5 @@ const heat = heatFor(repo.updatedAt, now, cfg.theme.heat);
     )}
   </div>
 
-  <script>
-    document.querySelectorAll<HTMLButtonElement>('button[data-copy]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(btn.dataset.copy ?? '');
-          btn.classList.add('is-copied');
-          setTimeout(() => btn.classList.remove('is-copied'), 1200);
-        } catch {}
-      });
-    });
-  </script>
+  <CopyScript />
 </Base>

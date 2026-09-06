@@ -15,7 +15,7 @@ import InsightsChart from '../../../../components/InsightsChart.astro';
 import { hasInsights } from '../../../../lib/routes';
 import { formatBytes, formatInt, getData } from '../../../../lib/site';
 import type { Repo } from '../../../../lib/data/schema';
-import '../../../../styles/insights.css';
+import '../../../../../web/css/insights.css';
 
 export async function getStaticPaths() {
   const data = await getData();

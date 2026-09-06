@@ -18,8 +18,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
-const GLOBAL_CSS = fs.readFileSync(path.join(ROOT, 'src', 'styles', 'global.css'), 'utf8');
-const REPO_CSS = fs.readFileSync(path.join(ROOT, 'src', 'styles', 'repo.css'), 'utf8');
+const GLOBAL_CSS = fs.readFileSync(path.join(ROOT, 'web', 'css', 'global.css'), 'utf8');
+const REPO_CSS = fs.readFileSync(path.join(ROOT, 'web', 'css', 'repo.css'), 'utf8');
 
 /* ---- colour maths (the WCAG formulae, nothing more) ----------------------- */
 

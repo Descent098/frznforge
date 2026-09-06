@@ -85,9 +85,4 @@ const siteHost = cfg.site.url ? prettyUrl(cfg.site.url) : null;
   </div>
 </aside>
 
-<script>
-  document.getElementById('hf-search-open')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    window.dispatchEvent(new CustomEvent('frznforge:palette'));
-  });
-</script>
+<script is:inline type="module" src={withBase('/js/sidebar.js')}></script>

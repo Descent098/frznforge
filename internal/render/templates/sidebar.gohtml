@@ -1,0 +1,67 @@
+{{- /*
+  Primary navigation. Port of src/components/Sidebar.astro.
+
+  A section whose count is 0 is not rendered at all: an always-empty nav entry is a dead end
+  for keyboard and screen-reader users, so notes and organizations appear only once they exist.
+*/ -}}
+{{define "sidebar"}}
+<aside class="hf-sidebar">
+  <div class="hf-sidebar-card">
+    <a class="hf-brand" href="{{homeURL}}">
+      <span class="hf-brand-mark"><svg><use href="#i-anvil" /></svg></span>
+      <span class="hf-brand-name">{{.Cfg.Site.Title}}{{if .SiteHost}}<small>{{.SiteHost}}</small>{{end}}</span>
+    </a>
+
+    {{- /* Opens the command palette; a plain link to /repos/ when JS is off. */}}
+    <a class="hf-search" href="{{reposURL}}" id="hf-search-open">
+      <svg class="hf-i"><use href="#i-search" /></svg>
+      <span>Search repos…</span>
+      <kbd class="hf-kbd">Ctrl K</kbd>
+    </a>
+
+    <nav class="hf-nav" aria-label="Primary">
+      <a href="{{homeURL}}"{{if eq .Active "profile"}} aria-current="page"{{end}}>
+        <svg class="hf-i"><use href="#i-home" /></svg> Overview
+      </a>
+      <a href="{{reposURL}}"{{if eq .Active "repos"}} aria-current="page"{{end}}>
+        <svg class="hf-i"><use href="#i-repo" /></svg> Repositories <span class="hf-count">{{len .Data.Repos}}</span>
+      </a>
+      {{- if .Data.Notes}}
+      <a href="{{notesURL}}"{{if eq .Active "notes"}} aria-current="page"{{end}}>
+        <svg class="hf-i"><use href="#i-note" /></svg> Notes <span class="hf-count">{{len .Data.Notes}}</span>
+      </a>
+      {{- end}}
+      {{- if .Data.Organizations}}
+      <a href="{{orgsURL}}"{{if eq .Active "orgs"}} aria-current="page"{{end}}>
+        <svg class="hf-i"><use href="#i-layers" /></svg> Organizations <span class="hf-count">{{len .Data.Organizations}}</span>
+      </a>
+      {{- end}}
+    </nav>
+
+    <div class="hf-sidebar-foot">
+      {{- /*
+        No aria-label on either control below. An aria-label REPLACES the accessible name, and
+        one that did not contain the visible text ("Theme T", "Kieran Wood @kieran") failed
+        WCAG 2.5.3 Label in Name — a speech-input user saying what they can see would not match
+        it. The purpose is appended in a visually hidden span instead, so the accessible name
+        still starts with the visible text, and the mobile rule clips that span rather than
+        removing it so the name survives when the label collapses to an icon.
+      */}}
+      <button class="hf-theme-btn" type="button" id="hf-theme-toggle">
+        <svg class="hf-i hf-i-sun"><use href="#i-sun" /></svg>
+        <svg class="hf-i hf-i-moon"><use href="#i-moon" /></svg>
+        <span>Theme</span>
+        <kbd class="hf-kbd">T</kbd>
+        <span class="hf-sr">— switch between light and dark</span>
+      </button>
+      <a class="hf-owner" href="{{homeURL}}">
+        {{template "avatar" dict "Name" .Cfg.Owner.Name "Src" .Cfg.Owner.Avatar "Size" "md" "Eager" true "Base" .Router.Base}}
+        <span class="hf-owner-text"><strong>{{.Cfg.Owner.Name}}</strong><span>@{{.Cfg.Owner.Handle}}</span></span>
+        <span class="hf-sr">— overview</span>
+      </a>
+    </div>
+  </div>
+</aside>
+
+<script type="module" src="{{withBase "/js/sidebar.js"}}"></script>
+{{end}}

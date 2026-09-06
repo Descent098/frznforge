@@ -1,0 +1,92 @@
+# Every language NAME the ingest language map can put in the artifact — the `name` of each
+# LANGS entry in src/lib/ingest/languages.ts, sorted. This is the domain LanguageToChroma has
+# to cover; a name here with no entry there is an uncoloured file nobody would notice.
+#
+# Regenerated and checked by TestIngestLanguageListIsCurrent, which re-derives it from
+# languages.ts. When Phase 6 moves the language map into Go, that test points at the Go map
+# and this file goes away.
+Ada
+AsciiDoc
+Assembly
+Astro
+Batchfile
+C
+C#
+C++
+CMake
+CSS
+CSV
+Clojure
+CoffeeScript
+Common Lisp
+Crystal
+D
+Dart
+Dockerfile
+EditorConfig
+Elixir
+Elm
+Emacs Lisp
+Erlang
+F#
+Fortran
+Git Attributes
+Git Config
+Gleam
+Go
+GraphQL
+Groovy
+HCL
+HTML
+Handlebars
+Haskell
+INI
+Ignore List
+JSON
+Java
+JavaScript
+Julia
+Jupyter Notebook
+Kotlin
+Less
+Lockfile
+Lua
+MDX
+Makefile
+Markdown
+Nim
+Nix
+OCaml
+Objective-C
+PHP
+Pascal
+Perl
+PowerShell
+Protocol Buffer
+Pug
+Python
+R
+Ruby
+Rust
+SCSS
+SQL
+SVG
+Sass
+Scala
+Scheme
+Shell
+Solidity
+Svelte
+Swift
+TOML
+TeX
+Text
+TypeScript
+V
+Vim Script
+Vue
+WebAssembly
+XML
+YAML
+Zig
+reStructuredText

@@ -1,0 +1,300 @@
+{
+  "parse": [
+    {
+      "name": "none",
+      "src": "# Just a body\n\ntext",
+      "present": false,
+      "raw": "",
+      "body": "# Just a body\n\ntext",
+      "data": {}
+    },
+    {
+      "name": "simple",
+      "src": "---\ntitle: Hello\ndate: 2026-01-02\n---\nbody",
+      "present": true,
+      "raw": "title: Hello\ndate: 2026-01-02",
+      "body": "body",
+      "data": {
+        "title": "Hello",
+        "date": "2026-01-02"
+      }
+    },
+    {
+      "name": "dots-terminator",
+      "src": "---\ntitle: Hello\n...\nbody",
+      "present": true,
+      "raw": "title: Hello",
+      "body": "body",
+      "data": {
+        "title": "Hello"
+      }
+    },
+    {
+      "name": "unterminated",
+      "src": "---\ntitle: Hello\nbody without close",
+      "present": false,
+      "raw": "",
+      "body": "---\ntitle: Hello\nbody without close",
+      "data": {}
+    },
+    {
+      "name": "flow-seq",
+      "src": "---\ntags: [a, b, \"c, d\"]\n---\nx",
+      "present": true,
+      "raw": "tags: [a, b, \"c, d\"]",
+      "body": "x",
+      "data": {
+        "tags": [
+          "a",
+          "b",
+          "c, d"
+        ]
+      }
+    },
+    {
+      "name": "flow-seq-comment",
+      "src": "---\ntags: [a, b] # why\n---\nx",
+      "present": true,
+      "raw": "tags: [a, b] # why",
+      "body": "x",
+      "data": {
+        "tags": [
+          "a",
+          "b"
+        ]
+      }
+    },
+    {
+      "name": "block-seq",
+      "src": "---\ntags:\n  - one\n  - two\n---\nx",
+      "present": true,
+      "raw": "tags:\n  - one\n  - two",
+      "body": "x",
+      "data": {
+        "tags": [
+          "one",
+          "two"
+        ]
+      }
+    },
+    {
+      "name": "block-seq-nested-map",
+      "src": "---\npeople:\n  - name: x\n  - name: y\n---\nx",
+      "present": true,
+      "raw": "people:\n  - name: x\n  - name: y",
+      "body": "x",
+      "data": {}
+    },
+    {
+      "name": "block-seq-nested-flow",
+      "src": "---\nmatrix:\n  - [a, b]\n---\nx",
+      "present": true,
+      "raw": "matrix:\n  - [a, b]",
+      "body": "x",
+      "data": {}
+    },
+    {
+      "name": "nested-mapping",
+      "src": "---\nforges:\n  github: https://x\n---\nx",
+      "present": true,
+      "raw": "forges:\n  github: https://x",
+      "body": "x",
+      "data": {}
+    },
+    {
+      "name": "quoted-double",
+      "src": "---\ntitle: \"A \\\"quoted\\\" thing\nnewline\"\n---\nx",
+      "present": true,
+      "raw": "title: \"A \\\"quoted\\\" thing\nnewline\"",
+      "body": "x",
+      "data": {}
+    },
+    {
+      "name": "quoted-single",
+      "src": "---\ntitle: 'it''s here'\n---\nx",
+      "present": true,
+      "raw": "title: 'it''s here'",
+      "body": "x",
+      "data": {
+        "title": "it's here"
+      }
+    },
+    {
+      "name": "unterminated-quote",
+      "src": "---\ntitle: \"never closed\n---\nx",
+      "present": true,
+      "raw": "title: \"never closed",
+      "body": "x",
+      "data": {}
+    },
+    {
+      "name": "plain-comment",
+      "src": "---\ntitle: Hello # a comment\n---\nx",
+      "present": true,
+      "raw": "title: Hello # a comment",
+      "body": "x",
+      "data": {
+        "title": "Hello"
+      }
+    },
+    {
+      "name": "hash-not-comment",
+      "src": "---\ntitle: C#-tips\n---\nx",
+      "present": true,
+      "raw": "title: C#-tips",
+      "body": "x",
+      "data": {
+        "title": "C#-tips"
+      }
+    },
+    {
+      "name": "comment-line",
+      "src": "---\n# just a comment\ntitle: Hello\n---\nx",
+      "present": true,
+      "raw": "# just a comment\ntitle: Hello",
+      "body": "x",
+      "data": {
+        "title": "Hello"
+      }
+    },
+    {
+      "name": "flow-map",
+      "src": "---\nobj: {a: 1}\n---\nx",
+      "present": true,
+      "raw": "obj: {a: 1}",
+      "body": "x",
+      "data": {}
+    },
+    {
+      "name": "crlf",
+      "src": "---\r\ntitle: Hello\r\ntags: [a]\r\n---\r\nbody\r\nmore",
+      "present": true,
+      "raw": "title: Hello\ntags: [a]",
+      "body": "body\nmore",
+      "data": {
+        "title": "Hello",
+        "tags": [
+          "a"
+        ]
+      }
+    },
+    {
+      "name": "bom",
+      "src": "﻿---\ntitle: Hello\n---\nx",
+      "present": true,
+      "raw": "title: Hello",
+      "body": "x",
+      "data": {
+        "title": "Hello"
+      }
+    },
+    {
+      "name": "empty-value",
+      "src": "---\ntitle:\ndescription: set\n---\nx",
+      "present": true,
+      "raw": "title:\ndescription: set",
+      "body": "x",
+      "data": {
+        "description": "set"
+      }
+    },
+    {
+      "name": "dotted-key",
+      "src": "---\nsome.key: v\nother-key: w\n---\nx",
+      "present": true,
+      "raw": "some.key: v\nother-key: w",
+      "body": "x",
+      "data": {
+        "some.key": "v",
+        "other-key": "w"
+      }
+    },
+    {
+      "name": "blank-lines",
+      "src": "---\n\ntitle: Hello\n\ntags:\n\n  - a\n\n---\nx",
+      "present": true,
+      "raw": "\ntitle: Hello\n\ntags:\n\n  - a\n",
+      "body": "x",
+      "data": {
+        "title": "Hello",
+        "tags": [
+          "a"
+        ]
+      }
+    }
+  ],
+  "firstHeading": [
+    {
+      "name": "atx",
+      "body": "# Title\n\ntext",
+      "out": "Title"
+    },
+    {
+      "name": "atx-closed",
+      "body": "# Title ###\n\ntext",
+      "out": "Title"
+    },
+    {
+      "name": "setext",
+      "body": "Title\n=====\n\ntext",
+      "out": null
+    },
+    {
+      "name": "in-fence",
+      "body": "```\n# Not a heading\n```\n\n# Real\n",
+      "out": "Real"
+    },
+    {
+      "name": "tilde-fence",
+      "body": "~~~\n# Not a heading\n~~~\n# Real\n",
+      "out": "Real"
+    },
+    {
+      "name": "indented",
+      "body": "   # Indented heading\n",
+      "out": "Indented heading"
+    },
+    {
+      "name": "none",
+      "body": "no headings here\n",
+      "out": null
+    },
+    {
+      "name": "h2-only",
+      "body": "## Second level\n",
+      "out": null
+    }
+  ],
+  "stripLeadingHeading": [
+    {
+      "name": "matching-atx",
+      "body": "# Title\n\nrest",
+      "title": "Title",
+      "out": "\nrest"
+    },
+    {
+      "name": "matching-setext",
+      "body": "Title\n===\n\nrest",
+      "title": "Title",
+      "out": "\nrest"
+    },
+    {
+      "name": "different",
+      "body": "# Other\n\nrest",
+      "title": "Title",
+      "out": "# Other\n\nrest"
+    },
+    {
+      "name": "no-heading",
+      "body": "rest",
+      "title": "Title",
+      "out": "rest"
+    },
+    {
+      "name": "leading-blank",
+      "body": "\n\n# Title\nrest",
+      "title": "Title",
+      "out": "rest"
+    }
+  ]
+}

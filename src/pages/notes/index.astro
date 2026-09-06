@@ -14,7 +14,7 @@ import Base from '../../layouts/Base.astro';
 import { getConfig, getData } from '../../lib/site';
 import { formatBytes, heatClass, heatFor, isoDay, relativeTime } from '../../lib/format';
 import { noteUrl } from '../../lib/routes';
-import '../../styles/notes.css';
+import '../../../web/css/notes.css';
 
 const data = await getData();
 const notes = data.notes;

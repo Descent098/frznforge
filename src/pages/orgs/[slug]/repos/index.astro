@@ -8,12 +8,12 @@
  * fix is membership, not ingestion.
  */
 import Base from '../../../../layouts/Base.astro';
-import RepoListing from '../../../../components/RepoListing.svelte';
+import RepoListing from '../../../../components/RepoListing.astro';
 import type { Organization, Repo } from '../../../../lib/data/schema';
 import { summarize } from '../../../../lib/listing';
 import { getOrgRoutes, orgReposUrl, orgUrl } from '../../../../lib/routes';
 import { getConfig, getData } from '../../../../lib/site';
-import '../../../../styles/orgs.css';
+import '../../../../../web/css/orgs.css';
 
 export async function getStaticPaths() {
   const data = await getData();
@@ -40,7 +40,7 @@ const now = Date.now();
     </header>
     {summaries.length ? (
       /* basePath keeps tag chips and the no-JS pager inside this organization. */
-      <RepoListing client:load repos={summaries} pageSize={cfg.listing.pageSize} now={now} heatDays={cfg.theme.heat} basePath={orgReposUrl(org.slug)} />
+      <RepoListing repos={summaries} pageSize={cfg.listing.pageSize} now={now} heatDays={cfg.theme.heat} basePath={orgReposUrl(org.slug)} />
     ) : (
       <div class="hf-empty hf-card">
         <svg class="hf-i"><use href="#i-repo" /></svg>

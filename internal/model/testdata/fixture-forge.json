@@ -1,0 +1,3851 @@
+{
+  "schemaVersion": 8,
+  "repos": [
+    {
+      "slug": "alpha",
+      "name": "alpha",
+      "description": "Alpha fixture: a static site generator.",
+      "source": {
+        "type": "local",
+        "path": "C:\\Users\\Kieran\\Desktop\\Development\\personal\\unfinished-mvp\\frznforge\\tests\\.tmp\\e2e\\repos\\alpha"
+      },
+      "links": {
+        "homepage": "https://example.com/alpha",
+        "upstream": "https://github.com/example/alpha"
+      },
+      "tags": [
+        "ssg",
+        "astro"
+      ],
+      "template": false,
+      "license": {
+        "spdx": "MIT",
+        "file": "LICENSE",
+        "source": "file"
+      },
+      "releaseMode": "tags",
+      "releases": [],
+      "empty": false,
+      "defaultBranch": "main",
+      "branches": [
+        {
+          "name": "feature/extra",
+          "head": "dee4808ec516c367fd54d5edce39b4fb52cbf99f",
+          "commits": [
+            "dee4808ec516c367fd54d5edce39b4fb52cbf99f",
+            "a6092acb194b810e56327d844c421e03e98b46c7",
+            "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+          ],
+          "lastCommitDate": "2026-09-04T10:25:02Z"
+        },
+        {
+          "name": "gh-pages",
+          "head": "475c88d2db9cca83e5a317e18756f8dc74588af6",
+          "commits": [
+            "475c88d2db9cca83e5a317e18756f8dc74588af6",
+            "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+            "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+          ],
+          "lastCommitDate": "2024-03-05T00:00:00Z"
+        },
+        {
+          "name": "main",
+          "head": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "commits": [
+            "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+            "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+          ],
+          "lastCommitDate": "2024-02-01T00:00:00Z"
+        }
+      ],
+      "gitTags": [
+        {
+          "name": "light",
+          "target": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "annotated": false,
+          "message": null,
+          "tagger": null,
+          "date": "2024-02-01T00:00:00Z"
+        },
+        {
+          "name": "v1.0.0",
+          "target": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "annotated": true,
+          "message": "First release",
+          "tagger": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "date": "2024-02-01T00:00:00Z"
+        },
+        {
+          "name": "v1.1.0",
+          "target": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "annotated": true,
+          "message": "Second release\n\n## Highlights\n\n- adds a *guide*\n- new `extra` module",
+          "tagger": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "date": "2024-03-01T00:00:00Z"
+        }
+      ],
+      "commits": {
+        "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e": {
+          "sha": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "parents": [
+            "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-02-01T00:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-02-01T00:00:00Z",
+          "subject": "bump the answer",
+          "body": "",
+          "files": [
+            {
+              "path": "src/index.ts",
+              "additions": 20,
+              "deletions": 20
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 20,
+            "deletions": 20
+          }
+        },
+        "28d0f335ea924638f670cfe73318f1dfa7ed86b6": {
+          "sha": "28d0f335ea924638f670cfe73318f1dfa7ed86b6",
+          "parents": [],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-01-01T00:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-01-01T00:00:00Z",
+          "subject": "initial commit",
+          "body": "",
+          "files": [
+            {
+              "path": ".frznforge.json",
+              "additions": 11,
+              "deletions": 0
+            },
+            {
+              "path": "LICENSE",
+              "additions": 5,
+              "deletions": 0
+            },
+            {
+              "path": "README.md",
+              "additions": 20,
+              "deletions": 0
+            },
+            {
+              "path": "assets/dot.png",
+              "additions": null,
+              "deletions": null
+            },
+            {
+              "path": "docs/50% off.txt",
+              "additions": 1,
+              "deletions": 0
+            },
+            {
+              "path": "docs/c#-tips.md",
+              "additions": 3,
+              "deletions": 0
+            },
+            {
+              "path": "docs/guide.md",
+              "additions": 6,
+              "deletions": 0
+            },
+            {
+              "path": "docs/read me.md",
+              "additions": 3,
+              "deletions": 0
+            },
+            {
+              "path": "src/index.ts",
+              "additions": 20,
+              "deletions": 0
+            },
+            {
+              "path": "src/lib/index.ts",
+              "additions": 1,
+              "deletions": 0
+            },
+            {
+              "path": "src/style.css",
+              "additions": 5,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 11,
+            "additions": 75,
+            "deletions": 0
+          }
+        },
+        "475c88d2db9cca83e5a317e18756f8dc74588af6": {
+          "sha": "475c88d2db9cca83e5a317e18756f8dc74588af6",
+          "parents": [
+            "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-03-05T00:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-03-05T00:00:00Z",
+          "subject": "publish the site",
+          "body": "",
+          "files": [
+            {
+              "path": ".frznforge.json",
+              "additions": 0,
+              "deletions": 11
+            },
+            {
+              "path": "LICENSE",
+              "additions": 0,
+              "deletions": 5
+            },
+            {
+              "path": "README.md",
+              "additions": 0,
+              "deletions": 20
+            },
+            {
+              "path": "app.js",
+              "additions": 1,
+              "deletions": 0
+            },
+            {
+              "path": "assets/dot.png",
+              "additions": null,
+              "deletions": null
+            },
+            {
+              "path": "docs/50% off.txt",
+              "additions": 0,
+              "deletions": 1
+            },
+            {
+              "path": "docs/c#-tips.md",
+              "additions": 0,
+              "deletions": 3
+            },
+            {
+              "path": "docs/guide.md",
+              "additions": 0,
+              "deletions": 6
+            },
+            {
+              "path": "docs/read me.md",
+              "additions": 0,
+              "deletions": 3
+            },
+            {
+              "path": "index.html",
+              "additions": 1,
+              "deletions": 0
+            },
+            {
+              "path": "src/index.ts",
+              "additions": 0,
+              "deletions": 20
+            },
+            {
+              "path": "src/lib/index.ts",
+              "additions": 0,
+              "deletions": 1
+            },
+            {
+              "path": "src/style.css",
+              "additions": 0,
+              "deletions": 5
+            },
+            {
+              "path": "style.css",
+              "additions": 1,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 14,
+            "additions": 3,
+            "deletions": 75
+          }
+        },
+        "a6092acb194b810e56327d844c421e03e98b46c7": {
+          "sha": "a6092acb194b810e56327d844c421e03e98b46c7",
+          "parents": [
+            "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-01-15T00:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-01-15T00:00:00Z",
+          "subject": "add extra feature file",
+          "body": "",
+          "files": [
+            {
+              "path": "src/extra.ts",
+              "additions": 1,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 1,
+            "deletions": 0
+          }
+        },
+        "dee4808ec516c367fd54d5edce39b4fb52cbf99f": {
+          "sha": "dee4808ec516c367fd54d5edce39b4fb52cbf99f",
+          "parents": [
+            "a6092acb194b810e56327d844c421e03e98b46c7"
+          ],
+          "author": {
+            "name": "Kieran Wood",
+            "email": "kieran@canadiancoding.ca"
+          },
+          "authorDate": "2026-09-04T10:25:02Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2026-09-04T10:25:02Z",
+          "subject": "tweak the extra feature",
+          "body": "",
+          "files": [
+            {
+              "path": "src/extra.ts",
+              "additions": 1,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 1,
+            "deletions": 0
+          }
+        }
+      },
+      "commitCount": 5,
+      "extraCommits": {},
+      "tree": [
+        {
+          "path": ".frznforge.json",
+          "name": ".frznforge.json",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "f9439983e93fcbcd885e6f953bc43f1cff066b77",
+          "size": 216,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "LICENSE",
+          "name": "LICENSE",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "1463b1e49f2bd08441525f35beab75c1c8858033",
+          "size": 120,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "README.md",
+          "name": "README.md",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "bb601c8c256df1f364c922553c48a01972a7ff20",
+          "size": 255,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "assets",
+          "name": "assets",
+          "type": "tree",
+          "mode": "040000",
+          "sha": "397ee2b214eb5f0828fe7048e5849f383a7531d8",
+          "size": null,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "assets/dot.png",
+          "name": "dot.png",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "b437676b0b69749e011e1353750ee9638acde8c1",
+          "size": 20,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "docs",
+          "name": "docs",
+          "type": "tree",
+          "mode": "040000",
+          "sha": "7b001829b0aa63fc4bcd58a13d8d3301bf747511",
+          "size": null,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "docs/50% off.txt",
+          "name": "50% off.txt",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "27058edfd6bf6f6f26da96070ba0ee55c843ab31",
+          "size": 20,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "docs/c#-tips.md",
+          "name": "c#-tips.md",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "847e2c5cf9ca309ffd9dde369781e3e03039c69b",
+          "size": 29,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "docs/guide.md",
+          "name": "guide.md",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "bb90546d0a501154e111b184326754851f751a7a",
+          "size": 60,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "docs/read me.md",
+          "name": "read me.md",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "b625abd57c39e16285bf51587e0635792e0707c9",
+          "size": 32,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "src",
+          "name": "src",
+          "type": "tree",
+          "mode": "040000",
+          "sha": "6e25d0d7c486b76fff5828ddacccf5d412df4c82",
+          "size": null,
+          "lastCommit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e"
+        },
+        {
+          "path": "src/index.ts",
+          "name": "index.ts",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "8a88534aa34eeba7f0602a50cab0b6603f9da3ad",
+          "size": 680,
+          "lastCommit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e"
+        },
+        {
+          "path": "src/lib",
+          "name": "lib",
+          "type": "tree",
+          "mode": "040000",
+          "sha": "fed41f1f7930e950775bef1dee347e695bf21c27",
+          "size": null,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "src/lib/index.ts",
+          "name": "index.ts",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "cb0ff5c3b541f646105198ee23ac0fc3d805023e",
+          "size": 11,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        },
+        {
+          "path": "src/style.css",
+          "name": "style.css",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "09678d95f34fca3d3c963da425e1f460d7f006c8",
+          "size": 100,
+          "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+        }
+      ],
+      "files": {
+        ".frznforge.json": {
+          "path": ".frznforge.json",
+          "sha": "f9439983e93fcbcd885e6f953bc43f1cff066b77",
+          "size": 216,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "JSON"
+        },
+        "LICENSE": {
+          "path": "LICENSE",
+          "sha": "1463b1e49f2bd08441525f35beab75c1c8858033",
+          "size": 120,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Text"
+        },
+        "README.md": {
+          "path": "README.md",
+          "sha": "bb601c8c256df1f364c922553c48a01972a7ff20",
+          "size": 255,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Markdown"
+        },
+        "assets/dot.png": {
+          "path": "assets/dot.png",
+          "sha": "b437676b0b69749e011e1353750ee9638acde8c1",
+          "size": 20,
+          "binary": true,
+          "tooLarge": false,
+          "stored": true,
+          "language": null
+        },
+        "docs/50% off.txt": {
+          "path": "docs/50% off.txt",
+          "sha": "27058edfd6bf6f6f26da96070ba0ee55c843ab31",
+          "size": 20,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Text"
+        },
+        "docs/c#-tips.md": {
+          "path": "docs/c#-tips.md",
+          "sha": "847e2c5cf9ca309ffd9dde369781e3e03039c69b",
+          "size": 29,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Markdown"
+        },
+        "docs/guide.md": {
+          "path": "docs/guide.md",
+          "sha": "bb90546d0a501154e111b184326754851f751a7a",
+          "size": 60,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Markdown"
+        },
+        "docs/read me.md": {
+          "path": "docs/read me.md",
+          "sha": "b625abd57c39e16285bf51587e0635792e0707c9",
+          "size": 32,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Markdown"
+        },
+        "src/index.ts": {
+          "path": "src/index.ts",
+          "sha": "8a88534aa34eeba7f0602a50cab0b6603f9da3ad",
+          "size": 680,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "TypeScript"
+        },
+        "src/lib/index.ts": {
+          "path": "src/lib/index.ts",
+          "sha": "cb0ff5c3b541f646105198ee23ac0fc3d805023e",
+          "size": 11,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "TypeScript"
+        },
+        "src/style.css": {
+          "path": "src/style.css",
+          "sha": "09678d95f34fca3d3c963da425e1f460d7f006c8",
+          "size": 100,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "CSS"
+        }
+      },
+      "refTrees": {
+        "feature/extra": {
+          "kind": "branch",
+          "name": "feature/extra",
+          "commit": "dee4808ec516c367fd54d5edce39b4fb52cbf99f",
+          "tree": [
+            {
+              "path": ".frznforge.json",
+              "name": ".frznforge.json",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "f9439983e93fcbcd885e6f953bc43f1cff066b77",
+              "size": 216,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "LICENSE",
+              "name": "LICENSE",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "1463b1e49f2bd08441525f35beab75c1c8858033",
+              "size": 120,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "README.md",
+              "name": "README.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "bb601c8c256df1f364c922553c48a01972a7ff20",
+              "size": 255,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "assets",
+              "name": "assets",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "397ee2b214eb5f0828fe7048e5849f383a7531d8",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "assets/dot.png",
+              "name": "dot.png",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "b437676b0b69749e011e1353750ee9638acde8c1",
+              "size": 20,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs",
+              "name": "docs",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "7b001829b0aa63fc4bcd58a13d8d3301bf747511",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/50% off.txt",
+              "name": "50% off.txt",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "27058edfd6bf6f6f26da96070ba0ee55c843ab31",
+              "size": 20,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/c#-tips.md",
+              "name": "c#-tips.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "847e2c5cf9ca309ffd9dde369781e3e03039c69b",
+              "size": 29,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/guide.md",
+              "name": "guide.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "bb90546d0a501154e111b184326754851f751a7a",
+              "size": 60,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/read me.md",
+              "name": "read me.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "b625abd57c39e16285bf51587e0635792e0707c9",
+              "size": 32,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src",
+              "name": "src",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "515264bd2fc84f876a07b670dfb8e6f5115039fd",
+              "size": null,
+              "lastCommit": "dee4808ec516c367fd54d5edce39b4fb52cbf99f"
+            },
+            {
+              "path": "src/extra.ts",
+              "name": "extra.ts",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "ef4ba1fd1da3bdf542fb92635c6871f5010a3a6c",
+              "size": 50,
+              "lastCommit": "dee4808ec516c367fd54d5edce39b4fb52cbf99f"
+            },
+            {
+              "path": "src/index.ts",
+              "name": "index.ts",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "c056cb7b54d578db7a96162db85c28984e672afc",
+              "size": 680,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src/lib",
+              "name": "lib",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "fed41f1f7930e950775bef1dee347e695bf21c27",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src/lib/index.ts",
+              "name": "index.ts",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "cb0ff5c3b541f646105198ee23ac0fc3d805023e",
+              "size": 11,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src/style.css",
+              "name": "style.css",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "09678d95f34fca3d3c963da425e1f460d7f006c8",
+              "size": 100,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            }
+          ],
+          "files": {
+            ".frznforge.json": {
+              "path": ".frznforge.json",
+              "sha": "f9439983e93fcbcd885e6f953bc43f1cff066b77",
+              "size": 216,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "JSON"
+            },
+            "LICENSE": {
+              "path": "LICENSE",
+              "sha": "1463b1e49f2bd08441525f35beab75c1c8858033",
+              "size": 120,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Text"
+            },
+            "README.md": {
+              "path": "README.md",
+              "sha": "bb601c8c256df1f364c922553c48a01972a7ff20",
+              "size": 255,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "assets/dot.png": {
+              "path": "assets/dot.png",
+              "sha": "b437676b0b69749e011e1353750ee9638acde8c1",
+              "size": 20,
+              "binary": true,
+              "tooLarge": false,
+              "stored": true,
+              "language": null
+            },
+            "docs/50% off.txt": {
+              "path": "docs/50% off.txt",
+              "sha": "27058edfd6bf6f6f26da96070ba0ee55c843ab31",
+              "size": 20,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Text"
+            },
+            "docs/c#-tips.md": {
+              "path": "docs/c#-tips.md",
+              "sha": "847e2c5cf9ca309ffd9dde369781e3e03039c69b",
+              "size": 29,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "docs/guide.md": {
+              "path": "docs/guide.md",
+              "sha": "bb90546d0a501154e111b184326754851f751a7a",
+              "size": 60,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "docs/read me.md": {
+              "path": "docs/read me.md",
+              "sha": "b625abd57c39e16285bf51587e0635792e0707c9",
+              "size": 32,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "src/extra.ts": {
+              "path": "src/extra.ts",
+              "sha": "ef4ba1fd1da3bdf542fb92635c6871f5010a3a6c",
+              "size": 50,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "TypeScript"
+            },
+            "src/index.ts": {
+              "path": "src/index.ts",
+              "sha": "c056cb7b54d578db7a96162db85c28984e672afc",
+              "size": 680,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "TypeScript"
+            },
+            "src/lib/index.ts": {
+              "path": "src/lib/index.ts",
+              "sha": "cb0ff5c3b541f646105198ee23ac0fc3d805023e",
+              "size": 11,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "TypeScript"
+            },
+            "src/style.css": {
+              "path": "src/style.css",
+              "sha": "09678d95f34fca3d3c963da425e1f460d7f006c8",
+              "size": 100,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "CSS"
+            }
+          }
+        },
+        "gh-pages": {
+          "kind": "branch",
+          "name": "gh-pages",
+          "commit": "475c88d2db9cca83e5a317e18756f8dc74588af6",
+          "tree": [
+            {
+              "path": "app.js",
+              "name": "app.js",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "7b6cb49c2927c33d86ab1c402552472e50604099",
+              "size": 26,
+              "lastCommit": "475c88d2db9cca83e5a317e18756f8dc74588af6"
+            },
+            {
+              "path": "index.html",
+              "name": "index.html",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "55cb8f0df0ce12f90cfbb33aa6ea192b87f2f44b",
+              "size": 155,
+              "lastCommit": "475c88d2db9cca83e5a317e18756f8dc74588af6"
+            },
+            {
+              "path": "style.css",
+              "name": "style.css",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "163e3a601462963cbfcee14ea582a1b6cc90688c",
+              "size": 29,
+              "lastCommit": "475c88d2db9cca83e5a317e18756f8dc74588af6"
+            }
+          ],
+          "files": {
+            "app.js": {
+              "path": "app.js",
+              "sha": "7b6cb49c2927c33d86ab1c402552472e50604099",
+              "size": 26,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "JavaScript"
+            },
+            "index.html": {
+              "path": "index.html",
+              "sha": "55cb8f0df0ce12f90cfbb33aa6ea192b87f2f44b",
+              "size": 155,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "HTML"
+            },
+            "style.css": {
+              "path": "style.css",
+              "sha": "163e3a601462963cbfcee14ea582a1b6cc90688c",
+              "size": 29,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "CSS"
+            }
+          }
+        },
+        "light": {
+          "kind": "tag",
+          "name": "light",
+          "commit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "tree": [
+            {
+              "path": ".frznforge.json",
+              "name": ".frznforge.json",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "f9439983e93fcbcd885e6f953bc43f1cff066b77",
+              "size": 216,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "LICENSE",
+              "name": "LICENSE",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "1463b1e49f2bd08441525f35beab75c1c8858033",
+              "size": 120,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "README.md",
+              "name": "README.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "bb601c8c256df1f364c922553c48a01972a7ff20",
+              "size": 255,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "assets",
+              "name": "assets",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "397ee2b214eb5f0828fe7048e5849f383a7531d8",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "assets/dot.png",
+              "name": "dot.png",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "b437676b0b69749e011e1353750ee9638acde8c1",
+              "size": 20,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs",
+              "name": "docs",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "7b001829b0aa63fc4bcd58a13d8d3301bf747511",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/50% off.txt",
+              "name": "50% off.txt",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "27058edfd6bf6f6f26da96070ba0ee55c843ab31",
+              "size": 20,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/c#-tips.md",
+              "name": "c#-tips.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "847e2c5cf9ca309ffd9dde369781e3e03039c69b",
+              "size": 29,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/guide.md",
+              "name": "guide.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "bb90546d0a501154e111b184326754851f751a7a",
+              "size": 60,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/read me.md",
+              "name": "read me.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "b625abd57c39e16285bf51587e0635792e0707c9",
+              "size": 32,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src",
+              "name": "src",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "6e25d0d7c486b76fff5828ddacccf5d412df4c82",
+              "size": null,
+              "lastCommit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e"
+            },
+            {
+              "path": "src/index.ts",
+              "name": "index.ts",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "8a88534aa34eeba7f0602a50cab0b6603f9da3ad",
+              "size": 680,
+              "lastCommit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e"
+            },
+            {
+              "path": "src/lib",
+              "name": "lib",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "fed41f1f7930e950775bef1dee347e695bf21c27",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src/lib/index.ts",
+              "name": "index.ts",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "cb0ff5c3b541f646105198ee23ac0fc3d805023e",
+              "size": 11,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src/style.css",
+              "name": "style.css",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "09678d95f34fca3d3c963da425e1f460d7f006c8",
+              "size": 100,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            }
+          ],
+          "files": {
+            ".frznforge.json": {
+              "path": ".frznforge.json",
+              "sha": "f9439983e93fcbcd885e6f953bc43f1cff066b77",
+              "size": 216,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "JSON"
+            },
+            "LICENSE": {
+              "path": "LICENSE",
+              "sha": "1463b1e49f2bd08441525f35beab75c1c8858033",
+              "size": 120,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Text"
+            },
+            "README.md": {
+              "path": "README.md",
+              "sha": "bb601c8c256df1f364c922553c48a01972a7ff20",
+              "size": 255,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "assets/dot.png": {
+              "path": "assets/dot.png",
+              "sha": "b437676b0b69749e011e1353750ee9638acde8c1",
+              "size": 20,
+              "binary": true,
+              "tooLarge": false,
+              "stored": true,
+              "language": null
+            },
+            "docs/50% off.txt": {
+              "path": "docs/50% off.txt",
+              "sha": "27058edfd6bf6f6f26da96070ba0ee55c843ab31",
+              "size": 20,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Text"
+            },
+            "docs/c#-tips.md": {
+              "path": "docs/c#-tips.md",
+              "sha": "847e2c5cf9ca309ffd9dde369781e3e03039c69b",
+              "size": 29,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "docs/guide.md": {
+              "path": "docs/guide.md",
+              "sha": "bb90546d0a501154e111b184326754851f751a7a",
+              "size": 60,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "docs/read me.md": {
+              "path": "docs/read me.md",
+              "sha": "b625abd57c39e16285bf51587e0635792e0707c9",
+              "size": 32,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "src/index.ts": {
+              "path": "src/index.ts",
+              "sha": "8a88534aa34eeba7f0602a50cab0b6603f9da3ad",
+              "size": 680,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "TypeScript"
+            },
+            "src/lib/index.ts": {
+              "path": "src/lib/index.ts",
+              "sha": "cb0ff5c3b541f646105198ee23ac0fc3d805023e",
+              "size": 11,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "TypeScript"
+            },
+            "src/style.css": {
+              "path": "src/style.css",
+              "sha": "09678d95f34fca3d3c963da425e1f460d7f006c8",
+              "size": 100,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "CSS"
+            }
+          }
+        },
+        "v1.0.0": {
+          "kind": "tag",
+          "name": "v1.0.0",
+          "commit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "tree": [
+            {
+              "path": ".frznforge.json",
+              "name": ".frznforge.json",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "f9439983e93fcbcd885e6f953bc43f1cff066b77",
+              "size": 216,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "LICENSE",
+              "name": "LICENSE",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "1463b1e49f2bd08441525f35beab75c1c8858033",
+              "size": 120,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "README.md",
+              "name": "README.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "bb601c8c256df1f364c922553c48a01972a7ff20",
+              "size": 255,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "assets",
+              "name": "assets",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "397ee2b214eb5f0828fe7048e5849f383a7531d8",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "assets/dot.png",
+              "name": "dot.png",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "b437676b0b69749e011e1353750ee9638acde8c1",
+              "size": 20,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs",
+              "name": "docs",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "7b001829b0aa63fc4bcd58a13d8d3301bf747511",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/50% off.txt",
+              "name": "50% off.txt",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "27058edfd6bf6f6f26da96070ba0ee55c843ab31",
+              "size": 20,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/c#-tips.md",
+              "name": "c#-tips.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "847e2c5cf9ca309ffd9dde369781e3e03039c69b",
+              "size": 29,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/guide.md",
+              "name": "guide.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "bb90546d0a501154e111b184326754851f751a7a",
+              "size": 60,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/read me.md",
+              "name": "read me.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "b625abd57c39e16285bf51587e0635792e0707c9",
+              "size": 32,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src",
+              "name": "src",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "6e25d0d7c486b76fff5828ddacccf5d412df4c82",
+              "size": null,
+              "lastCommit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e"
+            },
+            {
+              "path": "src/index.ts",
+              "name": "index.ts",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "8a88534aa34eeba7f0602a50cab0b6603f9da3ad",
+              "size": 680,
+              "lastCommit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e"
+            },
+            {
+              "path": "src/lib",
+              "name": "lib",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "fed41f1f7930e950775bef1dee347e695bf21c27",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src/lib/index.ts",
+              "name": "index.ts",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "cb0ff5c3b541f646105198ee23ac0fc3d805023e",
+              "size": 11,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src/style.css",
+              "name": "style.css",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "09678d95f34fca3d3c963da425e1f460d7f006c8",
+              "size": 100,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            }
+          ],
+          "files": {
+            ".frznforge.json": {
+              "path": ".frznforge.json",
+              "sha": "f9439983e93fcbcd885e6f953bc43f1cff066b77",
+              "size": 216,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "JSON"
+            },
+            "LICENSE": {
+              "path": "LICENSE",
+              "sha": "1463b1e49f2bd08441525f35beab75c1c8858033",
+              "size": 120,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Text"
+            },
+            "README.md": {
+              "path": "README.md",
+              "sha": "bb601c8c256df1f364c922553c48a01972a7ff20",
+              "size": 255,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "assets/dot.png": {
+              "path": "assets/dot.png",
+              "sha": "b437676b0b69749e011e1353750ee9638acde8c1",
+              "size": 20,
+              "binary": true,
+              "tooLarge": false,
+              "stored": true,
+              "language": null
+            },
+            "docs/50% off.txt": {
+              "path": "docs/50% off.txt",
+              "sha": "27058edfd6bf6f6f26da96070ba0ee55c843ab31",
+              "size": 20,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Text"
+            },
+            "docs/c#-tips.md": {
+              "path": "docs/c#-tips.md",
+              "sha": "847e2c5cf9ca309ffd9dde369781e3e03039c69b",
+              "size": 29,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "docs/guide.md": {
+              "path": "docs/guide.md",
+              "sha": "bb90546d0a501154e111b184326754851f751a7a",
+              "size": 60,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "docs/read me.md": {
+              "path": "docs/read me.md",
+              "sha": "b625abd57c39e16285bf51587e0635792e0707c9",
+              "size": 32,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "src/index.ts": {
+              "path": "src/index.ts",
+              "sha": "8a88534aa34eeba7f0602a50cab0b6603f9da3ad",
+              "size": 680,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "TypeScript"
+            },
+            "src/lib/index.ts": {
+              "path": "src/lib/index.ts",
+              "sha": "cb0ff5c3b541f646105198ee23ac0fc3d805023e",
+              "size": 11,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "TypeScript"
+            },
+            "src/style.css": {
+              "path": "src/style.css",
+              "sha": "09678d95f34fca3d3c963da425e1f460d7f006c8",
+              "size": 100,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "CSS"
+            }
+          }
+        },
+        "v1.1.0": {
+          "kind": "tag",
+          "name": "v1.1.0",
+          "commit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "tree": [
+            {
+              "path": ".frznforge.json",
+              "name": ".frznforge.json",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "f9439983e93fcbcd885e6f953bc43f1cff066b77",
+              "size": 216,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "LICENSE",
+              "name": "LICENSE",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "1463b1e49f2bd08441525f35beab75c1c8858033",
+              "size": 120,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "README.md",
+              "name": "README.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "bb601c8c256df1f364c922553c48a01972a7ff20",
+              "size": 255,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "assets",
+              "name": "assets",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "397ee2b214eb5f0828fe7048e5849f383a7531d8",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "assets/dot.png",
+              "name": "dot.png",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "b437676b0b69749e011e1353750ee9638acde8c1",
+              "size": 20,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs",
+              "name": "docs",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "7b001829b0aa63fc4bcd58a13d8d3301bf747511",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/50% off.txt",
+              "name": "50% off.txt",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "27058edfd6bf6f6f26da96070ba0ee55c843ab31",
+              "size": 20,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/c#-tips.md",
+              "name": "c#-tips.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "847e2c5cf9ca309ffd9dde369781e3e03039c69b",
+              "size": 29,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/guide.md",
+              "name": "guide.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "bb90546d0a501154e111b184326754851f751a7a",
+              "size": 60,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "docs/read me.md",
+              "name": "read me.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "b625abd57c39e16285bf51587e0635792e0707c9",
+              "size": 32,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src",
+              "name": "src",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "6e25d0d7c486b76fff5828ddacccf5d412df4c82",
+              "size": null,
+              "lastCommit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e"
+            },
+            {
+              "path": "src/index.ts",
+              "name": "index.ts",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "8a88534aa34eeba7f0602a50cab0b6603f9da3ad",
+              "size": 680,
+              "lastCommit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e"
+            },
+            {
+              "path": "src/lib",
+              "name": "lib",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "fed41f1f7930e950775bef1dee347e695bf21c27",
+              "size": null,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src/lib/index.ts",
+              "name": "index.ts",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "cb0ff5c3b541f646105198ee23ac0fc3d805023e",
+              "size": 11,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            },
+            {
+              "path": "src/style.css",
+              "name": "style.css",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "09678d95f34fca3d3c963da425e1f460d7f006c8",
+              "size": 100,
+              "lastCommit": "28d0f335ea924638f670cfe73318f1dfa7ed86b6"
+            }
+          ],
+          "files": {
+            ".frznforge.json": {
+              "path": ".frznforge.json",
+              "sha": "f9439983e93fcbcd885e6f953bc43f1cff066b77",
+              "size": 216,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "JSON"
+            },
+            "LICENSE": {
+              "path": "LICENSE",
+              "sha": "1463b1e49f2bd08441525f35beab75c1c8858033",
+              "size": 120,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Text"
+            },
+            "README.md": {
+              "path": "README.md",
+              "sha": "bb601c8c256df1f364c922553c48a01972a7ff20",
+              "size": 255,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "assets/dot.png": {
+              "path": "assets/dot.png",
+              "sha": "b437676b0b69749e011e1353750ee9638acde8c1",
+              "size": 20,
+              "binary": true,
+              "tooLarge": false,
+              "stored": true,
+              "language": null
+            },
+            "docs/50% off.txt": {
+              "path": "docs/50% off.txt",
+              "sha": "27058edfd6bf6f6f26da96070ba0ee55c843ab31",
+              "size": 20,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Text"
+            },
+            "docs/c#-tips.md": {
+              "path": "docs/c#-tips.md",
+              "sha": "847e2c5cf9ca309ffd9dde369781e3e03039c69b",
+              "size": 29,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "docs/guide.md": {
+              "path": "docs/guide.md",
+              "sha": "bb90546d0a501154e111b184326754851f751a7a",
+              "size": 60,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "docs/read me.md": {
+              "path": "docs/read me.md",
+              "sha": "b625abd57c39e16285bf51587e0635792e0707c9",
+              "size": 32,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "src/index.ts": {
+              "path": "src/index.ts",
+              "sha": "8a88534aa34eeba7f0602a50cab0b6603f9da3ad",
+              "size": 680,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "TypeScript"
+            },
+            "src/lib/index.ts": {
+              "path": "src/lib/index.ts",
+              "sha": "cb0ff5c3b541f646105198ee23ac0fc3d805023e",
+              "size": 11,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "TypeScript"
+            },
+            "src/style.css": {
+              "path": "src/style.css",
+              "sha": "09678d95f34fca3d3c963da425e1f460d7f006c8",
+              "size": 100,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "CSS"
+            }
+          }
+        }
+      },
+      "archives": [
+        {
+          "ref": "main",
+          "kind": "branch",
+          "commit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "file": "archives/alpha/main.zip",
+          "bytes": 2929
+        },
+        {
+          "ref": "light",
+          "kind": "tag",
+          "commit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "file": "archives/alpha/light.zip",
+          "bytes": 2961
+        },
+        {
+          "ref": "v1.0.0",
+          "kind": "tag",
+          "commit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "file": "archives/alpha/v1.0.0.zip",
+          "bytes": 2993
+        },
+        {
+          "ref": "v1.1.0",
+          "kind": "tag",
+          "commit": "0c3c6ce85970d2d38ceabf74fc7dfbdf7bee799e",
+          "file": "archives/alpha/v1.1.0.zip",
+          "bytes": 2993
+        }
+      ],
+      "languages": [
+        {
+          "name": "TypeScript",
+          "bytes": 691,
+          "percent": 87.4,
+          "color": "#3178c6"
+        },
+        {
+          "name": "CSS",
+          "bytes": 100,
+          "percent": 12.6,
+          "color": "#663399"
+        }
+      ],
+      "contributors": [
+        {
+          "name": "Fixture Author (configured)",
+          "email": "fixture@example.com",
+          "commits": 4,
+          "firstCommit": "2024-01-01T00:00:00Z",
+          "lastCommit": "2024-03-05T00:00:00Z",
+          "avatar": "/logo.png",
+          "description": "the fixture commit author",
+          "url": "https://example.com/fixture-author"
+        },
+        {
+          "name": "Kieran Wood",
+          "email": "kieran@canadiancoding.ca",
+          "commits": 1,
+          "firstCommit": "2026-09-04T10:25:02Z",
+          "lastCommit": "2026-09-04T10:25:02Z",
+          "avatar": null,
+          "description": null,
+          "url": null
+        }
+      ],
+      "insights": {
+        "commits": [
+          {
+            "month": "2024-01",
+            "commits": 1,
+            "contributors": 1
+          },
+          {
+            "month": "2024-02",
+            "commits": 1,
+            "contributors": 1
+          }
+        ],
+        "codeSize": [
+          {
+            "month": "2024-01",
+            "bytes": 1523,
+            "lines": 75
+          },
+          {
+            "month": "2024-02",
+            "bytes": 1523,
+            "lines": 75
+          }
+        ],
+        "sampled": false,
+        "sampleCount": 2,
+        "approximate": false
+      },
+      "readme": {
+        "path": "README.md",
+        "sha": "bb601c8c256df1f364c922553c48a01972a7ff20",
+        "content": "# Alpha\n\nA **fixture** repo for e2e tests.\n\n- bullet one\n- bullet two\n\n```mermaid\ngraph TD;\n  A[Ingest]-->B[Artifact];\n  B-->C[Site];\n```\n\nAnd a second diagram:\n\n```mermaid\nsequenceDiagram;\n  Reader->>Site: GET /repos/;\n  Site-->>Reader: static HTML;\n```\n"
+      },
+      "createdAt": "2024-01-01T00:00:00Z",
+      "updatedAt": "2026-09-04T10:25:02Z",
+      "warnings": [
+        {
+          "code": "repo-path-unservable",
+          "repo": "alpha",
+          "message": "'docs/50% off.txt' on ref 'main' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+        },
+        {
+          "code": "repo-path-unservable",
+          "repo": "alpha",
+          "message": "'docs/c#-tips.md' on ref 'main' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+        },
+        {
+          "code": "repo-path-unservable",
+          "repo": "alpha",
+          "message": "'docs/50% off.txt' on ref 'feature/extra' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+        },
+        {
+          "code": "repo-path-unservable",
+          "repo": "alpha",
+          "message": "'docs/c#-tips.md' on ref 'feature/extra' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+        },
+        {
+          "code": "repo-path-unservable",
+          "repo": "alpha",
+          "message": "'docs/50% off.txt' on ref 'light' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+        },
+        {
+          "code": "repo-path-unservable",
+          "repo": "alpha",
+          "message": "'docs/c#-tips.md' on ref 'light' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+        },
+        {
+          "code": "repo-path-unservable",
+          "repo": "alpha",
+          "message": "'docs/50% off.txt' on ref 'v1.0.0' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+        },
+        {
+          "code": "repo-path-unservable",
+          "repo": "alpha",
+          "message": "'docs/c#-tips.md' on ref 'v1.0.0' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+        },
+        {
+          "code": "repo-path-unservable",
+          "repo": "alpha",
+          "message": "'docs/50% off.txt' on ref 'v1.1.0' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+        },
+        {
+          "code": "repo-path-unservable",
+          "repo": "alpha",
+          "message": "'docs/c#-tips.md' on ref 'v1.1.0' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+        }
+      ]
+    },
+    {
+      "slug": "bravo",
+      "name": "bravo",
+      "description": "Bravo fixture: a Go CLI template.",
+      "source": {
+        "type": "local",
+        "path": "C:\\Users\\Kieran\\Desktop\\Development\\personal\\unfinished-mvp\\frznforge\\tests\\.tmp\\e2e\\repos\\bravo"
+      },
+      "links": {},
+      "tags": [
+        "cli",
+        "go"
+      ],
+      "template": true,
+      "license": null,
+      "releaseMode": "tags",
+      "releases": [],
+      "empty": false,
+      "defaultBranch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "head": "176abf5b976a851c291b579d86ee21f926e366f6",
+          "commits": [
+            "176abf5b976a851c291b579d86ee21f926e366f6",
+            "fcb91f520251ec20227808a31f23a5fd147cffe6",
+            "669fc5cd2cb2d2ae379dba8abaf1bd8f4037627f",
+            "e62b35e37248d3ffe08299b0e4ebbcada6dfd310",
+            "1921291b3dbb0ccd9e6e9e41ed6ac49dbefbfefd",
+            "cf90c47f2482d68456ea27a6204f14f48acba25c",
+            "d5647dd157247afc80d394e8baa63a255f6dba94",
+            "0b7b12e25426704820e0d9493012ae47188568bd",
+            "c260e074c6e8cd6daa9ef47686390a808f08b920",
+            "ceb49d6114cf5ab0acd090640d57751b3709f357",
+            "21793daefc46f101ed78d742a499cb01b96d5090",
+            "bb88c332b118c3d407c91a479674eb4dbf08618a",
+            "441d5d05036aee08c231fc2704e41d7e61410e27",
+            "85888e708d9e2f62831a065c8d82154b89424985",
+            "1b2d617b552619e52d9ddfbde260f70571da8b5b",
+            "3d5358c4c546b7a83c74b4a443dbf06b1b5efd33",
+            "3935b286bcd6b7e3bc670ac989ed8495cd3cb158",
+            "99845d1efb647a6c5b0cd6509db5f0fc164545af",
+            "58df1d7994c1104cb01093306c83b2b2821cd82d",
+            "dda15d9e046e517c7e83530f11bc80dce76fda06",
+            "66e8e6b1ebd557da556917e2c5a2b8cf48e6ae12",
+            "c701255411ef1637ca2e61fef3cf8517ce816ec6",
+            "8d8add6683ef4788729d17365dc27f95eb9065d1",
+            "f5677782af458e762221446eec9efdc234ac59c9",
+            "a4a299f45d85d491f65230efe9b2e130d612100a",
+            "0576de3fb04f480455b873dcb80cdcc46f7ad40d",
+            "acab42d4884ab43ea99e2b30dd2f2156b5e0caa8",
+            "5310e7937b920385ca65b7e9830818b7836192df",
+            "2bcbcf46a746677e52a1934eaed147fdaecbd5e4"
+          ],
+          "lastCommitDate": "2024-08-02T09:00:00Z"
+        }
+      ],
+      "gitTags": [],
+      "commits": {
+        "0576de3fb04f480455b873dcb80cdcc46f7ad40d": {
+          "sha": "0576de3fb04f480455b873dcb80cdcc46f7ad40d",
+          "parents": [
+            "acab42d4884ab43ea99e2b30dd2f2156b5e0caa8"
+          ],
+          "author": {
+            "name": "Bo Maintainer",
+            "email": "bo@example.com"
+          },
+          "authorDate": "2023-08-06T09:01:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2023-08-06T09:01:00Z",
+          "subject": "step 3",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "0b7b12e25426704820e0d9493012ae47188568bd": {
+          "sha": "0b7b12e25426704820e0d9493012ae47188568bd",
+          "parents": [
+            "c260e074c6e8cd6daa9ef47686390a808f08b920"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-05-10T09:02:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-05-10T09:02:00Z",
+          "subject": "step 21",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "176abf5b976a851c291b579d86ee21f926e366f6": {
+          "sha": "176abf5b976a851c291b579d86ee21f926e366f6",
+          "parents": [
+            "fcb91f520251ec20227808a31f23a5fd147cffe6"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-08-02T09:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-08-02T09:00:00Z",
+          "subject": "step 28",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "1921291b3dbb0ccd9e6e9e41ed6ac49dbefbfefd": {
+          "sha": "1921291b3dbb0ccd9e6e9e41ed6ac49dbefbfefd",
+          "parents": [
+            "cf90c47f2482d68456ea27a6204f14f48acba25c"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-07-02T09:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-07-02T09:00:00Z",
+          "subject": "step 24",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "1b2d617b552619e52d9ddfbde260f70571da8b5b": {
+          "sha": "1b2d617b552619e52d9ddfbde260f70571da8b5b",
+          "parents": [
+            "3d5358c4c546b7a83c74b4a443dbf06b1b5efd33"
+          ],
+          "author": {
+            "name": "Bo Maintainer",
+            "email": "bo@example.com"
+          },
+          "authorDate": "2024-02-06T09:01:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-02-06T09:01:00Z",
+          "subject": "step 14",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "21793daefc46f101ed78d742a499cb01b96d5090": {
+          "sha": "21793daefc46f101ed78d742a499cb01b96d5090",
+          "parents": [
+            "bb88c332b118c3d407c91a479674eb4dbf08618a"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-03-02T09:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-03-02T09:00:00Z",
+          "subject": "step 18",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "2bcbcf46a746677e52a1934eaed147fdaecbd5e4": {
+          "sha": "2bcbcf46a746677e52a1934eaed147fdaecbd5e4",
+          "parents": [],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2023-06-01T00:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2023-06-01T00:00:00Z",
+          "subject": "scaffold",
+          "body": "",
+          "files": [
+            {
+              "path": ".frznforge.json",
+              "additions": 8,
+              "deletions": 0
+            },
+            {
+              "path": "README.md",
+              "additions": 3,
+              "deletions": 0
+            },
+            {
+              "path": "main.go",
+              "additions": 30,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 3,
+            "additions": 41,
+            "deletions": 0
+          }
+        },
+        "3935b286bcd6b7e3bc670ac989ed8495cd3cb158": {
+          "sha": "3935b286bcd6b7e3bc670ac989ed8495cd3cb158",
+          "parents": [
+            "99845d1efb647a6c5b0cd6509db5f0fc164545af"
+          ],
+          "author": {
+            "name": "Bo Maintainer",
+            "email": "bo@example.com"
+          },
+          "authorDate": "2024-01-06T09:01:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-01-06T09:01:00Z",
+          "subject": "step 12",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "3d5358c4c546b7a83c74b4a443dbf06b1b5efd33": {
+          "sha": "3d5358c4c546b7a83c74b4a443dbf06b1b5efd33",
+          "parents": [
+            "3935b286bcd6b7e3bc670ac989ed8495cd3cb158"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-02-02T09:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-02-02T09:00:00Z",
+          "subject": "step 13",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "441d5d05036aee08c231fc2704e41d7e61410e27": {
+          "sha": "441d5d05036aee08c231fc2704e41d7e61410e27",
+          "parents": [
+            "85888e708d9e2f62831a065c8d82154b89424985"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-02-14T09:03:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-02-14T09:03:00Z",
+          "subject": "step 16",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "5310e7937b920385ca65b7e9830818b7836192df": {
+          "sha": "5310e7937b920385ca65b7e9830818b7836192df",
+          "parents": [
+            "2bcbcf46a746677e52a1934eaed147fdaecbd5e4"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2023-07-02T09:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2023-07-02T09:00:00Z",
+          "subject": "step 1",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "58df1d7994c1104cb01093306c83b2b2821cd82d": {
+          "sha": "58df1d7994c1104cb01093306c83b2b2821cd82d",
+          "parents": [
+            "dda15d9e046e517c7e83530f11bc80dce76fda06"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2023-10-14T09:03:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2023-10-14T09:03:00Z",
+          "subject": "step 10",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "669fc5cd2cb2d2ae379dba8abaf1bd8f4037627f": {
+          "sha": "669fc5cd2cb2d2ae379dba8abaf1bd8f4037627f",
+          "parents": [
+            "e62b35e37248d3ffe08299b0e4ebbcada6dfd310"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-07-10T09:02:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-07-10T09:02:00Z",
+          "subject": "step 26",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "66e8e6b1ebd557da556917e2c5a2b8cf48e6ae12": {
+          "sha": "66e8e6b1ebd557da556917e2c5a2b8cf48e6ae12",
+          "parents": [
+            "c701255411ef1637ca2e61fef3cf8517ce816ec6"
+          ],
+          "author": {
+            "name": "Bo Maintainer",
+            "email": "bo@example.com"
+          },
+          "authorDate": "2023-10-06T09:01:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2023-10-06T09:01:00Z",
+          "subject": "step 8",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "85888e708d9e2f62831a065c8d82154b89424985": {
+          "sha": "85888e708d9e2f62831a065c8d82154b89424985",
+          "parents": [
+            "1b2d617b552619e52d9ddfbde260f70571da8b5b"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-02-10T09:02:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-02-10T09:02:00Z",
+          "subject": "step 15",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "8d8add6683ef4788729d17365dc27f95eb9065d1": {
+          "sha": "8d8add6683ef4788729d17365dc27f95eb9065d1",
+          "parents": [
+            "f5677782af458e762221446eec9efdc234ac59c9"
+          ],
+          "author": {
+            "name": "Bo Maintainer",
+            "email": "bo@example.com"
+          },
+          "authorDate": "2023-09-06T09:01:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2023-09-06T09:01:00Z",
+          "subject": "step 6",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "99845d1efb647a6c5b0cd6509db5f0fc164545af": {
+          "sha": "99845d1efb647a6c5b0cd6509db5f0fc164545af",
+          "parents": [
+            "58df1d7994c1104cb01093306c83b2b2821cd82d"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-01-02T09:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-01-02T09:00:00Z",
+          "subject": "step 11",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "a4a299f45d85d491f65230efe9b2e130d612100a": {
+          "sha": "a4a299f45d85d491f65230efe9b2e130d612100a",
+          "parents": [
+            "0576de3fb04f480455b873dcb80cdcc46f7ad40d"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2023-08-10T09:02:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2023-08-10T09:02:00Z",
+          "subject": "step 4",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "acab42d4884ab43ea99e2b30dd2f2156b5e0caa8": {
+          "sha": "acab42d4884ab43ea99e2b30dd2f2156b5e0caa8",
+          "parents": [
+            "5310e7937b920385ca65b7e9830818b7836192df"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2023-08-02T09:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2023-08-02T09:00:00Z",
+          "subject": "step 2",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "bb88c332b118c3d407c91a479674eb4dbf08618a": {
+          "sha": "bb88c332b118c3d407c91a479674eb4dbf08618a",
+          "parents": [
+            "441d5d05036aee08c231fc2704e41d7e61410e27"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-02-18T09:04:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-02-18T09:04:00Z",
+          "subject": "step 17",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "c260e074c6e8cd6daa9ef47686390a808f08b920": {
+          "sha": "c260e074c6e8cd6daa9ef47686390a808f08b920",
+          "parents": [
+            "ceb49d6114cf5ab0acd090640d57751b3709f357"
+          ],
+          "author": {
+            "name": "Bo Maintainer",
+            "email": "bo@example.com"
+          },
+          "authorDate": "2024-05-06T09:01:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-05-06T09:01:00Z",
+          "subject": "step 20",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "c701255411ef1637ca2e61fef3cf8517ce816ec6": {
+          "sha": "c701255411ef1637ca2e61fef3cf8517ce816ec6",
+          "parents": [
+            "8d8add6683ef4788729d17365dc27f95eb9065d1"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2023-10-02T09:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2023-10-02T09:00:00Z",
+          "subject": "step 7",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "ceb49d6114cf5ab0acd090640d57751b3709f357": {
+          "sha": "ceb49d6114cf5ab0acd090640d57751b3709f357",
+          "parents": [
+            "21793daefc46f101ed78d742a499cb01b96d5090"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-05-02T09:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-05-02T09:00:00Z",
+          "subject": "step 19",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "cf90c47f2482d68456ea27a6204f14f48acba25c": {
+          "sha": "cf90c47f2482d68456ea27a6204f14f48acba25c",
+          "parents": [
+            "d5647dd157247afc80d394e8baa63a255f6dba94"
+          ],
+          "author": {
+            "name": "Bo Maintainer",
+            "email": "bo@example.com"
+          },
+          "authorDate": "2024-06-06T09:01:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-06-06T09:01:00Z",
+          "subject": "step 23",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "d5647dd157247afc80d394e8baa63a255f6dba94": {
+          "sha": "d5647dd157247afc80d394e8baa63a255f6dba94",
+          "parents": [
+            "0b7b12e25426704820e0d9493012ae47188568bd"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-06-02T09:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-06-02T09:00:00Z",
+          "subject": "step 22",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "dda15d9e046e517c7e83530f11bc80dce76fda06": {
+          "sha": "dda15d9e046e517c7e83530f11bc80dce76fda06",
+          "parents": [
+            "66e8e6b1ebd557da556917e2c5a2b8cf48e6ae12"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2023-10-10T09:02:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2023-10-10T09:02:00Z",
+          "subject": "step 9",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "e62b35e37248d3ffe08299b0e4ebbcada6dfd310": {
+          "sha": "e62b35e37248d3ffe08299b0e4ebbcada6dfd310",
+          "parents": [
+            "1921291b3dbb0ccd9e6e9e41ed6ac49dbefbfefd"
+          ],
+          "author": {
+            "name": "Bo Maintainer",
+            "email": "bo@example.com"
+          },
+          "authorDate": "2024-07-06T09:01:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-07-06T09:01:00Z",
+          "subject": "step 25",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "f5677782af458e762221446eec9efdc234ac59c9": {
+          "sha": "f5677782af458e762221446eec9efdc234ac59c9",
+          "parents": [
+            "a4a299f45d85d491f65230efe9b2e130d612100a"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2023-09-02T09:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2023-09-02T09:00:00Z",
+          "subject": "step 5",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        },
+        "fcb91f520251ec20227808a31f23a5fd147cffe6": {
+          "sha": "fcb91f520251ec20227808a31f23a5fd147cffe6",
+          "parents": [
+            "669fc5cd2cb2d2ae379dba8abaf1bd8f4037627f"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-07-14T09:03:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-07-14T09:03:00Z",
+          "subject": "step 27",
+          "body": "",
+          "files": [
+            {
+              "path": "main.go",
+              "additions": 2,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 2,
+            "deletions": 0
+          }
+        }
+      },
+      "commitCount": 29,
+      "extraCommits": {},
+      "tree": [
+        {
+          "path": ".frznforge.json",
+          "name": ".frznforge.json",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "4cd621c415740fa5ca6eeb56747984436292bb50",
+          "size": 113,
+          "lastCommit": "2bcbcf46a746677e52a1934eaed147fdaecbd5e4"
+        },
+        {
+          "path": "README.md",
+          "name": "README.md",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "2f65e8fa7f932de285865cd9a356b50421d8ec02",
+          "size": 28,
+          "lastCommit": "2bcbcf46a746677e52a1934eaed147fdaecbd5e4"
+        },
+        {
+          "path": "main.go",
+          "name": "main.go",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "ad11bd6930379034a76af6e2bdd6bf927173c128",
+          "size": 1196,
+          "lastCommit": "176abf5b976a851c291b579d86ee21f926e366f6"
+        }
+      ],
+      "files": {
+        ".frznforge.json": {
+          "path": ".frznforge.json",
+          "sha": "4cd621c415740fa5ca6eeb56747984436292bb50",
+          "size": 113,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "JSON"
+        },
+        "README.md": {
+          "path": "README.md",
+          "sha": "2f65e8fa7f932de285865cd9a356b50421d8ec02",
+          "size": 28,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Markdown"
+        },
+        "main.go": {
+          "path": "main.go",
+          "sha": "ad11bd6930379034a76af6e2bdd6bf927173c128",
+          "size": 1196,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Go"
+        }
+      },
+      "refTrees": {},
+      "archives": [
+        {
+          "ref": "main",
+          "kind": "branch",
+          "commit": "176abf5b976a851c291b579d86ee21f926e366f6",
+          "file": "archives/bravo/main.zip",
+          "bytes": 897
+        }
+      ],
+      "languages": [
+        {
+          "name": "Go",
+          "bytes": 1196,
+          "percent": 100,
+          "color": "#00add8"
+        }
+      ],
+      "contributors": [
+        {
+          "name": "Fixture Author (configured)",
+          "email": "fixture@example.com",
+          "commits": 21,
+          "firstCommit": "2023-06-01T00:00:00Z",
+          "lastCommit": "2024-08-02T09:00:00Z",
+          "avatar": "/logo.png",
+          "description": "the fixture commit author",
+          "url": "https://example.com/fixture-author"
+        },
+        {
+          "name": "Bo Maintainer",
+          "email": "bo@example.com",
+          "commits": 8,
+          "firstCommit": "2023-08-06T09:01:00Z",
+          "lastCommit": "2024-07-06T09:01:00Z",
+          "avatar": null,
+          "description": null,
+          "url": null
+        }
+      ],
+      "insights": {
+        "commits": [
+          {
+            "month": "2023-06",
+            "commits": 1,
+            "contributors": 1
+          },
+          {
+            "month": "2023-07",
+            "commits": 1,
+            "contributors": 1
+          },
+          {
+            "month": "2023-08",
+            "commits": 3,
+            "contributors": 2
+          },
+          {
+            "month": "2023-09",
+            "commits": 2,
+            "contributors": 2
+          },
+          {
+            "month": "2023-10",
+            "commits": 4,
+            "contributors": 2
+          },
+          {
+            "month": "2023-11",
+            "commits": 0,
+            "contributors": 0
+          },
+          {
+            "month": "2023-12",
+            "commits": 0,
+            "contributors": 0
+          },
+          {
+            "month": "2024-01",
+            "commits": 2,
+            "contributors": 2
+          },
+          {
+            "month": "2024-02",
+            "commits": 5,
+            "contributors": 2
+          },
+          {
+            "month": "2024-03",
+            "commits": 1,
+            "contributors": 1
+          },
+          {
+            "month": "2024-04",
+            "commits": 0,
+            "contributors": 0
+          },
+          {
+            "month": "2024-05",
+            "commits": 3,
+            "contributors": 2
+          },
+          {
+            "month": "2024-06",
+            "commits": 2,
+            "contributors": 2
+          },
+          {
+            "month": "2024-07",
+            "commits": 4,
+            "contributors": 2
+          },
+          {
+            "month": "2024-08",
+            "commits": 1,
+            "contributors": 1
+          }
+        ],
+        "codeSize": [
+          {
+            "month": "2023-06",
+            "bytes": 431,
+            "lines": 41
+          },
+          {
+            "month": "2023-08",
+            "bytes": 555,
+            "lines": 49
+          },
+          {
+            "month": "2023-10",
+            "bytes": 743,
+            "lines": 61
+          },
+          {
+            "month": "2024-03",
+            "bytes": 1007,
+            "lines": 77
+          },
+          {
+            "month": "2024-06",
+            "bytes": 1172,
+            "lines": 87
+          },
+          {
+            "month": "2024-08",
+            "bytes": 1337,
+            "lines": 97
+          }
+        ],
+        "sampled": true,
+        "sampleCount": 6,
+        "approximate": false
+      },
+      "readme": {
+        "path": "README.md",
+        "sha": "2f65e8fa7f932de285865cd9a356b50421d8ec02",
+        "content": "# Bravo template\n\nClone me.\n"
+      },
+      "createdAt": "2023-06-01T00:00:00Z",
+      "updatedAt": "2024-08-02T09:00:00Z",
+      "warnings": []
+    },
+    {
+      "slug": "charlie",
+      "name": "charlie",
+      "description": "Charlie fixture: metadata imported from a provider API.",
+      "source": {
+        "type": "github",
+        "host": "https://api.github.com",
+        "owner": "fixture",
+        "repo": "charlie",
+        "webUrl": "https://github.com/fixture/charlie",
+        "cloneUrl": "https://github.com/fixture/charlie.git"
+      },
+      "links": {
+        "homepage": "https://example.com/charlie",
+        "issues": "https://github.com/fixture/charlie/issues",
+        "upstream": "https://github.com/fixture/charlie"
+      },
+      "tags": [
+        "imported",
+        "provider"
+      ],
+      "template": false,
+      "license": {
+        "spdx": "Apache-2.0",
+        "file": null,
+        "source": "config"
+      },
+      "releaseMode": "provider",
+      "releases": [
+        {
+          "tag": "v2.1.0",
+          "name": "Sunrise",
+          "body": "## What's new\n\n- imported over the provider API\n- ships two uploaded assets\n\nSee `docs/` for the details.\n",
+          "url": "https://github.com/fixture/charlie/releases/tag/v2.1.0",
+          "prerelease": false,
+          "publishedAt": "2024-04-01T12:00:00Z",
+          "author": "Fixture Releaser",
+          "assets": [
+            {
+              "name": "charlie-2.1.0-linux-x64.tar.gz",
+              "url": "https://github.com/fixture/charlie/releases/download/v2.1.0/charlie-2.1.0-linux-x64.tar.gz",
+              "size": 1048576,
+              "contentType": "application/gzip"
+            },
+            {
+              "name": "charlie-2.1.0.sha256",
+              "url": "https://github.com/fixture/charlie/releases/download/v2.1.0/charlie-2.1.0.sha256",
+              "size": 96,
+              "contentType": "text/plain"
+            }
+          ]
+        },
+        {
+          "tag": "v2.2.0-rc.1",
+          "name": "v2.2.0-rc.1",
+          "body": "Release candidate. **Not** for production use.\n\n<script>window.__PWNED = 1</script>\n\n<img src=x onerror=\"window.__PWNED = 2\">\n\n[boom](javascript:window.__PWNED=3)\n\n```mermaid\ngraph TD;\n  A-->B;\n```\n",
+          "url": "https://github.com/fixture/charlie/releases/tag/v2.2.0-rc.1",
+          "prerelease": true,
+          "publishedAt": "2024-05-01T12:00:00Z",
+          "author": "Fixture Releaser",
+          "assets": []
+        }
+      ],
+      "empty": false,
+      "defaultBranch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "head": "c27e2de7ad29a5e27accc82fef450bb83c98cfc2",
+          "commits": [
+            "c27e2de7ad29a5e27accc82fef450bb83c98cfc2",
+            "7a2608e01432c58ddb5ac7909342c1359323965c"
+          ],
+          "lastCommitDate": "2024-05-01T12:00:00Z"
+        }
+      ],
+      "gitTags": [
+        {
+          "name": "v2.1.0",
+          "target": "7a2608e01432c58ddb5ac7909342c1359323965c",
+          "annotated": true,
+          "message": "Sunrise",
+          "tagger": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "date": "2024-04-01T12:00:00Z"
+        },
+        {
+          "name": "v2.2.0-rc.1",
+          "target": "c27e2de7ad29a5e27accc82fef450bb83c98cfc2",
+          "annotated": true,
+          "message": "Release candidate",
+          "tagger": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "date": "2024-05-01T12:00:00Z"
+        }
+      ],
+      "commits": {
+        "7a2608e01432c58ddb5ac7909342c1359323965c": {
+          "sha": "7a2608e01432c58ddb5ac7909342c1359323965c",
+          "parents": [],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-03-10T00:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-03-10T00:00:00Z",
+          "subject": "import charlie",
+          "body": "",
+          "files": [
+            {
+              "path": "README.md",
+              "additions": 12,
+              "deletions": 0
+            },
+            {
+              "path": "src/main.ts",
+              "additions": 12,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 2,
+            "additions": 24,
+            "deletions": 0
+          }
+        },
+        "c27e2de7ad29a5e27accc82fef450bb83c98cfc2": {
+          "sha": "c27e2de7ad29a5e27accc82fef450bb83c98cfc2",
+          "parents": [
+            "7a2608e01432c58ddb5ac7909342c1359323965c"
+          ],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-05-01T12:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-05-01T12:00:00Z",
+          "subject": "prepare the release candidate",
+          "body": "",
+          "files": [
+            {
+              "path": "src/main.ts",
+              "additions": 1,
+              "deletions": 11
+            }
+          ],
+          "stats": {
+            "filesChanged": 1,
+            "additions": 1,
+            "deletions": 11
+          }
+        }
+      },
+      "commitCount": 2,
+      "extraCommits": {},
+      "tree": [
+        {
+          "path": "README.md",
+          "name": "README.md",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "7abf5717dab1b6c4328610a4dea00d172a542022",
+          "size": 153,
+          "lastCommit": "7a2608e01432c58ddb5ac7909342c1359323965c"
+        },
+        {
+          "path": "src",
+          "name": "src",
+          "type": "tree",
+          "mode": "040000",
+          "sha": "6c7c4ffcb74ba2f7f7002da6c610476a42fb7ca6",
+          "size": null,
+          "lastCommit": "c27e2de7ad29a5e27accc82fef450bb83c98cfc2"
+        },
+        {
+          "path": "src/main.ts",
+          "name": "main.ts",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "096da1942f733992cbfb2996583f09b49566c168",
+          "size": 50,
+          "lastCommit": "c27e2de7ad29a5e27accc82fef450bb83c98cfc2"
+        }
+      ],
+      "files": {
+        "README.md": {
+          "path": "README.md",
+          "sha": "7abf5717dab1b6c4328610a4dea00d172a542022",
+          "size": 153,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Markdown"
+        },
+        "src/main.ts": {
+          "path": "src/main.ts",
+          "sha": "096da1942f733992cbfb2996583f09b49566c168",
+          "size": 50,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "TypeScript"
+        }
+      },
+      "refTrees": {
+        "v2.1.0": {
+          "kind": "tag",
+          "name": "v2.1.0",
+          "commit": "7a2608e01432c58ddb5ac7909342c1359323965c",
+          "tree": [
+            {
+              "path": "README.md",
+              "name": "README.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "7abf5717dab1b6c4328610a4dea00d172a542022",
+              "size": 153,
+              "lastCommit": "7a2608e01432c58ddb5ac7909342c1359323965c"
+            },
+            {
+              "path": "src",
+              "name": "src",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "bda33e5cf0ba23c84d06d4f003e8504c9d93d3e1",
+              "size": null,
+              "lastCommit": "7a2608e01432c58ddb5ac7909342c1359323965c"
+            },
+            {
+              "path": "src/main.ts",
+              "name": "main.ts",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "9192febbe17dbc8c6223647ab13471764f159984",
+              "size": 348,
+              "lastCommit": "7a2608e01432c58ddb5ac7909342c1359323965c"
+            }
+          ],
+          "files": {
+            "README.md": {
+              "path": "README.md",
+              "sha": "7abf5717dab1b6c4328610a4dea00d172a542022",
+              "size": 153,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "src/main.ts": {
+              "path": "src/main.ts",
+              "sha": "9192febbe17dbc8c6223647ab13471764f159984",
+              "size": 348,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "TypeScript"
+            }
+          }
+        },
+        "v2.2.0-rc.1": {
+          "kind": "tag",
+          "name": "v2.2.0-rc.1",
+          "commit": "c27e2de7ad29a5e27accc82fef450bb83c98cfc2",
+          "tree": [
+            {
+              "path": "README.md",
+              "name": "README.md",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "7abf5717dab1b6c4328610a4dea00d172a542022",
+              "size": 153,
+              "lastCommit": "7a2608e01432c58ddb5ac7909342c1359323965c"
+            },
+            {
+              "path": "src",
+              "name": "src",
+              "type": "tree",
+              "mode": "040000",
+              "sha": "6c7c4ffcb74ba2f7f7002da6c610476a42fb7ca6",
+              "size": null,
+              "lastCommit": "c27e2de7ad29a5e27accc82fef450bb83c98cfc2"
+            },
+            {
+              "path": "src/main.ts",
+              "name": "main.ts",
+              "type": "blob",
+              "mode": "100644",
+              "sha": "096da1942f733992cbfb2996583f09b49566c168",
+              "size": 50,
+              "lastCommit": "c27e2de7ad29a5e27accc82fef450bb83c98cfc2"
+            }
+          ],
+          "files": {
+            "README.md": {
+              "path": "README.md",
+              "sha": "7abf5717dab1b6c4328610a4dea00d172a542022",
+              "size": 153,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "Markdown"
+            },
+            "src/main.ts": {
+              "path": "src/main.ts",
+              "sha": "096da1942f733992cbfb2996583f09b49566c168",
+              "size": 50,
+              "binary": false,
+              "tooLarge": false,
+              "stored": true,
+              "language": "TypeScript"
+            }
+          }
+        }
+      },
+      "archives": [
+        {
+          "ref": "main",
+          "kind": "branch",
+          "commit": "c27e2de7ad29a5e27accc82fef450bb83c98cfc2",
+          "file": "archives/charlie/main.zip",
+          "bytes": 752
+        },
+        {
+          "ref": "v2.1.0",
+          "kind": "tag",
+          "commit": "7a2608e01432c58ddb5ac7909342c1359323965c",
+          "file": "archives/charlie/v2.1.0.zip",
+          "bytes": 764
+        },
+        {
+          "ref": "v2.2.0-rc.1",
+          "kind": "tag",
+          "commit": "c27e2de7ad29a5e27accc82fef450bb83c98cfc2",
+          "file": "archives/charlie/v2.2.0-rc.1.zip",
+          "bytes": 808
+        }
+      ],
+      "languages": [
+        {
+          "name": "TypeScript",
+          "bytes": 50,
+          "percent": 100,
+          "color": "#3178c6"
+        }
+      ],
+      "contributors": [
+        {
+          "name": "Fixture Author (configured)",
+          "email": "fixture@example.com",
+          "commits": 2,
+          "firstCommit": "2024-03-10T00:00:00Z",
+          "lastCommit": "2024-05-01T12:00:00Z",
+          "avatar": "/logo.png",
+          "description": "the fixture commit author",
+          "url": "https://example.com/fixture-author"
+        }
+      ],
+      "insights": {
+        "commits": [
+          {
+            "month": "2024-03",
+            "commits": 1,
+            "contributors": 1
+          },
+          {
+            "month": "2024-04",
+            "commits": 0,
+            "contributors": 0
+          },
+          {
+            "month": "2024-05",
+            "commits": 1,
+            "contributors": 1
+          }
+        ],
+        "codeSize": [
+          {
+            "month": "2024-03",
+            "bytes": 501,
+            "lines": 24
+          },
+          {
+            "month": "2024-05",
+            "bytes": 203,
+            "lines": 14
+          }
+        ],
+        "sampled": false,
+        "sampleCount": 2,
+        "approximate": false
+      },
+      "readme": {
+        "path": "README.md",
+        "sha": "7abf5717dab1b6c4328610a4dea00d172a542022",
+        "content": "# Charlie\n\nMirrored from a provider.\n\n<script>window.__PWNED = 11</script>\n\n<img src=x onerror=\"window.__PWNED = 12\">\n\n```mermaid\ngraph TD;\n  A-->B;\n```\n"
+      },
+      "createdAt": "2024-03-10T00:00:00Z",
+      "updatedAt": "2024-05-01T12:00:00Z",
+      "warnings": []
+    },
+    {
+      "slug": "delta",
+      "name": "delta",
+      "description": "Delta fixture: a Gitea repo with no releases.",
+      "source": {
+        "type": "gitea",
+        "host": "https://gitea.example.com",
+        "owner": "fixture",
+        "repo": "delta",
+        "webUrl": "https://gitea.example.com/fixture/delta",
+        "cloneUrl": "https://gitea.example.com/fixture/delta.git"
+      },
+      "links": {
+        "upstream": "https://gitea.example.com/fixture/delta"
+      },
+      "tags": [
+        "imported"
+      ],
+      "template": false,
+      "license": null,
+      "releaseMode": "provider",
+      "releases": [],
+      "empty": false,
+      "defaultBranch": "main",
+      "branches": [
+        {
+          "name": "main",
+          "head": "75a2844f56229023adb6a676ee44b6b434143693",
+          "commits": [
+            "75a2844f56229023adb6a676ee44b6b434143693"
+          ],
+          "lastCommitDate": "2024-03-20T00:00:00Z"
+        }
+      ],
+      "gitTags": [],
+      "commits": {
+        "75a2844f56229023adb6a676ee44b6b434143693": {
+          "sha": "75a2844f56229023adb6a676ee44b6b434143693",
+          "parents": [],
+          "author": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "authorDate": "2024-03-20T00:00:00Z",
+          "committer": {
+            "name": "Fixture Author",
+            "email": "fixture@example.com"
+          },
+          "commitDate": "2024-03-20T00:00:00Z",
+          "subject": "first push",
+          "body": "",
+          "files": [
+            {
+              "path": "README.md",
+              "additions": 3,
+              "deletions": 0
+            },
+            {
+              "path": "app.ts",
+              "additions": 8,
+              "deletions": 0
+            }
+          ],
+          "stats": {
+            "filesChanged": 2,
+            "additions": 11,
+            "deletions": 0
+          }
+        }
+      },
+      "commitCount": 1,
+      "extraCommits": {},
+      "tree": [
+        {
+          "path": "README.md",
+          "name": "README.md",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "eb1fc7e49b798e007f106b5d694f18a63075806e",
+          "size": 31,
+          "lastCommit": "75a2844f56229023adb6a676ee44b6b434143693"
+        },
+        {
+          "path": "app.ts",
+          "name": "app.ts",
+          "type": "blob",
+          "mode": "100644",
+          "sha": "f2210674f5ae14ff69df6603c4dcd8ac90c6f7a0",
+          "size": 192,
+          "lastCommit": "75a2844f56229023adb6a676ee44b6b434143693"
+        }
+      ],
+      "files": {
+        "README.md": {
+          "path": "README.md",
+          "sha": "eb1fc7e49b798e007f106b5d694f18a63075806e",
+          "size": 31,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Markdown"
+        },
+        "app.ts": {
+          "path": "app.ts",
+          "sha": "f2210674f5ae14ff69df6603c4dcd8ac90c6f7a0",
+          "size": 192,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "TypeScript"
+        }
+      },
+      "refTrees": {},
+      "archives": [
+        {
+          "ref": "main",
+          "kind": "branch",
+          "commit": "75a2844f56229023adb6a676ee44b6b434143693",
+          "file": "archives/delta/main.zip",
+          "bytes": 500
+        }
+      ],
+      "languages": [
+        {
+          "name": "TypeScript",
+          "bytes": 192,
+          "percent": 100,
+          "color": "#3178c6"
+        }
+      ],
+      "contributors": [
+        {
+          "name": "Fixture Author (configured)",
+          "email": "fixture@example.com",
+          "commits": 1,
+          "firstCommit": "2024-03-20T00:00:00Z",
+          "lastCommit": "2024-03-20T00:00:00Z",
+          "avatar": "/logo.png",
+          "description": "the fixture commit author",
+          "url": "https://example.com/fixture-author"
+        }
+      ],
+      "insights": {
+        "commits": [
+          {
+            "month": "2024-03",
+            "commits": 1,
+            "contributors": 1
+          }
+        ],
+        "codeSize": [
+          {
+            "month": "2024-03",
+            "bytes": 223,
+            "lines": 11
+          }
+        ],
+        "sampled": false,
+        "sampleCount": 1,
+        "approximate": false
+      },
+      "readme": {
+        "path": "README.md",
+        "sha": "eb1fc7e49b798e007f106b5d694f18a63075806e",
+        "content": "# Delta\n\nNothing released yet.\n"
+      },
+      "createdAt": "2024-03-20T00:00:00Z",
+      "updatedAt": "2024-03-20T00:00:00Z",
+      "warnings": []
+    },
+    {
+      "slug": "empty",
+      "name": "empty",
+      "description": null,
+      "source": {
+        "type": "local",
+        "path": "C:\\Users\\Kieran\\Desktop\\Development\\personal\\unfinished-mvp\\frznforge\\tests\\.tmp\\e2e\\repos\\empty"
+      },
+      "links": {},
+      "tags": [],
+      "template": false,
+      "license": null,
+      "releaseMode": "tags",
+      "releases": [],
+      "empty": true,
+      "defaultBranch": null,
+      "branches": [],
+      "gitTags": [],
+      "commits": {},
+      "commitCount": 0,
+      "extraCommits": {},
+      "tree": [],
+      "files": {},
+      "refTrees": {},
+      "archives": [],
+      "languages": [],
+      "contributors": [],
+      "insights": null,
+      "readme": null,
+      "createdAt": null,
+      "updatedAt": null,
+      "warnings": [
+        {
+          "code": "repo-empty",
+          "repo": "empty",
+          "message": "repository has no commits on any branch"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "slug": "deploying-a-frozen-forge",
+      "title": "Deploying a frozen forge",
+      "description": "Three ways to put a fully static forge online — rsync to a box, GitHub Pages, or a local preview server that mimics production routing.",
+      "tags": [
+        "deployment",
+        "static",
+        "ci"
+      ],
+      "date": "2026-07-11T00:00:00Z",
+      "kind": "folder",
+      "files": [
+        {
+          "name": "deploy.sh",
+          "path": "deploy.sh",
+          "sha": "4cc07eb1ee75acccc253e3039167e9d983baff20",
+          "size": 1054,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Shell",
+          "markdown": false
+        },
+        {
+          "name": "index.md",
+          "path": "index.md",
+          "sha": "02589b9ae882e0e0e9b3a065b94cbec4446e60fe",
+          "size": 1808,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Markdown",
+          "markdown": true
+        },
+        {
+          "name": "pages.yml",
+          "path": "pages.yml",
+          "sha": "51a4fad6a0f59945e0b7f8ae0b5ec512b9e3c9f8",
+          "size": 1341,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "YAML",
+          "markdown": false
+        },
+        {
+          "name": "serve.py",
+          "path": "serve.py",
+          "sha": "44e666123f6193a7c1f9e3b476318d8b509aaa55",
+          "size": 2982,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Python",
+          "markdown": false
+        }
+      ],
+      "totalBytes": 7185
+    },
+    {
+      "slug": "heat-buckets",
+      "title": "Heat buckets — reading a repo's age as temperature",
+      "description": "Why frznforge colours things fire-to-ice by age, where the five boundaries came from, and why the clock is an argument.",
+      "tags": [
+        "design",
+        "frznforge",
+        "css"
+      ],
+      "date": "2026-06-02T00:00:00Z",
+      "kind": "file",
+      "files": [
+        {
+          "name": "heat-buckets.md",
+          "path": "heat-buckets.md",
+          "sha": "4bbd45e0e3df605467c330c0f02b24e258b3944b",
+          "size": 2523,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Markdown",
+          "markdown": true
+        }
+      ],
+      "totalBytes": 2523
+    },
+    {
+      "slug": "git-plumbing-cheatsheet",
+      "title": "Git plumbing frznforge's ingest actually uses",
+      "description": "The seven git invocations behind a whole forge site, and the exact shape of what each one prints.",
+      "tags": [
+        "git",
+        "frznforge",
+        "ingest"
+      ],
+      "date": "2026-05-14T00:00:00Z",
+      "kind": "file",
+      "files": [
+        {
+          "name": "git-plumbing-cheatsheet.md",
+          "path": "git-plumbing-cheatsheet.md",
+          "sha": "06e98868c3b2ef82eafb73a425c92c26337918bc",
+          "size": 2726,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "Markdown",
+          "markdown": true
+        }
+      ],
+      "totalBytes": 2726
+    },
+    {
+      "slug": "check-determinism",
+      "title": "Check determinism",
+      "description": null,
+      "tags": [],
+      "date": null,
+      "kind": "file",
+      "files": [
+        {
+          "name": "check-determinism.ps1",
+          "path": "check-determinism.ps1",
+          "sha": "08449ff4d558ba69604e91836ec8632b4a36acb5",
+          "size": 2805,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "PowerShell",
+          "markdown": false
+        }
+      ],
+      "totalBytes": 2805
+    },
+    {
+      "slug": "static-host-configs",
+      "title": "Static host configs",
+      "description": null,
+      "tags": [],
+      "date": null,
+      "kind": "folder",
+      "files": [
+        {
+          "name": "cloudflare-pages.yaml",
+          "path": "cloudflare-pages.yaml",
+          "sha": "32feae02226cd0902486294b83122ab38b69c91d",
+          "size": 1022,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "YAML",
+          "markdown": false
+        },
+        {
+          "name": "netlify.toml",
+          "path": "netlify.toml",
+          "sha": "8d0b5def3687dd8d74f5c12b9d5bdaad8d916211",
+          "size": 865,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "TOML",
+          "markdown": false
+        },
+        {
+          "name": "vercel.json",
+          "path": "vercel.json",
+          "sha": "6f0a9d9211f54ffc85c07c58f2e7b0269421d447",
+          "size": 885,
+          "binary": false,
+          "tooLarge": false,
+          "stored": true,
+          "language": "JSON",
+          "markdown": false
+        }
+      ],
+      "totalBytes": 2772
+    }
+  ],
+  "organizations": [
+    {
+      "slug": "canadian-coding",
+      "name": "Canadian Coding",
+      "description": "Small, sturdy, source-available tools that keep working when the server doesn't.",
+      "repos": [
+        "alpha",
+        "bravo"
+      ],
+      "avatar": "/logo.png"
+    }
+  ],
+  "hosting": [
+    {
+      "slug": "alpha-site",
+      "repo": "alpha",
+      "ref": "gh-pages"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "contributor-unknown-email",
+      "repo": null,
+      "message": "contributor 'Nobody At All' lists 'nobody@example.invalid', which no ingested repo has commits from; the entry decorates nobody"
+    },
+    {
+      "code": "repo-path-unservable",
+      "repo": "alpha",
+      "message": "'docs/50% off.txt' on ref 'main' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+    },
+    {
+      "code": "repo-path-unservable",
+      "repo": "alpha",
+      "message": "'docs/c#-tips.md' on ref 'main' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+    },
+    {
+      "code": "repo-path-unservable",
+      "repo": "alpha",
+      "message": "'docs/50% off.txt' on ref 'feature/extra' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+    },
+    {
+      "code": "repo-path-unservable",
+      "repo": "alpha",
+      "message": "'docs/c#-tips.md' on ref 'feature/extra' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+    },
+    {
+      "code": "repo-path-unservable",
+      "repo": "alpha",
+      "message": "'docs/50% off.txt' on ref 'light' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+    },
+    {
+      "code": "repo-path-unservable",
+      "repo": "alpha",
+      "message": "'docs/c#-tips.md' on ref 'light' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+    },
+    {
+      "code": "repo-path-unservable",
+      "repo": "alpha",
+      "message": "'docs/50% off.txt' on ref 'v1.0.0' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+    },
+    {
+      "code": "repo-path-unservable",
+      "repo": "alpha",
+      "message": "'docs/c#-tips.md' on ref 'v1.0.0' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+    },
+    {
+      "code": "repo-path-unservable",
+      "repo": "alpha",
+      "message": "'docs/50% off.txt' on ref 'v1.1.0' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+    },
+    {
+      "code": "repo-path-unservable",
+      "repo": "alpha",
+      "message": "'docs/c#-tips.md' on ref 'v1.1.0' contains '#' or '%', which a static URL cannot round-trip; it is listed in the file table but has no page"
+    },
+    {
+      "code": "repo-empty",
+      "repo": "empty",
+      "message": "repository has no commits on any branch"
+    }
+  ]
+}

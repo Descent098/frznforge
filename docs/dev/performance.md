@@ -70,6 +70,78 @@ Two footnotes that matter when you compare numbers with the Astro build log:
 - **The multiplier is the whole story.** Tree + blob + raw are 87–90% of every build we have
   measured.
 
+## The 0.3.0 baseline — 0.4.0's reference point
+
+0.4.0 replaces the Astro build with a Go one ([the phase plan](./plans/version-0.4.0-phased.md)).
+Every claim that version makes about speed is measured against the numbers here, taken on the
+released 0.3.0 pipeline immediately before the rewrite began. They are recorded first, on
+purpose: a rewrite with no "before" column can only be argued about.
+
+**Machine.** Windows 11 Pro 26200, AMD Ryzen 9 7945HX (16 cores / 32 threads), 61.7 GB RAM,
+Node v24.6.0, git 2.50.1, Astro 7.2.9, Go 1.24.5. Measured **2026-09-06**, schema v8.
+
+### Corpus 1 — this repository's own site
+
+One repo, 5 notes, 1 organization; 2 browsable refs at 290 tree entries each. `npm run measure`
+decomposes it as **1,077 routes**, of which 1,018 (94.5%) are the tree + blob + raw multiplier.
+
+| step | command | time |
+|---|---|---:|
+| ingest, warm | `npm run ingest` | 1.077 s |
+| ingest, cold | `npm run ingest -- --no-cache` | 3.050 s |
+| render, cold | `FRZNFORGE_NO_HL_CACHE=1 npm run build -- --no-ingest` | 18.747 s |
+| render, warm | `npm run build -- --no-ingest` | 6.565 s |
+| **build, warm** | `npm run build` | **7.214 s** |
+
+The highlight memo is worth 12.2 s of an 18.7 s render — **65%** — which is the same story the
+0.2.0 measurement told in different units, now with the memo in place rather than proposed.
+That number is what Phase 5 of the 0.4.0 plan checks chroma against before deciding whether the
+memo is worth porting at all.
+
+Output:
+
+| | |
+|---|---:|
+| files in `dist/` | 1,187 |
+| HTML pages | 633 |
+| `dist/` on disk | 65,622,500 bytes (66 MB) |
+
+### Where the JavaScript actually goes
+
+`dist/_astro/` is **102 files, 3,495,584 bytes**. Of that, everything frznforge wrote is
+**79,924 bytes — 2.3%**:
+
+| file | bytes |
+|---|---:|
+| `Base.<hash>.css` | 59,682 |
+| `RepoListing.<hash>.js` | 10,681 |
+| `CommandPalette.<hash>.js` | 6,003 |
+| `MermaidRenderer…index_0_lang.<hash>.js` | 3,196 |
+| `base.<hash>.js` | 362 |
+
+The other **3.42 MB is mermaid and its dependency tree**, split across ~97 Vite chunks —
+`chunk-FOHPRMQF` at 662 KB, `cytoscape.esm` at 435 KB, `katex` at 259 KB, then a chunk per
+diagram type (`architectureDiagram` 149 KB, `sequenceDiagram` 116 KB, `swimlanes` 111 KB, …).
+
+Two consequences for the rewrite, both worth knowing before Phase 2 rather than during it:
+
+- **Dropping Svelte is not what shrinks this directory.** The two islands plus the shell script
+  are 17 KB of the 3.5 MB. The framework runtime is real and it goes, but the headline number
+  in `_astro/` is mermaid.
+- **Mermaid is the one dependency that genuinely needs a bundler today**, and the 0.4.0 plan
+  forbids one. It has to become a vendored, pre-built ESM asset copied verbatim like every other
+  file under the no-build rule — not a package Vite splits into 97 chunks. That is a Phase 2
+  deliverable, not a Phase 4 surprise.
+
+### Corpus 2 — the four-repo remote corpus
+
+Not re-measured for this baseline: it needs the network and ~5 minutes, and nothing about it has
+changed since it was taken. Use the table in
+[Measured: `ingest.branchTrees`](#measured-ingestbranchtrees-before-and-after) — at the default
+caps, **21,869 routes / 13,164 HTML pages / 204.2 s render / 7.1 s warm ingest / 854.2 MB**. It
+is the corpus that matters for the streaming pipeline (0.4.0 Phase 7), because it is the only one
+where fetch time and render time are the same order of magnitude.
+
 ## Measured: `ingest.branchTrees`, before and after
 
 The problem the cap fixes: tree/blob/raw pages are generated per browsable ref, and nothing

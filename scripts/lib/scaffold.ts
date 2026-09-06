@@ -495,8 +495,8 @@ export function nextSteps(result: ScaffoldResult, cwd: string = process.cwd()): 
   const steps: string[][] = [];
   if (!result.engineReady) {
     steps.push([
-      `Put the frznforge engine in ${where}: copy src/, scripts/, public/, astro.config.ts,`,
-      'svelte.config.js, tsconfig.json and package.json from your frznforge checkout, then run',
+      `Put the frznforge engine in ${where}: copy src/, scripts/, web/, public/,`,
+      'astro.config.ts, tsconfig.json and package.json from your frznforge checkout, then run',
       'npm install there. (docs/user/starting-a-site.md — there is no npm package to install yet.)',
     ]);
   }

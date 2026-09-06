@@ -4,12 +4,11 @@
  * Theme: `data-theme` on <html> (localStorage, toggle button / `t` key) or system preference.
  * Palette: `data-palette` from frznforge.config.ts.
  */
-import '../styles/global.css';
-import '../styles/repo.css';
+import '../../web/css/global.css';
+import '../../web/css/repo.css';
 import IconSprite from '../components/IconSprite.astro';
 import Sidebar from '../components/Sidebar.astro';
-import CommandPalette from '../components/CommandPalette.svelte';
-import { withBase } from '../lib/base';
+import { siteBase, withBase } from '../lib/base';
 import { getConfig, getData } from '../lib/site';
 
 interface Props {
@@ -24,7 +23,7 @@ const data = await getData();
 const fullTitle = title === cfg.site.title ? title : `${title} · ${cfg.site.title}`;
 ---
 <!doctype html>
-<html lang="en" data-palette={cfg.theme.palette}>
+<html lang="en" data-palette={cfg.theme.palette} data-base={siteBase()}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -45,7 +44,7 @@ const fullTitle = title === cfg.site.title ? title : `${title} · ${cfg.site.tit
   </head>
   <body>
     <IconSprite />
-    <CommandPalette client:load />
+    <hf-command-palette></hf-command-palette>
     <div class="hf-shell">
       <Sidebar
         active={active}
@@ -66,25 +65,7 @@ const fullTitle = title === cfg.site.title ? title : `${title} · ${cfg.site.tit
       </main>
     </div>
 
-    <script is:inline>
-      (function () {
-        var btn = document.getElementById('hf-theme-toggle');
-        if (!btn) return;
-        function current() {
-          var t = document.documentElement.getAttribute('data-theme');
-          if (t) return t;
-          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        function toggle() {
-          var next = current() === 'dark' ? 'light' : 'dark';
-          document.documentElement.setAttribute('data-theme', next);
-          try { localStorage.setItem('frznforge-theme', next); } catch (e) {}
-        }
-        btn.addEventListener('click', toggle);
-        document.addEventListener('keydown', function (e) {
-          if (e.key === 't' && !e.ctrlKey && !e.metaKey && !e.altKey && !/input|textarea|select/i.test(e.target.tagName)) toggle();
-        });
-      })();
-    </script>
+    <script is:inline type="module" src={withBase('/js/theme.js')}></script>
+    <script is:inline type="module" src={withBase('/js/hf-command-palette.js')}></script>
   </body>
 </html>
