@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -35,6 +36,7 @@ import (
 	"frznforge/internal/build"
 	"frznforge/internal/config"
 	"frznforge/internal/ingest"
+	"frznforge/internal/logging"
 	"frznforge/internal/model"
 )
 
@@ -101,6 +103,15 @@ Usage
                                     overwrite an existing .jsonc unless --force is given.
 
   frznforge help                    This message.
+
+Diagnostics
+  --log[=<level>]                   Write what the run is doing to stderr, on any command:
+                                    error, warn, info or debug (bare --log means debug).
+                                    FRZNFORGE_LOG does the same without retyping the command.
+                                    Every git call and every HTTP request is recorded before it
+                                    starts and again when it finishes, so a run that stops names
+                                    what it stopped on:
+                                      frznforge build --log=debug 2> build.log
 `
 
 func main() {
@@ -110,7 +121,41 @@ func main() {
 	}
 }
 
+// setUpLogging consumes a leading or trailing --log=<level> (and -v/--verbose as a shorthand for
+// --log=debug on commands that do not already own -v), installs the logger, and returns the
+// arguments with it removed.
+//
+// FRZNFORGE_LOG does the same thing without a flag, for the second attempt at a command that
+// has already been typed once. The flag wins when both are given.
+func setUpLogging(args []string, io *Io) []string {
+	level := os.Getenv(logging.EnvVar)
+	out := make([]string, 0, len(args))
+	for _, a := range args {
+		switch {
+		case strings.HasPrefix(a, "--log="):
+			level = strings.TrimPrefix(a, "--log=")
+		case a == "--log":
+			// A bare --log means "as much as you have", which is what someone reaching for it
+			// during a hang wants.
+			level = "debug"
+		default:
+			out = append(out, a)
+		}
+	}
+	if _, on := logging.Level(level); on {
+		logging.Setup(level, io.Err)
+		slog.Debug("frznforge starting", "args", strings.Join(args, " "), "cwd", io.Cwd)
+	}
+	return out
+}
+
 func run(args []string, io *Io) error {
+	// --log is read before the subcommand and stripped from the arguments, so every command
+	// gets it without each one growing its own flag. It goes to stderr and is off unless asked
+	// for: progress belongs on stdout, diagnostics do not, and redirecting one must not disturb
+	// the other.
+	args = setUpLogging(args, io)
+
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprint(io.Out, usage)
 		return nil

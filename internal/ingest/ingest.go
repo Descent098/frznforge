@@ -19,6 +19,7 @@ package ingest
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -156,6 +157,9 @@ func Ingest(ctx context.Context, cfg *config.Resolved, hooks Hooks, options Opti
 
 	order := orderMissesFirst(cfg, options.NoCache)
 
+	slog.Debug("ingest start", "repos", len(order), "concurrency", cfg.Ingest.Concurrency,
+		"outDir", cfg.OutDir, "cacheDir", cfg.CacheDir)
+
 	results := make([]scanned, len(order))
 	runPool(ctx, len(order), cfg.Ingest.Concurrency, func(i int) {
 		results[i] = ingestOne(ctx, order[i], cfg, remoteCfg, opts, hooks, options,
@@ -282,6 +286,15 @@ func ingestOne(
 	if hooks.OnRepoStart != nil {
 		hooks.OnRepoStart(slug)
 	}
+	// The progress line the user sees says only that this repository started. This says the same
+	// thing with a timestamp and a path, and is followed by a matching "repo done" — which is
+	// what turns "it stopped after printing a name" into "it stopped scanning THIS, at THIS
+	// point, N seconds in".
+	repoStarted := time.Now()
+	slog.Debug("repo start", "slug", slug, "path", src.AbsPath, "remote", src.IsRemote())
+	defer func() {
+		slog.Debug("repo done", "slug", slug, "ms", time.Since(repoStarted).Milliseconds())
+	}()
 
 	out := scanned{
 		// Carried alongside the scan result so organization membership resolves against the FINAL

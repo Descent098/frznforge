@@ -17,6 +17,12 @@ build path and no bundler, transpiler or minifier anywhere.
 
 There is no watch mode and no HMR. The render is fast enough that a rebuild is the loop.
 
+**When something stalls, ask it.** Every command takes `--log=debug` (or `FRZNFORGE_LOG=debug`),
+which writes to stderr while progress stays on stdout: `frznforge build --log=debug 2> build.log`.
+Each git call and HTTP request is logged before it starts as well as after it finishes, so a
+command that never returns leaves a start record with no matching finish — that asymmetry names
+the culprit. Logging is off by default and free when off.
+
 ## Project layout & commands
 
 - `frznforge.config.jsonc` — site config (owner, repos to ingest, palette). JSON with comments;

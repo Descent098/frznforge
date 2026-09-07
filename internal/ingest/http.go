@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/textproto"
@@ -345,6 +346,12 @@ func (c *JSONClient) attempt(
 
 func (c *JSONClient) send(ctx context.Context, rawURL string) (*http.Response, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	// Around the request, not after it. A provider that accepts the connection and then never
+	// answers is indistinguishable from a hang unless something recorded the attempt — the
+	// timeout above bounds it, but the log is what says which host and which URL.
+	reqStarted := time.Now()
+	slog.Debug("http start", "url", rawURL)
+
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		cancel()
@@ -353,9 +360,11 @@ func (c *JSONClient) send(ctx context.Context, rawURL string) (*http.Response, e
 	req.Header = c.headers()
 	resp, err := c.doer.Do(req)
 	if err != nil {
+		slog.Debug("http failed", "url", rawURL, "ms", time.Since(reqStarted).Milliseconds(), "err", err)
 		cancel()
 		return nil, err
 	}
+	slog.Debug("http done", "url", rawURL, "ms", time.Since(reqStarted).Milliseconds(), "status", resp.StatusCode)
 	// The body outlives this function, so the deadline has to as well: cancel once the body is
 	// closed rather than on return.
 	resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}

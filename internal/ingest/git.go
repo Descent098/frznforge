@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -123,6 +124,12 @@ func GitRun(ctx context.Context, repo string, args []string, opts GitOptions) (G
 	full = append(full, "-C", repo)
 	full = append(full, args...)
 
+	// Logged BEFORE the process starts and again after it is reaped, so a command that never
+	// returns leaves a "git start" with no "git done". That asymmetry is the whole diagnostic:
+	// it names the exact invocation that hung, which is what an hour of silence could not.
+	started := time.Now()
+	slog.Debug("git start", "repo", repo, "args", strings.Join(args, " "))
+
 	cmd := exec.CommandContext(ctx, "git", full...)
 	cmd.Env = gitEnv()
 	var stderr bytes.Buffer
@@ -151,8 +158,27 @@ func GitRun(ctx context.Context, repo string, args []string, opts GitOptions) (G
 
 	out, truncated, readErr := readLimited(stdout, opts.MaxBytes)
 	if truncated {
+		// Close our end of the pipe FIRST, and treat the kill as a backstop rather than the
+		// mechanism.
+		//
+		// A kill alone deadlocks on Windows, and did: `git` on PATH in cmd.exe and PowerShell is
+		// a 46 KB wrapper in Git\cmd that re-execs the real 4 MB binary in Git\mingw64\bin, so
+		// TerminateProcess kills the wrapper and the real git carries on holding the write end of
+		// the stderr pipe. os/exec's stderr copier then waits for an EOF that can never arrive and
+		// Wait never returns — a silent, permanent hang on any blob over maxBlobBytes, on the
+		// PATH every Windows user actually has. (Git Bash resolves git straight to the real
+		// binary, which is why it never reproduced there.)
+		//
+		// Closing the read end is what actually stops it: the next write fails with EPIPE and git
+		// exits by itself, whichever binary is really running and however many wrappers deep.
+		_ = stdout.Close()
 		_ = cmd.Process.Kill()
 	}
+	// Insurance against the same shape of problem from a direction not yet seen: once the process
+	// we launched has exited, Wait gets ten seconds to finish draining before it gives up and
+	// closes the pipes itself. Without this, ANY grandchild holding an inherited handle is an
+	// unkillable hang; with it, the worst case is a slow command and an error.
+	cmd.WaitDelay = 10 * time.Second
 	waitErr := cmd.Wait()
 	<-written
 
@@ -165,6 +191,11 @@ func GitRun(ctx context.Context, repo string, args []string, opts GitOptions) (G
 		var exitErr *exec.ExitError
 		if errors.As(waitErr, &exitErr) {
 			code = exitErr.ExitCode()
+		} else if errors.Is(waitErr, exec.ErrWaitDelay) {
+			// The process exited and something else was still holding a pipe. We have the output
+			// we came for, so this is worth knowing about and not worth failing over.
+			slog.Warn("git left a pipe open after exiting; continued without it",
+				"repo", repo, "args", strings.Join(args, " "))
 		} else if !truncated {
 			return GitResult{}, gitStartError(waitErr)
 		}
@@ -174,6 +205,8 @@ func GitRun(ctx context.Context, repo string, args []string, opts GitOptions) (G
 	}
 
 	res := GitResult{Stdout: out, Stderr: stderr.String(), Code: code}
+	slog.Debug("git done", "repo", repo, "args", strings.Join(args, " "),
+		"ms", time.Since(started).Milliseconds(), "code", code, "bytes", len(out), "truncated", truncated)
 	if truncated || code == 0 || opts.AllowFailure {
 		return res, nil
 	}
