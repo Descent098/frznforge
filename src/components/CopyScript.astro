@@ -1,7 +1,0 @@
----
-// Wires every `button[data-copy]` on the page to the clipboard. The implementation is
-// `web/js/copy.js`; this component exists so a page can opt in by including it. Two pages
-// including it emit the same script URL, which the browser loads once.
-import { withBase } from '../lib/base';
----
-<script is:inline type="module" src={withBase('/js/copy.js')}></script>

@@ -39,6 +39,7 @@ package build
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -68,6 +69,14 @@ type Options struct {
 	// Workers is how many repositories render at once. 0 picks a default from GOMAXPROCS; 1 is
 	// the serial mode `--serial` selects, which exists so the two can be compared.
 	Workers int
+	// Postprocess overrides the config file's `postprocess.command` — this is where the CLI's
+	// `--postprocess=<cmd>` arrives. Empty means "not given": the config block and
+	// $FRZNFORGE_POSTPROCESS stay in charge. See postprocess.go for the precedence.
+	Postprocess string
+	// PostprocessOut receives the hook command's stdout and stderr. nil means os.Stdout. Only
+	// the hook's output goes here — the build's own verbose lines still print directly, because
+	// a field named for one thing that quietly captured everything would be a trap.
+	PostprocessOut io.Writer
 }
 
 // Result reports what a build produced.
@@ -185,7 +194,23 @@ func Run(opts Options) (Result, error) {
 			fmt.Println(line)
 		}
 	}
-	return Result{Routes: b.written, Bytes: b.bytes, Elapsed: time.Since(start)}, nil
+
+	// Elapsed is taken before the hook runs. Whatever the user's own tooling costs is the user's
+	// tool's, and folding it into the build time would misattribute a slow minifier to this
+	// renderer.
+	res := Result{Routes: b.written, Bytes: b.bytes, Elapsed: time.Since(start)}
+
+	// The hook fires here and nowhere else: after every step above returned nil. Every early
+	// return in this function leaves a partial dist/ on disk, and handing a partial directory to
+	// somebody's minifier publishes a site that is neither the old build nor the new one — the
+	// worst outcome available, because it looks like a success.
+	hook := PostprocessFor(&cfg.Config, opts.Postprocess)
+	if err := hook.Run(cfg.Root, outDir, opts.PostprocessOut); err != nil {
+		// The site itself is written and the counts are real, so the caller gets both rather than
+		// losing them to the failure. It is the hook that failed, and the error says so.
+		return res, err
+	}
+	return res, nil
 }
 
 // emitAll walks every page family. The order matches routes.AllRoutes so a reader comparing

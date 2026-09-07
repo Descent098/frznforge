@@ -30,18 +30,21 @@ import (
 // real time — that is the one input a reproducible build is allowed to vary on, and pinning it
 // here is what isolates the failure modes above.
 func TestBuildIsDeterministic(t *testing.T) {
-	root := repoRoot(t)
-	if _, err := os.Stat(filepath.Join(root, "data", "forge.json")); err != nil {
-		t.Skip("no artifact on this machine; run `npm run ingest` or `frznforge ingest` first")
+	for _, project := range buildRoots(t) {
+		t.Run(project.name, func(t *testing.T) { assertDeterministic(t, project.root) })
 	}
+}
 
+func assertDeterministic(t *testing.T, root string) {
 	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 	first := filepath.Join(t.TempDir(), "one")
 	second := filepath.Join(t.TempDir(), "two")
 
 	for _, out := range []string{first, second} {
+		// Not t.Skipf. A build that will not run is a failure: this test's whole job is to run
+		// it twice, and "the build is broken" is the loudest possible reason to say so.
 		if _, err := build.Run(build.Options{Root: root, OutDir: out, Now: now}); err != nil {
-			t.Skipf("build is not complete yet: %v", err)
+			t.Fatalf("build: %v", err)
 		}
 	}
 

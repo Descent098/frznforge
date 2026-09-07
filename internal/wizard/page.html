@@ -1,0 +1,1791 @@
+<!doctype html>
+<!--
+  The whole UI for `frznforge init --web`, served by internal/wizard (go:embed).
+
+  Self-contained on purpose: inline CSS, inline JS, no build step, no CDN, no framework. The
+  server sends a CSP of `default-src 'none'; connect-src 'self'` so the page physically cannot
+  reach anything but the local server that served it.
+
+  It is a *static* document — the server never interpolates anything into it. Everything the
+  page knows arrives over /api/*, and every provider-supplied string (repo names, descriptions)
+  is put on the page with textContent, never innerHTML.
+
+  The session token lives in `?s=…` and is echoed on every request. The provider token never
+  comes near this file.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>frznforge init</title>
+<style>
+/* Tokens lifted from src/styles/global.css (hearth palette) so the wizard looks like the site. */
+:root {
+  color-scheme: light;
+  --canvas: #f6f1ea;
+  --canvas-2: #efe8df;
+  --surface: #fffcf8;
+  --surface-2: #f9f4ee;
+  --border: rgba(70, 45, 25, 0.12);
+  --border-strong: rgba(70, 45, 25, 0.22);
+  --shadow: 0 1px 2px rgba(60, 35, 15, 0.06), 0 8px 24px -12px rgba(60, 35, 15, 0.18);
+  --text: #24190f;
+  --text-2: #5c4e43;
+  --text-3: #7a6c60;
+  --ember: #ea5a14;
+  --ember-2: #ff8a3d;
+  --ember-soft: rgba(234, 90, 20, 0.12);
+  --amber: #d98c12;
+  --amber-soft: rgba(217, 140, 18, 0.14);
+  --ice: #2f86c7;
+  --ice-2: #6cc1ff;
+  --ice-soft: rgba(47, 134, 199, 0.12);
+  --danger: #c0392b;
+  --danger-soft: rgba(192, 57, 43, 0.1);
+  --on-accent: #fff7f0;
+  --accent-shadow: rgba(234, 90, 20, 0.55);
+  --code-bg: rgba(70, 45, 25, 0.07);
+  --radius: 14px;
+  --radius-sm: 9px;
+  --pill: 999px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --canvas: #171210;
+    --canvas-2: #1d1714;
+    --surface: #221b17;
+    --surface-2: #29211c;
+    --border: rgba(255, 220, 190, 0.10);
+    --border-strong: rgba(255, 220, 190, 0.2);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
+    --text: #f4ece4;
+    --text-2: #c2b3a6;
+    --text-3: #a4968a;
+    --ember: #ff7a2f;
+    --ember-2: #ffa15c;
+    --ember-soft: rgba(255, 122, 47, 0.16);
+    --amber: #f0a62a;
+    --amber-soft: rgba(240, 166, 42, 0.16);
+    --ice: #5fb1ee;
+    --ice-2: #9ad6ff;
+    --ice-soft: rgba(95, 177, 238, 0.16);
+    --danger: #ff8a7a;
+    --danger-soft: rgba(255, 138, 122, 0.14);
+    --on-accent: #1c0f06;
+    --accent-shadow: rgba(255, 122, 47, 0.45);
+    --code-bg: rgba(255, 220, 190, 0.08);
+  }
+}
+
+* { box-sizing: border-box; }
+/* Several things here are flex/grid containers, whose `display` would otherwise beat [hidden]. */
+[hidden] { display: none !important; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font-family: var(--font);
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { margin: 0; line-height: 1.2; font-weight: 650; letter-spacing: -0.01em; }
+p { margin: 0; }
+code, pre, kbd { font-family: var(--mono); }
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+.wrap { max-width: 940px; margin: 0 auto; padding: 28px 20px 64px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ---- header ---- */
+.hdr { display: flex; align-items: center; gap: 14px; padding: 4px 2px 6px; flex-wrap: wrap; }
+.mark {
+  width: 38px; height: 38px; flex: none; border-radius: 11px;
+  display: grid; place-items: center;
+  background: linear-gradient(180deg, var(--ember-2), var(--ember));
+  color: var(--on-accent); font-size: 19px; font-weight: 700;
+  box-shadow: 0 6px 14px -6px var(--accent-shadow);
+}
+.hdr h1 { font-size: 19px; }
+.hdr .sub { color: var(--text-3); font-size: 13px; margin-top: 2px; }
+.hdr .sub code { font-size: 12.5px; background: var(--code-bg); padding: 1px 5px; border-radius: 5px; }
+.hdr .spacer { flex: 1; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 11px; border-radius: var(--pill);
+  background: var(--ice-soft); color: var(--ice);
+  font-size: 12px; font-weight: 560; white-space: nowrap;
+}
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ---- cards ---- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.card-head { display: flex; align-items: center; gap: 10px; padding: 13px 18px; border-bottom: 1px solid var(--border); }
+.card-head h2 { font-size: 14.5px; font-weight: 640; }
+.card-head .note { margin-left: auto; font-size: 12.5px; color: var(--text-3); }
+.card-body { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+.step {
+  width: 22px; height: 22px; flex: none; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--ember-soft); color: var(--ember);
+  font-size: 12px; font-weight: 700;
+}
+.card[aria-disabled="true"] { opacity: 0.55; }
+
+/* ---- forms ---- */
+fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+legend, .lbl {
+  padding: 0; font-size: 12px; font-weight: 620; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.segs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.seg { position: relative; }
+.seg input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.seg span {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 14px; border-radius: 10px;
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--text-2); font-size: 13.5px; font-weight: 560;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.seg:hover span { border-color: var(--text-3); }
+.seg input:checked + span {
+  border-color: transparent; color: var(--on-accent);
+  background: linear-gradient(180deg, var(--ember-2), var(--ember));
+  box-shadow: 0 6px 14px -8px var(--accent-shadow);
+}
+.seg input:focus-visible + span { outline: 2px solid var(--ember); outline-offset: 2px; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid2.solo { grid-template-columns: minmax(0, 460px); }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field label { font-size: 12px; font-weight: 620; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+input[type="text"], input[type="url"], input[type="search"] {
+  height: 36px; padding: 0 11px;
+  border-radius: 10px; border: 1px solid var(--border-strong);
+  background: var(--canvas); color: var(--text);
+  font: inherit; font-size: 13.5px; width: 100%; min-width: 0;
+}
+input::placeholder { color: var(--text-3); opacity: 0.8; }
+input:hover { border-color: var(--text-3); }
+input:focus { border-color: var(--ember); }
+.hint { font-size: 12px; color: var(--text-3); }
+.hint code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; font-size: 11.5px; }
+
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.row .spacer { flex: 1; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 34px; padding: 0 14px; border-radius: 10px;
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--text); font: inherit; font-size: 13.5px; font-weight: 560;
+  white-space: nowrap; cursor: pointer;
+  transition: background .12s, border-color .12s, transform .12s, filter .12s;
+}
+.btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--text-3); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary {
+  border-color: transparent; color: var(--on-accent);
+  background: linear-gradient(180deg, var(--ember-2), var(--ember));
+  box-shadow: 0 6px 14px -6px var(--accent-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.btn.primary:hover:not(:disabled) { filter: brightness(1.06); background: linear-gradient(180deg, var(--ember-2), var(--ember)); border-color: transparent; }
+.btn.small { height: 28px; padding: 0 10px; font-size: 12.5px; border-radius: 8px; }
+.btn.quiet { border-color: transparent; background: var(--ice-soft); color: var(--ice); }
+.btn.quiet:hover:not(:disabled) { background: var(--ice-soft); border-color: var(--ice); }
+
+.status { font-size: 13px; color: var(--text-3); }
+.status.busy::before {
+  content: ""; display: inline-block; width: 11px; height: 11px; margin-right: 7px;
+  vertical-align: -1px; border-radius: 50%;
+  border: 2px solid var(--ember-soft); border-top-color: var(--ember);
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .status.busy::before { animation-duration: 2.4s; } }
+
+.alert {
+  border-radius: var(--radius-sm); padding: 11px 13px;
+  background: var(--danger-soft); border: 1px solid var(--danger);
+  color: var(--danger); font-size: 13px;
+}
+.alert strong { display: block; margin-bottom: 2px; }
+.tokenline {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12.5px; color: var(--text-2);
+  background: var(--canvas-2); border-radius: var(--radius-sm); padding: 9px 12px;
+}
+.tokenline .key { flex: none; font-weight: 640; color: var(--text-3); }
+.tokenline code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; font-size: 11.5px; }
+
+/* ---- repo table ---- */
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.toolbar .filter { flex: 1 1 220px; min-width: 160px; }
+.toggles { display: flex; gap: 12px; flex-wrap: wrap; }
+.tg { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); cursor: pointer; }
+.tg input { accent-color: var(--ember); width: 15px; height: 15px; margin: 0; cursor: pointer; }
+.tg.off { opacity: 0.45; cursor: not-allowed; text-decoration: line-through; }
+.tg.off input { cursor: not-allowed; }
+.count { font-size: 13px; color: var(--text-2); }
+.count b { color: var(--text); font-weight: 660; }
+
+.tablewrap {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  overflow: auto; max-height: 46vh; background: var(--canvas);
+}
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  text-align: left; padding: 0; font-weight: 620; color: var(--text-3);
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;
+}
+thead th .th {
+  display: flex; align-items: center; gap: 5px;
+  padding: 9px 12px; width: 100%; background: none; border: 0;
+  font: inherit; color: inherit; text-align: left;
+}
+thead th button.th { cursor: pointer; }
+thead th button.th:hover { color: var(--text); }
+thead th[aria-sort]:not([aria-sort="none"]) button.th { color: var(--ember); }
+thead th .arrow { font-size: 9px; }
+tbody tr { border-bottom: 1px solid var(--border); }
+tbody tr:last-child { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+tbody tr.on { background: var(--ember-soft); }
+tbody tr.on:hover { background: var(--ember-soft); }
+td { padding: 8px 12px; vertical-align: top; }
+td.pick { width: 34px; padding-right: 0; }
+td.pick input { accent-color: var(--ember); width: 16px; height: 16px; margin: 2px 0 0; cursor: pointer; }
+td.name { white-space: nowrap; font-weight: 560; }
+td.name .owner { color: var(--text-3); font-weight: 500; }
+td.desc { color: var(--text-2); }
+td.tags { width: 1%; white-space: nowrap; text-align: right; }
+.tag {
+  display: inline-block; margin-left: 5px; padding: 1px 7px;
+  border-radius: var(--pill); font-size: 11px; font-weight: 600;
+  background: var(--canvas-2); color: var(--text-3); border: 1px solid var(--border);
+}
+.tag.fork { background: var(--ice-soft); color: var(--ice); border-color: transparent; }
+.tag.archived { background: var(--amber-soft); color: var(--amber); border-color: transparent; }
+.tag.private { background: var(--ember-soft); color: var(--ember); border-color: transparent; }
+.empty { padding: 22px; text-align: center; color: var(--text-3); font-size: 13px; }
+
+/* ---- preview ---- */
+pre.preview {
+  margin: 0; padding: 13px 15px; overflow: auto; max-height: 240px;
+  background: var(--canvas); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 12.5px; line-height: 1.55; color: var(--text-2);
+  white-space: pre; tab-size: 2;
+}
+.dest { font-size: 12.5px; color: var(--text-3); overflow-wrap: break-word; }
+.dest code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+
+.radios { display: flex; flex-direction: column; gap: 8px; margin-top: 9px; }
+.radio { display: flex; align-items: flex-start; gap: 9px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.radio:hover { border-color: var(--border-strong); }
+.radio:has(input:checked) { border-color: var(--ember); background: var(--ember-soft); }
+.radio input { accent-color: var(--ember); margin: 3px 0 0; width: 15px; height: 15px; flex: none; cursor: pointer; }
+.radio b { font-weight: 600; font-size: 13.5px; }
+.radio small { display: block; color: var(--text-3); font-size: 12px; }
+
+/* ---- settings & profile (0.2.0) ---- */
+.setgroup { border-top: 1px solid var(--border); padding-top: 14px; }
+.setgroup:first-child { border-top: 0; padding-top: 0; }
+.setgroup .grid2 { margin-top: 9px; }
+.checks { display: flex; flex-direction: column; gap: 8px; margin-top: 9px; }
+select {
+  height: 36px; padding: 0 11px;
+  border-radius: 10px; border: 1px solid var(--border-strong);
+  background: var(--canvas); color: var(--text);
+  font: inherit; font-size: 13.5px; width: 100%; min-width: 0;
+}
+select:hover { border-color: var(--text-3); }
+select:focus { border-color: var(--ember); }
+input[type="number"] {
+  height: 36px; padding: 0 11px;
+  border-radius: 10px; border: 1px solid var(--border-strong);
+  background: var(--canvas); color: var(--text);
+  font: inherit; font-size: 13.5px; width: 100%; min-width: 0;
+}
+details.setgroup summary {
+  cursor: pointer; font-size: 12px; font-weight: 620; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.05em; list-style-position: outside;
+}
+details.setgroup summary:hover { color: var(--text); }
+.listrows { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--canvas); }
+.listrow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.listrow:last-child { border-bottom: 0; }
+.listrow .what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.listrow .what small { color: var(--text-3); }
+.listrow code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
+.listempty { padding: 10px 12px; color: var(--text-3); font-size: 12.5px; }
+.addrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.addrow .field { flex: 1 1 140px; }
+.addrow .btn { flex: none; }
+textarea.mdbody {
+  width: 100%; min-height: 220px; resize: vertical;
+  padding: 11px; border-radius: 10px; border: 1px solid var(--border-strong);
+  background: var(--canvas); color: var(--text);
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.55; tab-size: 2;
+}
+textarea.mdbody:hover { border-color: var(--text-3); }
+textarea.mdbody:focus { border-color: var(--ember); }
+pre.fmblock {
+  margin: 0; padding: 9px 12px; overflow: auto; max-height: 140px;
+  background: var(--canvas-2); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm);
+  font-size: 12px; line-height: 1.5; color: var(--text-3); white-space: pre;
+}
+.mdprev {
+  padding: 13px 15px; overflow: auto; max-height: 320px;
+  background: var(--canvas); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 13.5px; line-height: 1.6;
+}
+.mdprev :first-child { margin-top: 0; }
+.mdprev :last-child { margin-bottom: 0; }
+.mdprev pre { background: var(--code-bg); padding: 9px 11px; border-radius: 8px; overflow: auto; }
+.mdprev code { font-size: 12.5px; }
+.mdprev img { max-width: 100%; }
+
+/* ---- final state ---- */
+.done-body { display: flex; flex-direction: column; gap: 12px; padding: 22px; }
+.done-body h2 { font-size: 17px; }
+.done-body ul { margin: 0; padding-left: 18px; color: var(--text-2); font-size: 13px; }
+.done-body li { margin: 2px 0; }
+.done-body code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; font-size: 12px; word-break: break-all; }
+.tick { color: var(--ember); font-size: 22px; line-height: 1; }
+
+footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top: 4px; }
+
+@media (max-width: 760px) {
+  .grid2 { grid-template-columns: 1fr; }
+  .wrap { padding: 18px 12px 48px; }
+}
+@media (max-width: 620px) {
+  td.desc, th.desc { display: none; }
+  .tablewrap { max-height: 55vh; }
+  td.name { white-space: normal; word-break: break-word; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hdr">
+    <div class="mark" aria-hidden="true">&#9670;</div>
+    <div>
+      <h1>frznforge init</h1>
+      <p class="sub">Add repositories and edit <code id="cfgname">frznforge.config.jsonc</code></p>
+    </div>
+    <div class="spacer"></div>
+    <span class="chip" title="This page is served by a local process and is not reachable from anywhere else.">
+      <span class="dot" aria-hidden="true"></span>127.0.0.1 &middot; this machine only
+    </span>
+  </header>
+
+  <noscript>
+    <div class="card"><div class="card-body"><div class="alert">
+      <strong>JavaScript is required.</strong>
+      This wizard talks to the local process that opened it. Use <code>frznforge init</code> in the
+      terminal instead.
+    </div></div></div>
+  </noscript>
+
+  <!-- 1. where the repositories come from -->
+  <section class="card" aria-labelledby="h-source">
+    <div class="card-head"><span class="step" aria-hidden="true">1</span><h2 id="h-source">Source</h2></div>
+    <div class="card-body">
+      <fieldset>
+        <legend>Provider</legend>
+        <div class="segs" id="providers"></div>
+      </fieldset>
+
+      <div class="grid2">
+        <div class="field" id="host-field">
+          <label for="host">API host</label>
+          <input id="host" type="url" spellcheck="false" autocapitalize="off" autocomplete="off">
+          <p class="hint" id="host-hint"></p>
+        </div>
+        <div class="field">
+          <label for="account">Account</label>
+          <input id="account" type="text" spellcheck="false" autocapitalize="off" autocomplete="off"
+                 placeholder="e.g. Descent098">
+          <p class="hint" id="account-hint"></p>
+        </div>
+      </div>
+
+      <p class="tokenline" id="tokenline"><span class="key">Token</span><span id="tokentext">checking&hellip;</span></p>
+
+      <div class="row">
+        <button type="button" class="btn primary" id="load">Load repositories</button>
+        <button type="button" class="btn small quiet" id="host-toggle" hidden>Custom API host</button>
+        <div class="spacer"></div>
+        <span class="status" id="load-status" role="status" aria-live="polite"></span>
+      </div>
+      <div class="alert" id="load-error" role="alert" hidden></div>
+    </div>
+  </section>
+
+  <!-- 2. pick the repositories -->
+  <section class="card" id="repo-card" hidden aria-labelledby="h-repos">
+    <div class="card-head">
+      <span class="step" aria-hidden="true">2</span><h2 id="h-repos">Repositories</h2>
+      <span class="note" id="repo-note"></span>
+    </div>
+    <div class="card-body">
+      <div class="toolbar">
+        <div class="field filter">
+          <label class="sr" for="filter">Filter repositories</label>
+          <input id="filter" type="search" placeholder="Filter by name or description&hellip;">
+        </div>
+        <div class="toggles" role="group" aria-label="Quick filters">
+          <label class="tg" id="tg-fork"><input type="checkbox" id="hide-forks">Hide forks</label>
+          <label class="tg" id="tg-archived"><input type="checkbox" id="hide-archived">Hide archived</label>
+          <label class="tg" id="tg-private"><input type="checkbox" id="hide-private">Hide private</label>
+        </div>
+      </div>
+      <div class="row">
+        <button type="button" class="btn small" id="sel-all">Select all</button>
+        <button type="button" class="btn small" id="sel-visible">Select visible</button>
+        <button type="button" class="btn small" id="sel-none">Select none</button>
+        <div class="spacer"></div>
+        <p class="count" id="count" role="status" aria-live="polite"></p>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <caption class="sr">Repositories found for this account. Tick the ones to add to the config.</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="pick"><span class="sr">Selected</span>
+                <button type="button" class="th" id="sort-sel" title="Sort by selection"><span aria-hidden="true">&#10003;</span></button>
+              </th>
+              <th scope="col"><button type="button" class="th" id="sort-name">Repository <span class="arrow" id="arrow-name" aria-hidden="true"></span></button></th>
+              <th scope="col" class="desc"><span class="th">Description</span></th>
+              <th scope="col"><span class="th"><span class="sr">Flags</span></span></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <p class="empty" id="empty" hidden>Nothing matches that filter.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. releases, preview, write -->
+  <section class="card" id="write-card" hidden aria-labelledby="h-write">
+    <div class="card-head"><span class="step" aria-hidden="true">3</span><h2 id="h-write">Write the config</h2></div>
+    <div class="card-body">
+      <fieldset>
+        <legend>Where releases come from</legend>
+        <div class="radios">
+          <label class="radio">
+            <input type="radio" name="releases" value="provider" checked>
+            <span><b>Provider releases</b><small>Imported over the API: titles, notes, dates and download assets.</small></span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="releases" value="tags">
+            <span><b>Annotated git tags</b><small>Built from the mirror. No API calls, works fully offline.</small></span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <span class="lbl" id="preview-label">Exactly what gets written</span>
+        <pre class="preview" id="preview" tabindex="0" aria-labelledby="preview-label">  "repos": [
+  ],</pre>
+        <p class="dest" id="dest"></p>
+      </div>
+
+      <div class="alert" id="write-error" role="alert" hidden></div>
+
+      <div class="row">
+        <button type="button" class="btn primary" id="write">Write to config</button>
+        <div class="spacer"></div>
+        <span class="status" id="write-status" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. everything else in the config (0.2.0) -->
+  <section class="card" id="settings-card" hidden aria-labelledby="h-settings">
+    <div class="card-head">
+      <span class="step" aria-hidden="true">4</span><h2 id="h-settings">Settings</h2>
+      <span class="note" id="settings-note"></span>
+    </div>
+    <div class="card-body">
+      <div class="alert" id="settings-unreadable" role="alert" hidden></div>
+      <div id="settings-groups"></div>
+
+      <div class="setgroup">
+        <span class="lbl">Organizations</span>
+        <div class="listrows" id="org-rows" style="margin-top:9px"></div>
+        <div class="addrow" style="margin-top:10px">
+          <div class="field"><label for="org-slug">Slug</label><input id="org-slug" type="text" spellcheck="false" autocapitalize="off" placeholder="e.g. canadian-coding"></div>
+          <div class="field"><label for="org-name">Name</label><input id="org-name" type="text" placeholder="e.g. Canadian Coding"></div>
+          <div class="field"><label for="org-desc">Description (optional)</label><input id="org-desc" type="text" placeholder="one line"></div>
+          <div class="field"><label for="org-repos">Repo slugs (optional)</label><input id="org-repos" type="text" spellcheck="false" autocapitalize="off" placeholder="comma-separated"></div>
+          <button type="button" class="btn" id="org-add">Add organization</button>
+        </div>
+      </div>
+
+      <div class="setgroup">
+        <span class="lbl">Contributors</span>
+        <p class="hint" style="margin-top:6px">Put a real name and picture on the people git only knows as an email address. Listing several addresses merges them into one person.</p>
+        <div class="listrows" id="contrib-rows" style="margin-top:9px"></div>
+        <div class="addrow" style="margin-top:10px">
+          <div class="field"><label for="contrib-name">Name</label><input id="contrib-name" type="text" placeholder="e.g. Kieran Wood"></div>
+          <div class="field"><label for="contrib-emails">Git emails</label><input id="contrib-emails" type="text" spellcheck="false" autocapitalize="off" placeholder="comma-separated"></div>
+          <div class="field"><label for="contrib-desc">Description (optional)</label><input id="contrib-desc" type="text" placeholder="one line"></div>
+          <div class="field"><label for="contrib-url">Link (optional)</label><input id="contrib-url" type="text" spellcheck="false" autocapitalize="off" placeholder="https://…"></div>
+          <button type="button" class="btn" id="contrib-add">Add contributor</button>
+        </div>
+      </div>
+
+      <div class="setgroup">
+        <span class="lbl">Hosted sites</span>
+        <p class="hint" style="margin-top:6px">Serve a repo's branch as a real site at <code>/&lt;slug&gt;/</code> — e.g. a <code>gh-pages</code> branch.</p>
+        <div class="listrows" id="hosting-rows" style="margin-top:9px"></div>
+        <div class="addrow" style="margin-top:10px">
+          <div class="field"><label for="hosting-repo">Repo slug</label><input id="hosting-repo" type="text" spellcheck="false" autocapitalize="off" placeholder="e.g. my-site"></div>
+          <div class="field"><label for="hosting-slug">Path slug (optional)</label><input id="hosting-slug" type="text" spellcheck="false" autocapitalize="off" placeholder="defaults to repo slug"></div>
+          <div class="field"><label for="hosting-branch">Branch (optional)</label><input id="hosting-branch" type="text" spellcheck="false" autocapitalize="off" placeholder="gh-pages / main / master"></div>
+          <button type="button" class="btn" id="hosting-add">Add hosted site</button>
+        </div>
+      </div>
+
+      <div class="setgroup">
+        <span class="lbl">Sources</span>
+        <p class="hint" style="margin-top:6px">Repositories currently in the config. Add more with the picker above.</p>
+        <div class="listrows" id="source-rows" style="margin-top:9px"></div>
+      </div>
+
+      <div class="alert" id="settings-error" role="alert" hidden></div>
+      <div class="row">
+        <button type="button" class="btn primary" id="settings-save">Save settings</button>
+        <div class="spacer"></div>
+        <span class="status" id="settings-status" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. the profile page (0.2.0) -->
+  <section class="card" id="profile-card" hidden aria-labelledby="h-profile">
+    <div class="card-head">
+      <span class="step" aria-hidden="true">5</span><h2 id="h-profile">Profile</h2>
+      <span class="note" id="profile-note"></span>
+    </div>
+    <div class="card-body">
+      <div class="field" id="profile-fm-field" hidden>
+        <span class="lbl" id="profile-fm-label">Frontmatter (kept as-is)</span>
+        <pre class="fmblock" id="profile-fm" tabindex="0" aria-labelledby="profile-fm-label"></pre>
+      </div>
+      <div class="field">
+        <label for="profile-body">Profile markdown</label>
+        <textarea id="profile-body" class="mdbody" spellcheck="true"></textarea>
+      </div>
+      <div class="field" id="profile-prev-field" hidden>
+        <span class="lbl" id="profile-prev-label">Preview</span>
+        <div class="mdprev" id="profile-prev" aria-labelledby="profile-prev-label"></div>
+      </div>
+      <div class="alert" id="profile-error" role="alert" hidden></div>
+      <div class="row">
+        <button type="button" class="btn primary" id="profile-save">Save profile</button>
+        <button type="button" class="btn" id="profile-preview">Preview</button>
+        <div class="spacer"></div>
+        <span class="status" id="profile-status" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- session controls: the wizard stays up for any number of writes until one of these -->
+  <section class="card" id="session-card">
+    <div class="card-body">
+      <div class="row">
+        <button type="button" class="btn primary" id="done">Done — stop the wizard</button>
+        <button type="button" class="btn" id="cancel">Cancel</button>
+        <div class="spacer"></div>
+        <span class="hint" id="session-note">Each edited file gets one timestamped <code>.bak</code> of its pre-wizard state.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- terminal state: the server has exited by the time this is visible -->
+  <section class="card" id="done-card" hidden aria-labelledby="h-done">
+    <div class="done-body">
+      <h2 id="h-done"><span class="tick" aria-hidden="true">&#9670;</span> <span id="done-title">Done</span></h2>
+      <p id="done-text" class="hint"></p>
+      <ul id="done-list"></ul>
+      <p class="hint">The local server has stopped. You can close this tab.</p>
+    </div>
+  </section>
+
+  <footer>frznforge &middot; the provider token stays in this machine's environment and is never sent to this page.</footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var TOKEN = new URLSearchParams(location.search).get('s') || '';
+
+  /* ---------------------------------------------------------------- transport */
+
+  /**
+   * Every call carries the session token. `path` is always same-origin — the CSP the server
+   * sends makes anything else impossible anyway.
+   */
+  function api(path, body) {
+    var init = { method: body === undefined ? 'GET' : 'POST', headers: {} };
+    if (body !== undefined) {
+      init.headers['content-type'] = 'application/json';
+      init.body = JSON.stringify(body);
+    }
+    return fetch(path + '?s=' + encodeURIComponent(TOKEN), init).then(function (res) {
+      return res.text().then(function (text) {
+        var data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+        if (!res.ok) throw new Error((data && data.error) || (text || ('HTTP ' + res.status)));
+        return data;
+      });
+    });
+  }
+
+  /* ---------------------------------------------------------------- state */
+
+  var S = {
+    ctx: null,
+    provider: 'github',
+    repos: [],
+    // Which of fork/archived/private the loaded listing can actually report on.
+    flags: { fork: true, archived: true, private: true },
+    selected: Object.create(null),
+    loadedFor: null,
+    releases: 'provider',
+    sort: { key: 'name', dir: 1 },
+    hostShown: false,
+    finished: false,
+    // 0.2.0 whole-config editing
+    cfg: null,
+    base: {},
+    built: false,
+    profile: null
+  };
+
+  function info() { return S.ctx ? S.ctx.providers[S.provider] : null; }
+
+  /* ---------------------------------------------------------------- step 1 */
+
+  function buildProviders() {
+    var box = $('providers');
+    box.textContent = '';
+    S.ctx.order.forEach(function (name) {
+      var p = S.ctx.providers[name];
+      var wrap = document.createElement('label');
+      wrap.className = 'seg';
+      var input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'provider';
+      input.value = name;
+      input.checked = name === S.provider;
+      input.addEventListener('change', function () { S.provider = name; applyProvider(); });
+      var span = document.createElement('span');
+      span.textContent = p.label;
+      wrap.appendChild(input);
+      wrap.appendChild(span);
+      box.appendChild(wrap);
+    });
+  }
+
+  /** Host is only asked for when the provider has no sensible default (gitea/forgejo). */
+  function applyProvider() {
+    var p = info();
+    $('host').value = p.defaultHost || p.hostSuggestion;
+    $('host').placeholder = p.hostSuggestion;
+    // Say the token rule where the host is typed: a host other than the one named on the
+    // command line is listed anonymously, and the user should know that before they wonder
+    // where their private repositories went.
+    $('host-hint').textContent = p.hostRequired
+      ? 'The instance root, e.g. ' + p.hostSuggestion + '. A token is only sent to the --host you started init with.'
+      : 'API base URL. Change it only for self-hosted ' + p.label + ' — a custom host is listed without your token.';
+    $('account').placeholder = p.accountLabel === 'user or group path' ? 'e.g. gitlab-org/charts' : 'e.g. Descent098';
+    $('account-hint').textContent = p.accountLabel.charAt(0).toUpperCase() + p.accountLabel.slice(1) + '.';
+    S.hostShown = p.hostRequired;
+    $('host-toggle').hidden = p.hostRequired;
+    $('host-toggle').textContent = 'Custom API host';
+    renderHostField();
+    renderToken();
+    resetListing();
+  }
+
+  function renderHostField() {
+    $('host-field').hidden = !S.hostShown;
+    $('host-field').parentNode.classList.toggle('solo', !S.hostShown);
+  }
+
+  function renderToken() {
+    var t = info().token;
+    var el = $('tokentext');
+    el.textContent = '';
+    if (t.from) {
+      el.appendChild(document.createTextNode('using '));
+      var code = document.createElement('code');
+      code.textContent = '$' + t.from;
+      el.appendChild(code);
+      el.appendChild(document.createTextNode(' — read by the local process only; it never reaches this page.'));
+    } else {
+      el.appendChild(document.createTextNode('none set (checked '));
+      t.names.forEach(function (n, i) {
+        if (i) el.appendChild(document.createTextNode(', '));
+        var code = document.createElement('code');
+        code.textContent = '$' + n;
+        el.appendChild(code);
+      });
+      el.appendChild(document.createTextNode(') — public repositories only.'));
+    }
+  }
+
+  function resetListing() {
+    S.repos = [];
+    S.selected = Object.create(null);
+    S.loadedFor = null;
+    $('repo-card').hidden = true;
+    $('write-card').hidden = true;
+  }
+
+  function currentHost() {
+    var p = info();
+    var raw = (S.hostShown ? $('host').value : (p.defaultHost || $('host').value)) || '';
+    return raw.trim().replace(/\/+$/, '');
+  }
+
+  function load() {
+    var account = $('account').value.trim();
+    var host = currentHost();
+    $('load-error').hidden = true;
+    if (!account) {
+      fail('load-error', 'Enter an account', 'Which ' + info().accountLabel + ' should be listed?');
+      $('account').focus();
+      return;
+    }
+    if (!host) {
+      fail('load-error', 'Enter a host', info().label + ' needs the instance URL.');
+      $('host').focus();
+      return;
+    }
+    busy('load-status', 'Listing repositories…');
+    $('load').disabled = true;
+    api('/api/repos', { provider: S.provider, host: host, account: account })
+      .then(function (data) {
+        S.repos = data.repos;
+        S.loadedFor = { provider: S.provider, host: host, account: account };
+        S.flags = data.flags || { fork: true, archived: true, private: true };
+        applyFlagAvailability();
+        // Forks and archived repos are rarely what a showcase wants, so they start unticked —
+        // but only when the listing actually said which ones they are.
+        S.selected = Object.create(null);
+        S.repos.forEach(function (r) { if (!r.fork && !r.archived) S.selected[r.fullName] = true; });
+        idle('load-status', data.repos.length + ' repositor' + (data.repos.length === 1 ? 'y' : 'ies') + ' found.');
+        $('repo-note').textContent = data.account + ' on ' + data.hostLabel;
+        (data.warnings || []).forEach(function (w) { fail('load-error', 'Heads up', w); });
+        $('repo-card').hidden = false;
+        $('write-card').hidden = false;
+        render();
+        $('filter').focus();
+      })
+      .catch(function (err) {
+        idle('load-status', '');
+        fail('load-error', 'Could not list repositories', err.message);
+        resetListing();
+      })
+      .then(function () { $('load').disabled = false; });
+  }
+
+  /* ---------------------------------------------------------------- step 2 */
+
+  /**
+   * A quick filter the listing cannot answer for is turned off and disabled rather than left
+   * looking functional. GitLab's project listings never say which projects are forks, and only
+   * say `archived` for groups, so "Hide forks" there would tick and do nothing at all.
+   */
+  function applyFlagAvailability() {
+    [['fork', 'hide-forks', 'tg-fork', 'forks'],
+     ['archived', 'hide-archived', 'tg-archived', 'archived repositories'],
+     ['private', 'hide-private', 'tg-private', 'private repositories']].forEach(function (row) {
+      var known = S.flags[row[0]] !== false;
+      var box = $(row[1]);
+      box.disabled = !known;
+      if (!known) box.checked = false;
+      $(row[2]).classList.toggle('off', !known);
+      $(row[2]).title = known ? '' : 'This provider’s repository listing does not say which are ' + row[3] + '.';
+    });
+  }
+
+  function visibleRepos() {
+    var q = $('filter').value.trim().toLowerCase();
+    var list = S.repos.filter(function (r) {
+      if ($('hide-forks').checked && r.fork) return false;
+      if ($('hide-archived').checked && r.archived) return false;
+      if ($('hide-private').checked && r.private) return false;
+      if (!q) return true;
+      return r.fullName.toLowerCase().indexOf(q) !== -1
+        || (r.description || '').toLowerCase().indexOf(q) !== -1;
+    });
+    var dir = S.sort.dir;
+    if (S.sort.key === 'sel') {
+      list.sort(function (a, b) {
+        var d = (S.selected[b.fullName] ? 1 : 0) - (S.selected[a.fullName] ? 1 : 0);
+        return (d !== 0 ? d : a.fullName.localeCompare(b.fullName)) * dir;
+      });
+    } else {
+      list.sort(function (a, b) { return a.fullName.localeCompare(b.fullName) * dir; });
+    }
+    return list;
+  }
+
+  function selectedNames() {
+    return S.repos.filter(function (r) { return S.selected[r.fullName]; }).map(function (r) { return r.fullName; });
+  }
+
+  function render() {
+    var list = visibleRepos();
+    var body = $('rows');
+    body.textContent = '';
+    list.forEach(function (r) {
+      var tr = document.createElement('tr');
+      if (S.selected[r.fullName]) tr.className = 'on';
+
+      var pick = document.createElement('td');
+      pick.className = 'pick';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!S.selected[r.fullName];
+      cb.id = 'cb-' + r.fullName.replace(/[^\w.-]/g, '_');
+      cb.addEventListener('change', function () {
+        if (cb.checked) S.selected[r.fullName] = true; else delete S.selected[r.fullName];
+        tr.className = cb.checked ? 'on' : '';
+        afterSelectionChange();
+      });
+      pick.appendChild(cb);
+
+      var name = document.createElement('td');
+      name.className = 'name';
+      var label = document.createElement('label');
+      label.setAttribute('for', cb.id);
+      var owner = r.fullName.slice(0, r.fullName.length - r.name.length);
+      if (owner) {
+        var o = document.createElement('span');
+        o.className = 'owner';
+        o.textContent = owner;
+        label.appendChild(o);
+      }
+      label.appendChild(document.createTextNode(r.name));
+      name.appendChild(label);
+
+      var desc = document.createElement('td');
+      desc.className = 'desc';
+      desc.textContent = r.description || '';
+
+      var tags = document.createElement('td');
+      tags.className = 'tags';
+      [['private', r.private], ['archived', r.archived], ['fork', r.fork]].forEach(function (pair) {
+        if (!pair[1]) return;
+        var s = document.createElement('span');
+        s.className = 'tag ' + pair[0];
+        s.textContent = pair[0];
+        tags.appendChild(s);
+      });
+
+      tr.appendChild(pick);
+      tr.appendChild(name);
+      tr.appendChild(desc);
+      tr.appendChild(tags);
+      body.appendChild(tr);
+    });
+
+    $('empty').hidden = list.length !== 0;
+    $('arrow-name').textContent = S.sort.key === 'name' ? (S.sort.dir === 1 ? '▲' : '▼') : '';
+    $('sort-name').parentNode.setAttribute('aria-sort', S.sort.key === 'name' ? (S.sort.dir === 1 ? 'ascending' : 'descending') : 'none');
+    updateCount(list.length);
+  }
+
+  function updateCount(shown) {
+    var n = selectedNames().length;
+    var c = $('count');
+    c.textContent = '';
+    var b = document.createElement('b');
+    b.textContent = String(n);
+    c.appendChild(b);
+    c.appendChild(document.createTextNode(' of ' + S.repos.length + ' selected'
+      + (shown !== S.repos.length ? ' · ' + shown + ' shown' : '')));
+  }
+
+  function afterSelectionChange() {
+    updateCount(visibleRepos().length);
+    schedulePreview();
+  }
+
+  function setAll(which) {
+    if (which === 'none') S.selected = Object.create(null);
+    else if (which === 'all') S.repos.forEach(function (r) { S.selected[r.fullName] = true; });
+    else visibleRepos().forEach(function (r) { S.selected[r.fullName] = true; });
+    render();
+    schedulePreview();
+  }
+
+  function toggleSort(key) {
+    if (S.sort.key === key) S.sort.dir = -S.sort.dir;
+    else { S.sort.key = key; S.sort.dir = 1; }
+    render();
+  }
+
+  /* ---------------------------------------------------------------- step 3 */
+
+  var previewTimer = null;
+  function schedulePreview() {
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = setTimeout(refreshPreview, 180);
+  }
+
+  function refreshPreview() {
+    if (!S.loadedFor) return;
+    var names = selectedNames();
+    if (names.length === 0) {
+      $('preview').textContent = '  "repos": [\n  ],';
+      $('dest').textContent = 'Nothing selected yet.';
+      $('write').disabled = true;
+      return;
+    }
+    api('/api/preview', {
+      provider: S.loadedFor.provider, host: S.loadedFor.host, account: S.loadedFor.account,
+      releases: S.releases, select: names
+    }).then(function (data) {
+      $('preview').textContent = data.snippet;
+      $('write').disabled = !S.ctx.configPath || !data.changed;
+      var dest = $('dest');
+      dest.textContent = '';
+      if (!S.ctx.configPath) {
+        dest.textContent = 'No frznforge.config.jsonc was found — copy the snippet above into your config by hand.';
+        return;
+      }
+      dest.appendChild(document.createTextNode(data.changed
+        ? 'Adds ' + data.added + ' entr' + (data.added === 1 ? 'y' : 'ies') + ' to '
+        : 'Every selected repository is already in '));
+      var code = document.createElement('code');
+      code.textContent = S.ctx.configPath;
+      dest.appendChild(code);
+      if (data.changed && data.skipped) {
+        dest.appendChild(document.createTextNode(' · ' + data.skipped + ' already present, skipped'));
+      }
+      dest.appendChild(document.createTextNode(data.changed
+        ? ' · a timestamped .bak copy is written first'
+        : ' · nothing to write, use Cancel to close the wizard'));
+    }).catch(function (err) {
+      $('preview').textContent = '';
+      fail('write-error', 'Preview failed', err.message);
+    });
+  }
+
+  function write() {
+    if (!S.loadedFor) return;
+    $('write-error').hidden = true;
+    $('write').disabled = true;
+    busy('write-status', 'Writing…');
+    api('/api/write', {
+      provider: S.loadedFor.provider, host: S.loadedFor.host, account: S.loadedFor.account,
+      releases: S.releases, select: selectedNames()
+    }).then(function (data) {
+      // The session keeps going (0.2.0): report inline, refresh what the file now says.
+      idle('write-status', data.changed
+        ? 'Written — ' + data.added + ' entr' + (data.added === 1 ? 'y' : 'ies') + ' added'
+          + (data.skipped ? ', ' + data.skipped + ' skipped' : '') + '.'
+        : 'Everything selected was already in the config.');
+      schedulePreview();
+      loadConfig(true); // keep any half-typed Settings edits
+    }).catch(function (err) {
+      idle('write-status', '');
+      fail('write-error', 'Nothing was written', err.message);
+    }).then(function () { $('write').disabled = false; });
+  }
+
+  function cancel() {
+    $('done').disabled = true;
+    $('cancel').disabled = true;
+    api('/api/cancel', {}).catch(function () { return null; /* the server may close before answering */ })
+      .then(function (data) {
+        S.finished = true;
+        var n = data && data.writes ? data.writes : 0;
+        finish('Stopped', n
+          ? n + ' change' + (n === 1 ? ' was' : 's were') + ' written before stopping.'
+          : 'No file was touched.', ['Run frznforge init --web again when you are ready.']);
+      });
+  }
+
+  /** `lines` is a list of strings, or [label, value] pairs whose value is shown as code. */
+  function finish(title, text, lines) {
+    $('done-title').textContent = title;
+    $('done-text').textContent = text;
+    var ul = $('done-list');
+    ul.textContent = '';
+    lines.filter(Boolean).forEach(function (line) {
+      var li = document.createElement('li');
+      if (typeof line === 'string') {
+        li.textContent = line;
+      } else {
+        li.appendChild(document.createTextNode(line[0] + ' '));
+        var code = document.createElement('code');
+        code.textContent = line[1];
+        li.appendChild(code);
+      }
+      ul.appendChild(li);
+    });
+    ['repo-card', 'write-card', 'settings-card', 'profile-card', 'session-card'].forEach(function (id) { $(id).hidden = true; });
+    document.querySelector('.card').setAttribute('aria-disabled', 'true');
+    document.querySelectorAll('.card input, .card button').forEach(function (el) { el.disabled = true; });
+    $('done-card').hidden = false;
+    $('done-card').scrollIntoView({ block: 'nearest' });
+  }
+
+  /* ---------------------------------------------------------------- step 4: settings (0.2.0) */
+
+  /**
+   * Every field the wizard can edit, by config path. The server holds the real allow-list;
+   * this table only decides what to render. `unset: true` = an empty input clears the field,
+   * `numnull` = an empty input writes `null` (the schema's "no limit").
+   */
+  var GROUPS = [
+    { title: 'Site', fields: [
+      { path: 'site.title', label: 'Title', kind: 'text' },
+      { path: 'site.url', label: 'URL', kind: 'text', unset: true, hint: 'Public URL of the deployed site. Empty = unset.' },
+      { path: 'site.description', label: 'Description', kind: 'text', unset: true },
+      { path: 'site.base', label: 'Base path', kind: 'text', unset: true, hint: 'Serve from a sub-path, e.g. /mysite. Empty = root deploy.' }
+    ] },
+    { title: 'Owner', fields: [
+      { path: 'owner.name', label: 'Name', kind: 'text' },
+      { path: 'owner.handle', label: 'Handle', kind: 'text' },
+      { path: 'owner.profile', label: 'Profile file', kind: 'text', hint: 'Markdown file path, relative to the config.' },
+      { path: 'owner.avatar', label: 'Profile picture', kind: 'text', unset: true, upload: { kind: 'owner' },
+        hint: 'A file inside public/, e.g. images/owner.png. Empty = show initials.' }
+    ] },
+    { title: 'Theme', fields: [
+      { path: 'theme.palette', label: 'Palette', kind: 'palette' },
+      { path: 'theme.heat.hot', label: 'Hot < days', kind: 'num' },
+      { path: 'theme.heat.warm', label: 'Warm < days', kind: 'num' },
+      { path: 'theme.heat.neutral', label: 'Neutral < days', kind: 'num' },
+      { path: 'theme.heat.cool', label: 'Cool < days', kind: 'num', hint: 'Recency accent boundaries; must be strictly ascending.' }
+    ] },
+    { title: 'Content', fields: [
+      { path: 'markdown.mermaid', label: 'Render mermaid diagrams', kind: 'check' },
+      { path: 'listing.pageSize', label: 'Repos per page', kind: 'num' },
+      { path: 'notes.dir', label: 'Notes folder', kind: 'text' },
+      { path: 'notes.useMtime', label: 'Notes: date from file mtime when frontmatter has none', kind: 'check' },
+      { path: 'notes.maxFileBytes', label: 'Notes size cap (bytes)', kind: 'num', unset: true, hint: 'Empty = use the ingest blob cap.' },
+      { path: 'content.orgs', label: 'Org pages folder', kind: 'text' },
+      { path: 'hosting.maxFileBytes', label: 'Hosted file cap (bytes)', kind: 'num' }
+    ] },
+    { title: 'Ingest', collapsed: true, fields: [
+      { path: 'ingest.outDir', label: 'Output folder', kind: 'text' },
+      { path: 'ingest.cacheDir', label: 'Cache folder', kind: 'text' },
+      { path: 'ingest.fetch', label: 'Network policy', kind: 'select', options: ['auto', 'never', 'always'] },
+      { path: 'ingest.maxBlobBytes', label: 'Blob cap (bytes)', kind: 'num' },
+      { path: 'ingest.maxCommits', label: 'Max commits per repo', kind: 'numnull', hint: 'Empty = unlimited.' },
+      { path: 'ingest.maxCommitAgeDays', label: 'Max commit age (days)', kind: 'numnull', hint: 'Empty = unlimited.' },
+      { path: 'ingest.concurrency', label: 'Concurrency', kind: 'num' },
+      { path: 'ingest.tagTrees', label: 'Browsable tags', kind: 'num' },
+      { path: 'ingest.branchTrees', label: 'Browsable branches', kind: 'branchtrees', hint: "A number, or 'all'." },
+      { path: 'ingest.archives', label: 'Produce zip archives', kind: 'check' },
+      { path: 'ingest.failOnDegraded', label: 'Fail the build if any repo fell back to cached metadata', kind: 'check' },
+      { path: 'ingest.reuse.enabled', label: 'Reuse recent ingest work', kind: 'check' },
+      { path: 'ingest.reuse.maxAgeMinutes', label: 'Reuse window (minutes)', kind: 'num' },
+      { path: 'ingest.reuse.cooldownSeconds', label: 'Re-fetch cooldown (seconds)', kind: 'numnull', unset: true,
+        hint: 'Skip a repo fetched successfully this recently. Empty = no cooldown.' },
+      { path: 'ingest.reuse.skipUnchanged', label: "Skip the fetch when ls-remote shows nothing changed", kind: 'check' },
+      { path: 'ingest.insights.enabled', label: 'Per-repo insights', kind: 'check' },
+      { path: 'ingest.insights.samples', label: 'Insights samples', kind: 'num' },
+      { path: 'ingest.insights.maxBytesPerSample', label: 'Insights byte budget per sample', kind: 'num' }
+    ] }
+  ];
+
+  function getPath(obj, dotted) {
+    var parts = dotted.split('.');
+    var v = obj;
+    for (var i = 0; i < parts.length; i++) {
+      if (v === null || typeof v !== 'object') return undefined;
+      v = v[parts[i]];
+    }
+    return v;
+  }
+
+  function fieldId(pathText) { return 'set-' + pathText.replace(/\./g, '-'); }
+
+  /** The value a field shows on load: the parsed config when readable, schema defaults otherwise. */
+  function shownValue(pathText) {
+    if (!S.cfg) return undefined;
+    return getPath(S.cfg.current || S.cfg.defaults, pathText);
+  }
+
+  function buildSettings() {
+    var box = $('settings-groups');
+    box.textContent = '';
+    S.base = {};
+    GROUPS.forEach(function (group) {
+      var wrap, body;
+      if (group.collapsed) {
+        wrap = document.createElement('details');
+        wrap.className = 'setgroup';
+        var summary = document.createElement('summary');
+        summary.textContent = group.title;
+        wrap.appendChild(summary);
+      } else {
+        wrap = document.createElement('div');
+        wrap.className = 'setgroup';
+        var lbl = document.createElement('span');
+        lbl.className = 'lbl';
+        lbl.textContent = group.title;
+        wrap.appendChild(lbl);
+      }
+      var grid = document.createElement('div');
+      grid.className = 'grid2';
+      var checks = document.createElement('div');
+      checks.className = 'checks';
+      group.fields.forEach(function (f) {
+        var v = shownValue(f.path);
+        if (f.kind === 'check') {
+          S.base[f.path] = !!v;
+          var tg = document.createElement('label');
+          tg.className = 'tg';
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.id = fieldId(f.path);
+          cb.checked = !!v;
+          tg.appendChild(cb);
+          tg.appendChild(document.createTextNode(f.label));
+          checks.appendChild(tg);
+          return;
+        }
+        var field = document.createElement('div');
+        field.className = 'field';
+        var label = document.createElement('label');
+        label.setAttribute('for', fieldId(f.path));
+        label.textContent = f.label;
+        field.appendChild(label);
+        var input;
+        if (f.kind === 'select' || f.kind === 'palette') {
+          input = document.createElement('select');
+          var options = f.kind === 'palette' ? (S.cfg.palettes || []) : f.options;
+          options.forEach(function (o) {
+            var opt = document.createElement('option');
+            opt.value = o;
+            opt.textContent = o;
+            input.appendChild(opt);
+          });
+          input.value = v === undefined || v === null ? '' : String(v);
+          S.base[f.path] = input.value;
+        } else {
+          input = document.createElement('input');
+          input.type = 'text';
+          input.spellcheck = false;
+          input.value = v === undefined || v === null ? '' : String(v);
+          S.base[f.path] = input.value;
+        }
+        input.id = fieldId(f.path);
+        field.appendChild(input);
+        // A field backed by an image gets a file picker beside it. The upload writes the
+        // file and answers with the path it chose; the field is then filled in and saved
+        // through the ordinary settings save, so there is still one write path for config.
+        if (f.upload) field.appendChild(uploadControl(f, input));
+        if (f.hint) {
+          var hint = document.createElement('p');
+          hint.className = 'hint';
+          hint.textContent = f.hint;
+          field.appendChild(hint);
+        }
+        grid.appendChild(field);
+      });
+      if (grid.children.length) wrap.appendChild(grid);
+      if (checks.children.length) wrap.appendChild(checks);
+      box.appendChild(wrap);
+    });
+  }
+
+  /**
+   * "Choose a picture…" beside an image-backed field.
+   *
+   * The browser reads the file and posts the bytes; it never sends a path, and the server
+   * picks the filename from the target plus the type it sniffs. On success the text input is
+   * filled with the returned `public/`-relative path — the user still presses Save, so an
+   * upload never silently rewrites their config.
+   */
+  function uploadControl(f, input) {
+    var wrap = document.createElement('div');
+    wrap.className = 'uploadrow';
+    var picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/*';
+    picker.id = fieldId(f.path) + '-file';
+    var status = document.createElement('span');
+    status.className = 'hint';
+    picker.addEventListener('change', function () {
+      var file = picker.files && picker.files[0];
+      if (!file) return;
+      status.textContent = 'Uploading…';
+      var reader = new FileReader();
+      reader.onerror = function () { status.textContent = 'Could not read that file.'; };
+      reader.onload = function () {
+        api('/api/upload', { target: f.upload, data: String(reader.result) })
+          .then(function (data) {
+            input.value = data.path;
+            status.textContent = 'Uploaded — press Save settings to use it.';
+          })
+          .catch(function (err) { status.textContent = err.message; });
+      };
+      reader.readAsDataURL(file);
+    });
+    wrap.appendChild(picker);
+    wrap.appendChild(status);
+    return wrap;
+  }
+
+  /** Diff the inputs against what they showed on load; only changed fields become operations. */
+  function collectSettingsOps() {
+    var ops = [];
+    var problems = [];
+    GROUPS.forEach(function (group) {
+      group.fields.forEach(function (f) {
+        var el = $(fieldId(f.path));
+        if (!el) return;
+        if (f.kind === 'check') {
+          if (el.checked !== S.base[f.path]) ops.push({ op: 'set', path: f.path, value: el.checked });
+          return;
+        }
+        var text = el.value.trim();
+        if (text === S.base[f.path]) return;
+        if (text === '') {
+          if (f.unset) ops.push({ op: 'unset', path: f.path });
+          else if (f.kind === 'numnull') ops.push({ op: 'set', path: f.path, value: null });
+          else problems.push(f.label + ' cannot be empty.');
+          return;
+        }
+        if (f.kind === 'num' || f.kind === 'numnull' || (f.kind === 'branchtrees' && text !== 'all')) {
+          var n = Number(text);
+          if (!isFinite(n)) { problems.push(f.label + ' must be a number.'); return; }
+          ops.push({ op: 'set', path: f.path, value: n });
+          return;
+        }
+        ops.push({ op: 'set', path: f.path, value: text });
+      });
+    });
+    return { ops: ops, problems: problems };
+  }
+
+  function saveSettings() {
+    $('settings-error').hidden = true;
+    var collected = collectSettingsOps();
+    if (collected.problems.length) {
+      fail('settings-error', 'Not saved', collected.problems.join(' '));
+      return;
+    }
+    if (collected.ops.length === 0) {
+      idle('settings-status', 'Nothing changed.');
+      return;
+    }
+    postOps(collected.ops, 'Saved.', 'settings-status', 'settings-error');
+  }
+
+  /**
+   * POST operations, then reload the config so every card shows what the file now says.
+   * `opts.preserve` keeps the Settings inputs' in-progress edits across the reload (list
+   * add/remove must not wipe a half-typed field); `opts.onSuccess` runs only when the write
+   * actually landed (so inputs are cleared on success, not on a rejected add).
+   */
+  function postOps(ops, okText, statusId, errorId, opts) {
+    opts = opts || {};
+    $(errorId).hidden = true;
+    busy(statusId, 'Saving…');
+    $('settings-save').disabled = true;
+    api('/api/config/write', { operations: ops })
+      .then(function (data) {
+        idle(statusId, data.changed ? okText : 'Already up to date.');
+        if (data.changed && opts.onSuccess) opts.onSuccess();
+        return loadConfig(opts.preserve);
+      })
+      .catch(function (err) {
+        idle(statusId, '');
+        fail(errorId, 'Not saved', err.message);
+      })
+      .then(function () { $('settings-save').disabled = !(S.cfg && S.cfg.readable); });
+  }
+
+  /**
+   * An "Edit" disclosure on a list row: one input per editable field, saved with `setAt`
+   * operations so only the fields the user actually changed are written.
+   *
+   * `fields` is [{ key, label, upload? }]; `expect` is the identity the server re-checks
+   * against the element at `index`, so a page working from a stale list cannot edit the
+   * wrong entry. Identity fields (an org's slug) are deliberately not editable — repos point
+   * at them, and renaming one in place would orphan its members.
+   */
+  function editRow(row, arrayPath, index, entry, fields, expect, uploadTarget) {
+    var box = document.createElement('details');
+    box.className = 'editrow';
+    var summary = document.createElement('summary');
+    summary.textContent = 'Edit';
+    box.appendChild(summary);
+    var inputs = {};
+    fields.forEach(function (f) {
+      var field = document.createElement('div');
+      field.className = 'field';
+      var label = document.createElement('label');
+      var id = 'edit-' + arrayPath.replace(/\./g, '-') + '-' + index + '-' + f.key;
+      label.setAttribute('for', id);
+      label.textContent = f.label;
+      field.appendChild(label);
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.id = id;
+      input.spellcheck = false;
+      input.value = entry[f.key] === undefined || entry[f.key] === null ? '' : String(entry[f.key]);
+      field.appendChild(input);
+      inputs[f.key] = { el: input, was: input.value };
+      if (f.upload && uploadTarget) {
+        field.appendChild(uploadControl({ path: id, upload: uploadTarget }, input));
+      }
+      box.appendChild(field);
+    });
+    var save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'btn small';
+    save.textContent = 'Save changes';
+    save.addEventListener('click', function () {
+      var ops = [];
+      Object.keys(inputs).forEach(function (key) {
+        var got = inputs[key].el.value.trim();
+        if (got === inputs[key].was) return;
+        ops.push({ op: 'setAt', path: arrayPath, index: index, key: key, value: got, expect: expect });
+      });
+      if (!ops.length) { idle('settings-status', 'Nothing changed.'); return; }
+      postOps(ops, 'Saved.', 'settings-status', 'settings-error', { preserve: true });
+    });
+    box.appendChild(save);
+    row.appendChild(box);
+    return row;
+  }
+
+  function listRow(text, small, onRemove) {
+    var row = document.createElement('div');
+    row.className = 'listrow';
+    var what = document.createElement('span');
+    what.className = 'what';
+    var code = document.createElement('code');
+    code.textContent = text;
+    what.appendChild(code);
+    if (small) {
+      var s = document.createElement('small');
+      s.textContent = ' ' + small;
+      what.appendChild(s);
+    }
+    row.appendChild(what);
+    if (onRemove) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn small';
+      btn.textContent = 'Remove';
+      btn.addEventListener('click', onRemove);
+      row.appendChild(btn);
+    }
+    return row;
+  }
+
+  function renderList(boxId, items, emptyText, rowFor) {
+    var box = $(boxId);
+    box.textContent = '';
+    if (!items.length) {
+      var empty = document.createElement('p');
+      empty.className = 'listempty';
+      empty.textContent = emptyText;
+      box.appendChild(empty);
+      return;
+    }
+    items.forEach(function (item, i) { box.appendChild(rowFor(item, i)); });
+  }
+
+  /**
+   * Remove is by POSITION (`removeAt` with the row's index), never by field match: two entries
+   * can be indistinguishable by fields when one's are a subset of the other's, and a match would
+   * delete both. `expect` is the row's identifying fields, which the server double-checks against
+   * whatever actually sits at that index. `preserve` keeps any half-typed Settings input.
+   */
+  function removeAt(path, index, expect) {
+    postOps([{ op: 'removeAt', path: path, index: index, expect: expect }],
+      'Removed.', 'settings-status', 'settings-error', { preserve: true });
+  }
+
+  function renderOrgs() {
+    var orgs = (S.cfg.current && S.cfg.current.organizations) || [];
+    renderList('org-rows', orgs, 'No organizations yet.', function (org, i) {
+      var row = listRow(org.slug, org.name, function () {
+        removeAt('organizations', i, { slug: org.slug, name: org.name });
+      });
+      return editRow(
+        row, 'organizations', i, org,
+        [{ key: 'name', label: 'Name' }, { key: 'description', label: 'Description' },
+         { key: 'avatar', label: 'Picture (a file in public/)', upload: true }],
+        { slug: org.slug },
+        { kind: 'org', slug: org.slug },
+      );
+    });
+  }
+
+  function renderContributors() {
+    var people = (S.cfg.current && S.cfg.current.contributors) || [];
+    renderList('contrib-rows', people, 'No contributors configured — git-derived ones still show.', function (person, i) {
+      var emails = (person.emails || []).join(', ');
+      var row = listRow(person.name, emails, function () {
+        removeAt('contributors', i, { name: person.name });
+      });
+      return editRow(
+        row, 'contributors', i, person,
+        [{ key: 'name', label: 'Name' }, { key: 'description', label: 'Description' },
+         { key: 'url', label: 'Link' }, { key: 'avatar', label: 'Picture (a file in public/)', upload: true }],
+        { name: person.name },
+        { kind: 'contributor', index: i },
+      );
+    });
+  }
+
+  function addContributor() {
+    var name = $('contrib-name').value.trim();
+    var emails = $('contrib-emails').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!name || !emails.length) {
+      fail('settings-error', 'Not added', 'A contributor needs a name and at least one git email.');
+      return;
+    }
+    var item = { name: name, emails: emails };
+    var desc = $('contrib-desc').value.trim();
+    if (desc) item.description = desc;
+    var url = $('contrib-url').value.trim();
+    if (url) item.url = url;
+    postOps([{ op: 'add', path: 'contributors', item: item }], 'Added.', 'settings-status', 'settings-error', {
+      preserve: true,
+      onSuccess: function () {
+        ['contrib-name', 'contrib-emails', 'contrib-desc', 'contrib-url'].forEach(function (id) { $(id).value = ''; });
+      }
+    });
+  }
+
+  function renderHosting() {
+    var sites = (S.cfg.current && S.cfg.current.hosting && S.cfg.current.hosting.sites) || [];
+    renderList('hosting-rows', sites, 'No hosted sites yet.', function (site, i) {
+      var label = site.repo + ' → /' + (site.slug || site.repo) + '/';
+      var expect = { repo: site.repo };
+      if (site.slug) expect.slug = site.slug;
+      if (site.branch) expect.branch = site.branch;
+      var row = listRow(label, site.branch ? 'branch ' + site.branch : 'branch auto', function () {
+        removeAt('hosting.sites', i, expect);
+      });
+      return editRow(row, 'hosting.sites', i, site,
+        [{ key: 'slug', label: 'Served at /…/' }, { key: 'branch', label: 'Branch (empty = auto)' }], expect);
+    });
+  }
+
+  function renderSources() {
+    // Each entry's string fields, in array order (the same order the file wrote them, so a
+    // positional remove lines up). `expect` lets the server confirm the element at that index.
+    var sources = S.cfg.sources || [];
+    renderList('source-rows', sources, 'No repositories yet — use the picker above.', function (entry, i) {
+      var name = entry.path || entry.project || ((entry.owner || '?') + '/' + (entry.repo || '?'));
+      var row = listRow(entry.type + ': ' + name, entry.host || '', function () {
+        removeAt('repos', i, entry);
+      });
+      return editRow(row, 'repos', i, entry,
+        [{ key: 'slug', label: 'Slug' }, { key: 'org', label: 'Organization slug' },
+         { key: 'releases', label: "Releases ('provider' or 'tags')" }], entry);
+    });
+  }
+
+  function addOrg() {
+    var slug = $('org-slug').value.trim();
+    var name = $('org-name').value.trim();
+    if (!slug || !name) {
+      fail('settings-error', 'Not added', 'An organization needs both a slug and a name.');
+      return;
+    }
+    var item = { slug: slug, name: name };
+    var desc = $('org-desc').value.trim();
+    if (desc) item.description = desc;
+    var repos = $('org-repos').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (repos.length) item.repos = repos;
+    postOps([{ op: 'add', path: 'organizations', item: item }], 'Added.', 'settings-status', 'settings-error', {
+      preserve: true,
+      onSuccess: function () { ['org-slug', 'org-name', 'org-desc', 'org-repos'].forEach(function (id) { $(id).value = ''; }); }
+    });
+  }
+
+  function addHosting() {
+    var repo = $('hosting-repo').value.trim();
+    if (!repo) {
+      fail('settings-error', 'Not added', 'A hosted site needs the repo slug.');
+      return;
+    }
+    var item = { repo: repo };
+    var slug = $('hosting-slug').value.trim();
+    var branch = $('hosting-branch').value.trim();
+    if (slug) item.slug = slug;
+    if (branch) item.branch = branch;
+    postOps([{ op: 'add', path: 'hosting.sites', item: item }], 'Added.', 'settings-status', 'settings-error', {
+      preserve: true,
+      onSuccess: function () { ['hosting-repo', 'hosting-slug', 'hosting-branch'].forEach(function (id) { $(id).value = ''; }); }
+    });
+  }
+
+  /**
+   * Reload the config so the lists reflect the file. `preserve` keeps the Settings scalar inputs
+   * as the user left them (a list add/remove must not silently discard a half-typed field); a
+   * full save passes it falsy so the inputs reset to the freshly-saved baseline.
+   */
+  function loadConfig(preserve) {
+    return api('/api/config').then(function (cfg) {
+      S.cfg = cfg;
+      if (!cfg.configPath) return;
+      $('settings-card').hidden = false;
+      $('settings-note').textContent = cfg.configName || '';
+      $('settings-unreadable').hidden = cfg.readable;
+      if (!cfg.readable) {
+        fail('settings-unreadable', 'The config file does not load cleanly',
+          (cfg.issues || []).join('; ') + ' — the values below are the defaults, and saving is disabled until the file is fixed by hand.');
+      }
+      ['settings-save', 'org-add', 'contrib-add', 'hosting-add'].forEach(function (id) { $(id).disabled = !cfg.readable; });
+      // Rebuild the scalar inputs only when not preserving in-progress edits (and always on the
+      // first load, when there are none to keep).
+      if (!preserve || !S.built) { buildSettings(); S.built = true; }
+      renderOrgs();
+      renderContributors();
+      renderHosting();
+      renderSources();
+    }).catch(function (err) {
+      fail('settings-error', 'Could not load the config', err.message);
+    });
+  }
+
+  /* ---------------------------------------------------------------- step 5: profile (0.2.0) */
+
+  function loadProfile() {
+    return api('/api/profile').then(function (p) {
+      S.profile = p;
+      if (!p.available) return;
+      $('profile-card').hidden = false;
+      $('profile-note').textContent = p.path;
+      if (p.frontmatter) {
+        $('profile-fm').textContent = p.frontmatter;
+        $('profile-fm-field').hidden = false;
+      }
+      $('profile-body').value = p.body;
+      // What the server last confirmed, so Done can tell an edited body from an untouched one.
+      S.profileSaved = p.body;
+      if (!p.exists) idle('profile-status', 'New file — created on first save.');
+    }).catch(function () { /* no profile card, then */ });
+  }
+
+  function previewProfile() {
+    $('profile-error').hidden = true;
+    busy('profile-status', 'Rendering…');
+    api('/api/profile/preview', { body: $('profile-body').value })
+      .then(function (data) {
+        // Server-rendered from the owner's own markdown — the same trusted render the built
+        // site gives this exact file.
+        $('profile-prev').innerHTML = data.html;
+        $('profile-prev-field').hidden = false;
+        idle('profile-status', '');
+      })
+      .catch(function (err) {
+        idle('profile-status', '');
+        fail('profile-error', 'Preview failed', err.message);
+      });
+  }
+
+  function saveProfile() {
+    $('profile-error').hidden = true;
+    busy('profile-status', 'Saving…');
+    $('profile-save').disabled = true;
+    api('/api/profile/write', { body: $('profile-body').value })
+      .then(function (data) {
+        idle('profile-status', data.changed ? 'Saved.' : 'Already saved.');
+        S.profileSaved = $('profile-body').value;
+        if (S.profile) S.profile.exists = true;
+      })
+      .catch(function (err) {
+        idle('profile-status', '');
+        fail('profile-error', 'Not saved', err.message);
+      })
+      .then(function () { $('profile-save').disabled = false; });
+  }
+
+  /* ---------------------------------------------------------------- ending the session */
+
+  /**
+   * Is there an edit the user made but never saved?
+   *
+   * Settings are diffed against what they showed on load (the same diff `saveSettings`
+   * uses); the profile body is compared with the last text the server confirmed.
+   */
+  function pendingWork() {
+    var settings = { ops: [], problems: [] };
+    if (S.cfg && S.cfg.readable) settings = collectSettingsOps();
+    var profileEl = $('profile-body');
+    var profileDirty = !!(S.profile && profileEl && profileEl.value !== S.profileSaved);
+    return { settings: settings, profileDirty: profileDirty };
+  }
+
+  /**
+   * Save everything outstanding, then end the session.
+   *
+   * Before 0.3.0 this button only stopped the wizard: an edited field or a rewritten profile
+   * body that had never been saved was silently discarded. Now the pending saves run first,
+   * in sequence, and a rejected value ABORTS the shutdown — leaving the user in the page with
+   * the error, rather than exiting having thrown their edit away. Cancel is still the way out
+   * without saving.
+   */
+  function doneClick() {
+    var pending = pendingWork();
+    if (pending.settings.problems.length) {
+      fail('settings-error', 'Not saved', pending.settings.problems.join(' ') + ' Fix it, or press Cancel to discard.');
+      return;
+    }
+    $('done').disabled = true;
+    $('cancel').disabled = true;
+
+    var saved = 0;
+    var chain = Promise.resolve();
+    if (pending.settings.ops.length) {
+      chain = chain.then(function () {
+        busy('settings-status', 'Saving…');
+        return api('/api/config/write', { operations: pending.settings.ops }).then(function () {
+          idle('settings-status', 'Saved.');
+          saved += 1;
+        });
+      });
+    }
+    if (pending.profileDirty) {
+      chain = chain.then(function () {
+        busy('profile-status', 'Saving…');
+        return api('/api/profile/write', { body: $('profile-body').value }).then(function () {
+          idle('profile-status', 'Saved.');
+          S.profileSaved = $('profile-body').value;
+          saved += 1;
+        });
+      });
+    }
+
+    chain
+      .then(function () { return finishSession(); })
+      .catch(function (err) {
+        // Something the user typed was refused. Keep the session alive so they can fix it.
+        idle('settings-status', '');
+        idle('profile-status', '');
+        fail('settings-error', 'Not finished', 'Your changes were not all saved: ' + err.message +
+          ' Nothing was closed — fix it and press Done again, or press Cancel to discard.');
+        $('done').disabled = false;
+        $('cancel').disabled = false;
+      });
+  }
+
+  function finishSession() {
+    return api('/api/done', {}).catch(function () { return null; }).then(function (data) {
+      S.finished = true;
+      var n = data && data.writes ? data.writes : 0;
+      finish('Done', n
+        ? 'The wizard wrote ' + n + ' change' + (n === 1 ? '' : 's') + ' this session.'
+        : 'Nothing was changed.',
+        n ? [['Next', 'frznforge build']] : ['Run frznforge init --web again when you are ready.']);
+    });
+  }
+
+  /* ---------------------------------------------------------------- small helpers */
+
+  function busy(id, text) { var e = $(id); e.className = 'status busy'; e.textContent = text; }
+  function idle(id, text) { var e = $(id); e.className = 'status'; e.textContent = text; }
+  function fail(id, title, detail) {
+    var e = $(id);
+    e.textContent = '';
+    var s = document.createElement('strong');
+    s.textContent = title;
+    e.appendChild(s);
+    e.appendChild(document.createTextNode(detail || ''));
+    e.hidden = false;
+  }
+
+  /* ---------------------------------------------------------------- wiring */
+
+  $('load').addEventListener('click', load);
+  $('account').addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+  $('host').addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+  $('host-toggle').addEventListener('click', function () {
+    S.hostShown = !S.hostShown;
+    renderHostField();
+    $('host-toggle').textContent = S.hostShown ? 'Use the default host' : 'Custom API host';
+    if (S.hostShown) $('host').focus();
+  });
+  $('filter').addEventListener('input', render);
+  ['hide-forks', 'hide-archived', 'hide-private'].forEach(function (id) {
+    $(id).addEventListener('change', render);
+  });
+  $('sel-all').addEventListener('click', function () { setAll('all'); });
+  $('sel-visible').addEventListener('click', function () { setAll('visible'); });
+  $('sel-none').addEventListener('click', function () { setAll('none'); });
+  $('sort-name').addEventListener('click', function () { toggleSort('name'); });
+  $('sort-sel').addEventListener('click', function () { toggleSort('sel'); });
+  document.querySelectorAll('input[name="releases"]').forEach(function (el) {
+    el.addEventListener('change', function () { S.releases = el.value; schedulePreview(); });
+  });
+  $('write').addEventListener('click', write);
+  $('cancel').addEventListener('click', cancel);
+  $('done').addEventListener('click', doneClick);
+  $('settings-save').addEventListener('click', saveSettings);
+  $('org-add').addEventListener('click', addOrg);
+  $('contrib-add').addEventListener('click', addContributor);
+  $('hosting-add').addEventListener('click', addHosting);
+  $('profile-preview').addEventListener('click', previewProfile);
+  $('profile-save').addEventListener('click', saveProfile);
+
+  /* ---------------------------------------------------------------- boot */
+
+  api('/api/context').then(function (ctx) {
+    S.ctx = ctx;
+    S.provider = ctx.defaults.provider || ctx.order[0];
+    S.releases = ctx.defaults.releases || 'provider';
+    buildProviders();
+    applyProvider();
+    if (ctx.defaults.host) { S.hostShown = true; renderHostField(); $('host').value = ctx.defaults.host; }
+    if (ctx.defaults.account) $('account').value = ctx.defaults.account;
+    document.querySelectorAll('input[name="releases"]').forEach(function (el) { el.checked = el.value === S.releases; });
+    if (ctx.configName) $('cfgname').textContent = ctx.configName;
+    loadConfig();
+    loadProfile();
+    $('account').focus();
+    if (ctx.defaults.account) load();
+  }).catch(function (err) {
+    fail('load-error', 'Could not reach the local wizard', err.message
+      + ' — open the exact URL printed in the terminal (it carries a one-time session key).');
+  });
+})();
+</script>
+</body>
+</html>

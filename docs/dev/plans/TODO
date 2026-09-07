@@ -13,19 +13,20 @@ Additional things to keep in mind:
 ## Features & fixes
 
 - [x] Swap over all svelte components to regular web components (0.4.0 Phase 2 — `web/js/*.js`, no build step; framework runtime and bundled mermaid both gone from `dist/_astro/`)
-- [ ] Replace Astro with a golang system that just builds and exports a bundle fully custom, fully static bundle
+- [x] Replace Astro with a golang system that just builds and exports a bundle fully custom, fully static bundle (0.4.0 Phases 3-9 — one Go binary; `src/`, `scripts/` and Astro deleted at Phase 9, Checkpoint D passed)
   - [x] Keep dependencies to a minimum (2 direct: goldmark + chroma, 1 transitive)
     - [x] Don't bother doing steps like minification either (0.4.0 — `public/` and `web/` are copied byte for byte: no minify, no bundle, no content hash)
-    - [ ] Ideally the UI should be no-build throughout the entire process until after the final bundle is generated if the user wants to, via some sort of post-processing step
+    - [x] Ideally the UI should be no-build throughout the entire process until after the final bundle is generated if the user wants to, via some sort of post-processing step (0.4.0 Phase 8 — a `postprocess` block, `--postprocess <cmd>` or `FRZNFORGE_POSTPROCESS`; nothing runs by default, and frznforge itself still never minifies, bundles or hashes)
   - [x] Move the ingest to a more concurrency-friendly approach where as the system is ingesting information it can build the pages for that repo, while fetching data for other repos (0.4.0 Phase 7 — landed as parallel rendering at BOTH levels, repos and pages; the fetch/render overlap was measured as worth a few seconds against a 204 s render, the core-level parallelism as worth half of it. Self-site 3.66 s → 1.84 s vs astro's 8.74 s)
-  - [ ] Re-use as much of what's already here as you can, but be willing to pull things out or change the architecture if it makes sense
+  - [x] Re-use as much of what's already here as you can, but be willing to pull things out or change the architecture if it makes sense (0.4.0 — schema v8 unchanged so `data/` keeps working, `web/` and the e2e suite carried over untouched, the Astro/Svelte/Shiki/marked layers replaced. Architecture that DID change, deliberately: the config is JSONC not TypeScript, rendering is parallel at both levels, and the highlight memo was dropped because chroma made it unnecessary)
 
 
 ## For human
 
 This section is for me to keep track of what I need to manually review, feel free to add to this
 
-- [ ] 
+- [ ] Decide whether the two JSONC splice engines get folded into one. `cmd/frznforge/entries.go` and `internal/wizard/{entries,edit}.go` implement the same thing twice (~1,600 lines). Of 20 shared functions 11 are byte-identical and 8 differ only cosmetically, but the twentieth had diverged into a data-loss bug (the wizard deleted the scaffolded config's commented-out examples). Fixed and tested on both sides; the fork itself is left for you to rule on — 0.4.0 or 0.4.1.
+- [ ] Walk the release checklist, including the item the last two releases both tripped on: the release commit is actually **pushed**. Nothing in 0.4.0 has been committed yet.
 
 ## Per change
 

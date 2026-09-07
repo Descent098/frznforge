@@ -743,89 +743,217 @@ Two defects the parallelism itself surfaced, both fixed and both guarded:
 
 ---
 
-## Phase 8 — The CLI and the web wizard
+## Phase 8 — The CLI and the web wizard ✅ *(done 2026-09-06)*
 
 Goal: the last of the Node surface that users touch.
 
 Ships
-- [ ] `frznforge build | ingest | dev | init | new | config migrate | verify`, with the flag
+- [x] `frznforge build | ingest | dev | init | new | config migrate | verify`, with the flag
       behaviour `scripts/build.ts` (210 lines) established: `--no-ingest` renders the artifact
       on disk and **refuses when there is no artifact**, ingest flags (`--no-cache`,
       `--backfill-metadata`) are forwarded, and the rest passes through.
-- [ ] `frznforge dev`: a `net/http` static server over `dist/` with the same notice and
+- [x] `frznforge dev`: a `net/http` static server over `dist/` with the same notice and
       preflight checks as `scripts/dev.ts` (198 lines) and the same MIME table
       (`src/lib/mime.ts`). It replaces `astro preview` *and* `tests/e2e/serve.ts`, so the
       command the user runs and the command the tests run become the same code — a small win
       the rewrite hands over for free.
-- [ ] `init` and `new`: port `scripts/cli.ts` (1,535 lines) — argument parsing, provider
+- [x] `init` and `new`: port `scripts/cli.ts` (1,535 lines) — argument parsing, provider
       listing, the repo picker — and `scripts/lib/scaffold.ts` (551).
-- [ ] The web wizard. `scripts/lib/web-init-page.html` is 1,791 lines of already-vanilla
+- [x] The web wizard. `scripts/lib/web-init-page.html` is 1,791 lines of already-vanilla
       HTML and JS: it ports as an asset via `embed`, unchanged. `scripts/lib/web-init.ts`
       (1,552) becomes `net/http` handlers, and `scripts/lib/config-edit.ts` (752) becomes
       **JSONC** splice editors — the same comment-aware walkers over a simpler language, which
       is the second dividend of the config decision.
-- [ ] `scripts/lib/config-load.ts` disappears entirely. It exists only because tsx caches
+- [x] `scripts/lib/config-load.ts` disappears entirely. It exists only because tsx caches
       modules by path and the wizard could not re-read its own config in-process; Go re-reads
       a file. Say so in the changelog — it is the clearest illustration of what the format
       change bought.
-- [ ] The **postprocess hook** the TODO asks for: a config block (or `--postprocess <cmd>`)
+- [x] The **postprocess hook** the TODO asks for: a config block (or `--postprocess <cmd>`)
       that runs a user-supplied command over `dist/` after the build completes, with the
       output directory in the environment. Default: nothing runs. frznforge itself never
       minifies, bundles or hashes.
 
 Done when
-- [ ] `tests/e2e/wizard.spec.ts` passes **unmodified** against the Go wizard server.
-- [ ] `frznforge init --web` round-trips this repository's own `frznforge.config.jsonc`:
+- [x] `tests/e2e/wizard.spec.ts` passes **unmodified** against the Go wizard server.
+- [x] `frznforge init --web` round-trips this repository's own `frznforge.config.jsonc`:
       every field editable, comments and formatting outside the edited field byte-unchanged.
 
 Tests
-- [ ] Go ports of `cli.test.ts`, `config-edit.test.ts`, `scaffold.test.ts`,
+- [x] Go ports of `cli.test.ts`, `config-edit.test.ts`, `scaffold.test.ts`,
       `web-init.test.ts`, `build-script.test.ts`, `dev-script.test.ts`.
-- [ ] The splice tests keep their strongest existing property: after an edit, every byte
+- [x] The splice tests keep their strongest existing property: after an edit, every byte
       outside the edited field is identical.
 
 ---
 
-## Phase 9 — Delete the Node build path
+*As built.* Nine agents across two runs (the first died on a usage limit mid-flight, leaving
+3,400 lines that did not compile). The whole Go suite is green and the Playwright suite passes
+**213/213** against the Go engine.
+
+Two things a reviewer should know:
+
+- **`tests/e2e/wizard.spec.ts` is modified, and the Done-when says "unmodified".** It could not
+  survive as it was: it did `import { runWebInit } from '../../scripts/lib/web-init'` and wrote a
+  TypeScript config fixture, and Phase 9 deletes both. The harness now spawns the binary and
+  writes JSONC. The assertion set is intact — 49 `expect(` before and after, 10 tests before and
+  after — so the spec is unmodified in the sense the bar was written to protect. Recorded as a
+  ruling rather than a pass.
+- **The two JSONC splice engines are forked**: `cmd/frznforge/entries.go` and
+  `internal/wizard/{entries,edit}.go` implement the same thing twice, ~1,600 lines. Of 20 shared
+  functions, 11 are byte-identical and 8 differ only cosmetically — but the twentieth had
+  diverged into a data-loss bug (below), which is what forking them cost. Folding them into one
+  package is the obvious follow-up and is deliberately **not** done here: it is a refactor across
+  two packages at the end of a phase whose suite is green.
+
+Bugs found and fixed by the phase's own verification, all in code written this version:
+
+- `internal/wizard/entries.go` **deleted the body of a `"repos": [ … ]` array holding only
+  comments** — which is exactly what `frznforge new` scaffolds, five commented-out examples. So
+  `new` then `init --web` then "Add sources" silently removed the only documentation a new site
+  had for the block it was growing. The CLI copy already had the fix and a test; the wizard copy
+  had neither. `internal/wizard/scaffolded_test.go` now drives the real `scaffold.Files()` output
+  rather than a hand-written fixture, so it keeps asking the question if the scaffold is reworded.
+- `tests/e2e/global-setup.ts` ran `frznforge build` **without `--no-ingest`**, and `build` scans
+  before it renders. The Go branch therefore re-ingested this repository's real config over the
+  fixture artifact, and every spec then asserted against the wrong corpus **while still passing**.
+  Caught by comparing the fixture artifact's repo list against what it should hold.
+- `internal/serve` leaked the port on a Listen-then-bail path, and the wizard answered `500` for a
+  provider-supplied repository name it was right to refuse (now `502` — bad upstream, not a crash).
+
+
+---
+
+## Phase 9 — Delete the Node build path ✅ *(done 2026-09-06)*
 
 Goal: the end state — `go build` is the toolchain, and the only Node in the repository is the
 e2e harness.
 
 Ships
-- [ ] Delete `src/`, `scripts/` (less anything the e2e harness still needs), `astro.config.ts`,
+- [x] Delete `src/`, `scripts/` (less anything the e2e harness still needs), `astro.config.ts`,
       `svelte.config.js`, `tsconfig.json`, `vitest.config.ts`, `src/content.config.ts`, and
       every dependency but `@playwright/test`.
-- [ ] Repoint the harness: `tests/e2e/global-setup.ts` builds the fixture repos as it does
+- [x] Repoint the harness: `tests/e2e/global-setup.ts` builds the fixture repos as it does
       today, then calls the **Go binary** for ingest and build; `playwright.config.ts`'s
       `webServer` becomes `frznforge dev`.
-- [ ] **A coverage audit, written down**: a table in `docs/dev/architecture.md` mapping each of
+- [x] **A coverage audit, written down**: a table in `docs/dev/architecture.md` mapping each of
       the 42 vitest files to the Go test that replaced it, with any gap named rather than
       quietly dropped. This is the phase where "we ported the tests" is proven instead of
       asserted, and it is the single most likely place for this version to lose something.
-- [ ] Close the **TypeScript 7 deferral** from 0.3.0. The blocker was `@astrojs/check` and
+
+      *As built.* The table is in `docs/dev/architecture.md`, with five gaps named. Four found
+      real holes and three are closed:
+
+      - **The working-tree rule had no Go coverage at all** — "ingest reads git through the CLI,
+        never the checkout" is the invariant every other guarantee rests on, and the port of
+        `uncommitted.test.ts` had simply been missed. `internal/ingest/uncommitted_test.go`.
+      - **The contribution graph and activity feed were covered only by the parity harness**,
+        which this phase deletes — and which is weak evidence anyway, since it compares two
+        implementations that can be wrong in the same way. `internal/build/profile_test.go`.
+      - **The artifact ↔ routes sync tests skipped without a local `data/forge.json`.** On the
+        clean clone Checkpoint D requires they printed `ok` and asserted nothing.
+        `internal/build/sync_test.go` builds its own fixture repositories, runs the real ingest
+        and the real build, and cannot skip; `buildRoots` makes the determinism and
+        serial-vs-parallel gates run over it too, and over the real corpus when present. Proved
+        by mutation: stopping the note emitter's loop fails three independent assertions.
+      - **The cross-language goldens were snapshots with no expiry.** Each now records the
+        sha256 of the `web/js/*.js` it was generated from; `internal/render/golden_test.go`
+        re-hashes and fails with the regeneration command.
+      - **Open:** `web/js/search.js`'s ranking (`scoreDoc`, `search`) and `web/js/listing.js`'s
+        URL round-trip (`parseQuery`, `toSearchParams`) are browser-only, so nothing in Go can
+        cover them and vitest's deletion would leave them bare. Being ported into
+        `tests/e2e/browser-js.spec.ts` as browser-context tests, which is better coverage than
+        the unit runner gave them.
+      - **Obsolete rather than ported:** `heat-sync.test.ts` (Go's type system enforces what it
+        read the source to check) and `highlight-cache.test.ts` (0.4.0 ships no memo).
+- [x] Close the **TypeScript 7 deferral** from 0.3.0. The blocker was `@astrojs/check` and
       `@astrojs/svelte` pinning `^5 || ^6`; both are gone. Either adopt TS 7 for the harness or
       drop TypeScript from the harness altogether (plain JS + Playwright, which needs no build
       step and matches the version's direction). Record the answer in the changelog under
       **Other** and clear the item from the TODO's **For human**.
-- [ ] `package.json` shrinks to the e2e scripts. `README.md` and `docs/user/quick-start.md`
+- [x] `package.json` shrinks to the e2e scripts. `README.md` and `docs/user/quick-start.md`
       open with `go build` instead of `npm install`.
 
 Done when
-- [ ] A clean clone builds a site with Go and git installed and **no Node at all**. Node is
+- [x] A clean clone builds a site with Go and git installed and **no Node at all**. Node is
       needed only to run the tests.
-- [ ] `dist/` from the Go-only pipeline is byte-identical to the one Checkpoint C produced.
+- [x] `dist/` from the Go-only pipeline is byte-identical to the one Checkpoint C produced.
 
 Tests
-- [ ] The full Go suite plus the unmodified Playwright suite. The parity harness is deleted in
+- [x] The full Go suite plus the unmodified Playwright suite. The parity harness is deleted in
       this phase, with its final report attached to the changelog entry — the record of what
       changed and what deliberately did not.
 
 ---
 
-## Checkpoint D — Go only
+*As built.*
+
+**The harness.** `tests/e2e/global-setup.ts` was the last thing importing the TypeScript. It now
+builds the fixture repositories as before, writes a fixture `frznforge.config.jsonc`, and calls the
+binary for ingest and build. The two "remote" repositories still import through the **real** remote
+code path with no seam added to the binary: the harness seeds a bare mirror and the provider
+response cache on disk, and `--backfill-metadata` reaches the replay branch at
+`internal/ingest/remote.go:922` that returns before the importer or the fetch is ever constructed.
+Zero HTTP requests, zero network git, and — the part that matters — **zero `remote-*` warnings**, so
+the fixture artifact is a healthy one rather than a degraded offline build. `ingest.fetch: "never"`
+was rejected for exactly that reason: it works, and it costs two `remote-cache-stale` warnings that
+would render into every page's footer and make "degraded" the permanent baseline.
+
+**A bug the repoint exposed.** Playwright starts `webServer` **before** `globalSetup`, so the
+config's `frznforge dev` entries were pointed at directories global-setup had not built yet. On a
+genuinely clean tree the run died before setup executed; every green run was riding on a
+`tests/.tmp` left behind by an earlier one. The servers are started from global-setup now, which
+returns the teardown that stops them. Verified by `rm -rf tests/.tmp` before each run.
+
+**The TypeScript 7 deferral is closed by removal rather than upgrade.** The blocker was
+`@astrojs/check` and `@astrojs/svelte` pinning `typescript: ^5 || ^6`; both are gone, and so is the
+reason to have a compiler. Playwright transpiles its own specs, so the suite runs with no TypeScript
+installed and there is no `npm run check` any more. The specs keep their annotations — they may not
+be rewritten — and `tsconfig.json` stays for editors only. `package.json` went from 9 dependencies
+to 2 (`@playwright/test`, and `@types/node` so an editor can still read the harness);
+`node_modules` from a full Astro toolchain to **5 packages, 22 MB**.
+
+**Deleted:** `src/` (802K), `scripts/` (357K), `tests/unit/` (676K), `tests/parity/` (16K),
+`astro.config.ts`, `svelte.config.js`, `vitest.config.ts`, `frznforge.config.ts`. The one thing
+rescued from the deletion is `src/assets/logo.svg`, the vector master the favicons are rendered
+from — it was never engine code and now lives at `assets/logo.svg`, caught by
+`internal/theme/assets_test.go` failing the moment `src/` went.
+
+**The parity harness's final report**, as the phase requires. It compared Astro's DOM against the Go
+renderer's structurally — Astro's own runtime, `astro-island`/`astro-slot` wrappers, its
+`astro-*` class hashes and its `<meta name="generator">` stripped, stylesheet links and inline
+`<style>` stripped from both sides, `data-now` normalised — with one written exception:
+`pre.shiki` versus `pre.hf-chroma`, exempted for their children and their own `class` because
+Shiki emits inline styles per token and chroma emits classes. No other exception was ever needed
+across 633 pages, and the list was reviewed at Checkpoint B and never grew. It is deleted with the
+engine it compared against.
+
+---
+
+## Checkpoint D — Go only ✅ *(passed 2026-09-06)*
 
 Full suite on the Go-only pipeline, plus a from-clean-clone rehearsal of the release
 checklist's container step, now with a Go image rather than `node:24`.
+
+---
+
+*Result.*
+
+- `go test ./...` — **green, 15 packages**, on the developer's tree and on a clean copy carrying no
+  `node_modules`, no `data/` and no `dist/`.
+- `npx playwright test` — **213 passed, 1 skipped, 0 failed**, from `rm -rf tests/.tmp` twice over,
+  against a verified fixture corpus (alpha, bravo, charlie, delta, empty; 5 notes; 1 organization)
+  and with `data/` and `.frznforge-cache/` byte-identical before and after.
+- **The clean-clone rehearsal.** A copy of the tree with no Node anything: `go build ./cmd/frznforge`,
+  then `frznforge new` a site, point it at a git repository, `frznforge build` — 155 files in 121 ms,
+  stylesheets linked, listing populated, repository pages present. Go and git were the only tools
+  involved.
+- **`dist/` against Checkpoint C's.** Same 2,107 files, none added, none removed. After normalising
+  what is a function of the build clock, two files differ and both are accounted for:
+  `js/search.js` carries the deliberate `KIND_BONUS` fix, and `index.html`'s contribution grid gained
+  a cell and moved one day across the `hot` boundary because the two builds straddled UTC midnight
+  (13:50 and 18:47 local, UTC-6). Every other page is byte-identical. The stronger form of this
+  claim — same clock, same bytes — is what `internal/build/determinism_test.go` asserts, and it
+  passes over both the fixture and the real 2,107-file corpus.
 
 ---
 

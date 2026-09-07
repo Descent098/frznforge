@@ -3,11 +3,11 @@
 Ten minutes from nothing to a running site: one git repository on your disk, one imported
 from GitHub, a profile page and a note.
 
-You need **Node ≥ 22.12** and **git** on your `PATH`. Nothing else — no database, no server,
-no account anywhere.
+You need **Go ≥ 1.24** and **git** on your `PATH`. Nothing else — no Node, no database, no
+server, no account anywhere.
 
 ```bash
-node --version   # v24.6.0
+go version       # go version go1.24.0
 git --version    # git version 2.50.1
 ```
 
@@ -21,20 +21,23 @@ commit your own config on top.
 ```bash
 git clone https://github.com/Descent098/frznforge my-forge
 cd my-forge
-npm install
+go build ./cmd/frznforge
 ```
+
+That produces one binary in the directory. Put it on your `PATH` if you like; this guide calls
+it as `./frznforge`.
 
 The clone arrives configured as *this project's own* demo site. This guide edits those files
 in place, which is the fastest way to see something work. When you are ready to keep your
 content out of the engine's git history — or you just want clean starting files rather than
-someone else's — `npm run frznforge -- new <dir>` scaffolds them, and
+someone else's — `frznforge new <dir>` scaffolds them, and
 [starting-a-site.md](./starting-a-site.md) explains the layouts that work.
 
 The files you will touch:
 
 | File | What it is |
 |---|---|
-| `frznforge.config.ts` | Which repositories to publish, your name, the palette, ingest limits |
+| `frznforge.config.jsonc` | Which repositories to publish, your name, the palette, ingest limits |
 | `content/profile.md` | Your profile page — frontmatter for links, markdown body for prose |
 | `content/notes/` | Gist-style notes (optional) |
 | `content/orgs/` | Organization pages (optional) |
@@ -48,7 +51,7 @@ notes** under `content/notes/` and **one organization page**, `content/orgs/cana
 Neither is yours, and the org page in particular will make *every* build print
 
 ```
-[frznforge] content/orgs/canadian-coding.md does not match any organization in frznforge.config.ts — ignored.
+[frznforge] content/orgs/canadian-coding.md does not match any organization in frznforge.config.jsonc — ignored.
 ```
 
 the moment you replace the `repos`/`organizations` config in step 2. Clear both now — the rest
@@ -104,7 +107,7 @@ is a release), an MIT `LICENSE`, and 100% JavaScript.
 
 ### Configure it
 
-Open `frznforge.config.ts` and replace the `repos` array. Two kinds of entry exist: a
+Open `frznforge.config.jsonc` and replace the `repos` array. Two kinds of entry exist: a
 **local** path, and a repository **imported** from a forge.
 
 ```ts
@@ -131,18 +134,18 @@ The slug (the URL segment) defaults to the directory or repository name, so thos
 database, never against your working tree — uncommitted, staged, stashed and untracked files
 never reach the site. Bare repositories work fine.
 
-> Don't want to hand-write the imported entries? `npm run frznforge -- init` walks a whole
+> Don't want to hand-write the imported entries? `./frznforge init` walks a whole
 > account and writes them for you — see [importing.md](./importing.md).
 
 ---
 
 ## 3. Ingest
 
-`npm run ingest` turns git into one JSON artifact plus a blob store under `data/`
+`./frznforge ingest` turns git into one JSON artifact plus a blob store under `data/`
 (git-ignored, regenerated on every build).
 
 ```
-$ npm run ingest
+$ ./frznforge ingest
 
 frznforge ingest → C:\…\my-forge\data
   1 remote source(s) — cache C:\…\my-forge\.frznforge-cache (fetch: auto)
@@ -169,7 +172,7 @@ done: 2 repo(s), 493 blob(s), 14 archive(s), 0 warning(s) in 16443ms
 Re-run it straight away and it will not even fetch: `ingest.reuse` skips the network for a
 source fetched successfully in the last two minutes, and skips the whole scan for a repo whose
 refs have not moved, so the line reads `(github: reused)` and the run finishes in a fraction of
-the time. `npm run ingest -- --no-cache` forces the long way round.
+the time. `./frznforge ingest -- --no-cache` forces the long way round.
 
 **Ingest never fails a build because of a repository.** An empty repo, a missing path, a forge
 that is down — each of those is a warning, printed as `⚠ [code] repo: message` and counted in
@@ -184,18 +187,18 @@ Ingest produced the *data*; the site itself is rendered by the build. Do that on
 serve it:
 
 ```
-$ npm run build      # = ingest, then astro build
-$ npm run dev
+$ ./frznforge build      # = ingest, then render
+$ ./frznforge dev
 
-frznforge dev — serving dist/ from the most recent `npm run build`.
+frznforge dev — serving dist/ from the most recent `./frznforge build`.
 
-  Nothing is rebuilt here. This is `astro preview` over the static files already in
+  Nothing is rebuilt here. This serves the static files already in
   dist/, rendered from data/forge.json as it stood at that build. Editing a page,
-  a component, a style, content/ or frznforge.config.ts changes nothing you see until
+  a component, a style, content/ or frznforge.config.jsonc changes nothing you see until
   you build again — file changes are not watched.
 
-    npm run build       refresh everything (ingest → data/forge.json → astro build → dist/)
-    npm run astro dev   the raw Astro dev server, if you want HMR on components and
+    ./frznforge build       refresh everything (ingest → data/forge.json → render → dist/)
+    ./frznforge build --no-ingest   re-render without touching git or the network,
                         styles — it reads the artifact once at startup and never again,
                         so re-ingested repos will 404 there until you restart it.
 
@@ -204,13 +207,13 @@ Preview server running at http://localhost:4321
 
 Open <http://localhost:4321/>.
 
-`npm run dev` is a local viewer, not a live-reloading dev server: **the loop is edit → `npm
+`./frznforge dev` is a local viewer, not a live-reloading dev server: **the loop is edit → `npm
 run build` → refresh the browser.** That is the honest shape of a static forge — the pages are
 rendered from an artifact, and re-rendering them is what `build` does. Run it before you have
 ever built and it says so and stops, rather than failing on a missing `dist/`:
 
 ```
-$ npm run dev
+$ ./frznforge dev
 
 frznforge dev: there is no built site to serve yet.
 
@@ -219,12 +222,12 @@ frznforge dev: there is no built site to serve yet.
 
   Run the build first — it does both halves:
 
-    npm run build       ingest (git → data/forge.json) then astro build → dist/
+    ./frznforge build       ingest (git → data/forge.json) then render → dist/
 
-  Then `npm run dev` again.
+  Then `./frznforge dev` again.
 ```
 
-Anything after `--` goes to `astro preview`, so `npm run dev -- --port 4400 --host` works.
+`./frznforge dev --port=4400` picks a different port; `--dir=<path>` serves a directory other than `dist/`.
 
 **What you should see.** The profile page: your name and bio, a contribution graph, an
 activity log, and cards for your pinned repositories. A docked sidebar with **Overview**,
@@ -269,10 +272,9 @@ insights charts are all there. The browser covers the default branch plus the 10
 updated branches and the 25 newest tags; those two caps are configurable and matter a lot for
 build size (see step 7).
 
-> **`npm run dev` serves the last build, and rebuilds nothing.** Re-run `npm run ingest` on
+> **`./frznforge dev` serves the last build, and rebuilds nothing.** Re-run `./frznforge ingest` on
 > its own and nothing you see changes — the pages in `dist/` were rendered from the old
-> artifact. `npm run build` is the command that makes new content appear. (The same trap is
-> sharper in `npm run astro dev`, which additionally caches the artifact in memory for the
+> artifact. `./frznforge build` is the command that makes new content appear. (The same trap is
 > life of the process, so even a rebuild under it needs a restart.)
 
 ### Where did that metadata come from?
@@ -288,7 +290,7 @@ build size (see step 7).
 ```
 
 That file is optional and lives *inside* the repository it describes, so the description
-travels with the code. You can override any of it from `frznforge.config.ts` with
+travels with the code. You can override any of it from `frznforge.config.jsonc` with
 `overrides: { … }`. The MIT badge, the language bar and the contributor list are detected —
 nobody typed those.
 
@@ -315,7 +317,7 @@ identities: [ada@example.com]  # emails counted as "you" in the contribution gra
 Everything I publish lives here.
 ```
 
-Save it and re-run `npm run build`. No *ingest* is strictly needed — this file is not part of
+Save it and re-run `./frznforge build`. No *ingest* is strictly needed — this file is not part of
 the artifact, it is read by the site build — but `build` is the one command that renders it
 either way.
 
@@ -348,7 +350,7 @@ tags: [cli, search]
 Notes *are* part of the artifact, so re-run ingest and restart the dev server:
 
 ```
-$ npm run ingest
+$ ./frznforge ingest
 …
 done: 2 repo(s), 1 note(s), 494 blob(s), 14 archive(s), 0 warning(s) in 16182ms
 ```
@@ -364,7 +366,7 @@ warned (`notes-dir-missing`) if that folder disappears — see
 ## 7. Build the real thing
 
 ```
-$ npm run build      # = ingest, then astro build
+$ ./frznforge build      # = ingest, then render
 
 [build] 3798 page(s) built in 1m 57s
 [build] Complete!
@@ -383,8 +385,8 @@ repositories produced 3,798 pages and a 400 MB `dist/`, 161 MB of which was sour
 Check the output locally — this is the same thing step 4 did:
 
 ```bash
-npm run dev          # http://localhost:4321/  (notice + astro preview over dist/)
-npm run preview      # the same server without the notice or the guard
+./frznforge dev          # http://localhost:4321/  (a notice, then dist/ served)
+./frznforge dev --dir=<path>   # serve some other directory, skipping the artifact check
 ```
 
 Then put `dist/` on a host. [deploying.md](./deploying.md) has a working GitHub Actions
@@ -405,10 +407,10 @@ workflow and the trailing-slash rules for Cloudflare Pages, Netlify, nginx and A
 
 | Symptom | Cause |
 |---|---|
-| `⚠ [repo-not-found]` | The `path` is not a git repository. It is relative to `frznforge.config.ts`, not to your shell |
+| `⚠ [repo-not-found]` | The `path` is not a git repository. It is relative to `frznforge.config.jsonc`, not to your shell |
 | `⚠ [repo-empty]` | The repository has no commits. It still gets a page saying so |
-| A new page 404s in `npm run dev` | `dev` serves the last build. Run `npm run build`; `ingest` alone only refreshes the data |
-| `npm run dev` says "there is no built site to serve yet" | You have not built. Run `npm run build` first |
+| A new page 404s in `./frznforge dev` | `dev` serves the last build. Run `./frznforge build`; `ingest` alone only refreshes the data |
+| `./frznforge dev` says "there is no built site to serve yet" | You have not built. Run `./frznforge build` first |
 | An imported repo is missing | Look for `remote-fetch-failed` / `remote-auth-missing` / `remote-rate-limited` in the ingest output |
 | `Filename too long` while cloning a mirror | Windows `MAX_PATH`. Run `git config --global core.longpaths true`, or point `ingest.cacheDir` somewhere shallow |
 | The site is empty | `repos: []`. Ingest says `(no repos configured — writing an empty artifact)` |

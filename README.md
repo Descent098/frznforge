@@ -24,7 +24,7 @@ and no git server — the site links back to wherever the repository actually li
 
 ## What it does
 
-**Ingest** — `npm run ingest` reads git through the CLI and writes one validated JSON artifact
+**Ingest** — `frznforge ingest` reads git through the CLI and writes one validated JSON artifact
 plus a content-addressed blob store.
 
 - Local repositories (including bare ones) and repositories imported from **GitHub, GitLab,
@@ -44,7 +44,7 @@ plus a content-addressed blob store.
   real name, picture, blurb and link — as `owner.avatar` and `organizations[].avatar` do for
   you and your groups. Pictures are files in `public/`, never third-party URLs.
 
-**Site** — `astro build` turns the artifact into static pages.
+**Site** — `frznforge build` turns the artifact into static pages.
 
 - Profile page from `content/profile.md`: bio, links, contribution graph, activity log,
   pinned repos, aggregated stats.
@@ -72,32 +72,38 @@ box.
 
 ## Quick start
 
+You need **Go ≥ 1.24** and **git**. That is the whole toolchain — there is no Node in the
+build, no bundler and no package install.
+
 ```bash
-npm install
-# edit frznforge.config.ts — your name, and the repos to publish
-# edit content/profile.md  — bio, links, pinned repos
-npm run build      # ingest (git → data/forge.json + blobs) then astro build → dist/
-npm run dev        # serve the site you just built, http://localhost:4321/
+go build ./cmd/frznforge
+# edit frznforge.config.jsonc — your name, and the repos to publish
+# edit content/profile.md     — bio, links, pinned repos
+./frznforge build             # ingest (git → data/forge.json + blobs) then render → dist/
+./frznforge dev               # serve the site you just built, http://localhost:4321/
 ```
 
-`npm run dev` serves what the last `npm run build` produced — it rebuilds nothing, so re-run
-`npm run build` to see a change. (`npm run astro dev` is the raw Astro dev server if you want
-HMR on components and styles.)
+`frznforge dev` serves what the last `frznforge build` produced — it rebuilds nothing, so re-run
+`build` to see a change. There is no watch mode; the render is fast enough that a rebuild is the
+loop. `frznforge build --no-ingest` re-renders the artifact already on disk without touching git
+or the network, which is the one to reach for while working on templates and styles.
 
-Two commands help you fill that config in:
-`npm run frznforge -- new <dir>` scaffolds fresh authoring files, and
-`npm run frznforge -- init` walks a forge account and writes the repo entries for you.
-`init --web` opens a local browser editor for the whole config — the repo picker plus site,
-owner, theme, ingest, organizations, contributors and hosted sites — and for your
-`profile.md`. Entries can be edited in place, avatars can be uploaded, and **Done** saves
-anything still unsaved.
+Two commands help you fill that config in: `frznforge new <dir>` scaffolds fresh authoring files,
+and `frznforge init` walks a forge account and writes the repo entries for you. `init --web` opens
+a local browser editor for the whole config — the repo picker plus site, owner, theme, ingest,
+organizations, contributors and hosted sites — and for your `profile.md`. Entries can be edited in
+place, avatars can be uploaded, and **Done** saves anything still unsaved.
+
+Coming from 0.3.0? `frznforge config migrate` converts your `frznforge.config.ts` into
+`frznforge.config.jsonc`, comments and all, and your existing `data/` keeps working — the artifact
+schema did not change.
 
 ## Documentation
 
 | Guide | |
 |---|---|
 | [Quick start](docs/user/quick-start.md) | Zero to a running site in ten minutes |
-| [Starting a site](docs/user/starting-a-site.md) | `frznforge -- new`, and keeping your content in its own repository |
+| [Starting a site](docs/user/starting-a-site.md) | `frznforge new`, and keeping your content in its own repository |
 | [Configuration](docs/user/configuration.md) | Every config key, `.frznforge.json`, notes, orgs, warnings |
 | [Importing from a forge](docs/user/importing.md) | GitHub/GitLab/Gitea/Forgejo, tokens, the `init` wizard, offline builds |
 | [Deploying](docs/user/deploying.md) | Build size, a working Actions workflow, host-by-host settings |
@@ -108,15 +114,17 @@ Start at [docs/user/](docs/user/README.md).
 ## Development
 
 ```bash
-npm test            # vitest unit tests (tests/unit) against fixture git repos in temp dirs
+go test ./...       # the whole engine, against fixture git repos in temp dirs
 npm run test:e2e    # playwright, builds the site from fixture repos first
-npm run check       # astro check
 ```
 
-Keep all three green. No test may touch the network.
+Keep both green. No test may touch the network. Node is needed for the browser suite and for
+nothing else — there is no `npm run check`, because 0.4.0 removed TypeScript rather than
+upgrading it and Playwright transpiles its own specs.
 
-- Data contract: [docs/dev/data-model.md](docs/dev/data-model.md) — `src/lib/data/schema.ts` is
-  the ingest ↔ site boundary; any change to it bumps `SCHEMA_VERSION`.
+- Data contract: [docs/dev/data-model.md](docs/dev/data-model.md) — `internal/model` is the
+  ingest ↔ site boundary; any change to it bumps `SchemaVersion`.
+- Architecture and the test coverage map: [docs/dev/architecture.md](docs/dev/architecture.md).
 - Phase plan and cross-cutting rules: [docs/dev/plans/plan-phases.md](docs/dev/plans/plan-phases.md).
 - Plain CSS only, `hf-` prefix, tokens at the top of `src/styles/global.css` and
   `src/styles/repo.css`.
@@ -135,7 +143,7 @@ Rough edges, honestly:
   file count is multiplied by its branches and tags. The defaults cap that at 1 default branch
   + 10 branches + 25 tags; see [deploying.md](docs/user/deploying.md#3-how-big-will-my-site-be)
   before you point it at fifty repositories.
-- **There is no published npm package.** You clone this repository; the generator and your
+- **There is nothing to install from a registry.** You clone this repository; the generator and your
   site live in the same directory. `frznforge -- new` scaffolds the files you author, but it
   cannot install the engine for you — see
   [starting-a-site.md](docs/user/starting-a-site.md).

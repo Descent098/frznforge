@@ -1,22 +1,32 @@
 /**
- * Playwright global setup: build the site from a deterministic FIXTURE artifact.
+ * Playwright global setup: build the site from a deterministic FIXTURE artifact, using the
+ * frznforge binary and nothing else.
+ *
+ *  0. compile cmd/frznforge → tests/.tmp/frznforge
  *  1. create the fixture git repos under tests/.tmp/e2e (local ones in repos/, the stand-in
  *     "provider" ones in origins/)
- *  2. run the real ingest pipeline on them → tests/.tmp/e2e/data
- *  3. render that artifact → tests/.tmp/e2e/dist, with Astro or (FRZNFORGE_E2E_ENGINE=go)
- *     the Go build — see buildSite at the bottom
- * The webServer in playwright.config.ts then serves that dist.
+ *  2. assemble a fixture SITE ROOT at tests/.tmp/e2e/site — its own frznforge.config.jsonc plus
+ *     copies of public/ and web/, because a build reads those from its root
+ *  3. seed the ingest cache for the two provider repos (a mirror clone plus the provider
+ *     response cache beside it) — see "offline provider repos" below
+ *  4. `frznforge ingest --backfill-metadata` → tests/.tmp/e2e/data
+ *  5. `frznforge build --no-ingest` twice → dist/, and dist-base/ under FRZNFORGE_BASE=/mysite
  *
- * Nothing here touches the network — see `remoteDeps` for how the provider repos are faked.
+ *  6. start `frznforge dev` over each of them, and return the teardown that stops both
+ *
+ * Step 6 lives here rather than in playwright.config.ts's `webServer` because Playwright starts
+ * `webServer` BEFORE `globalSetup` — so a server named there is pointed at a directory steps
+ * 1-5 have not created yet, and a clean checkout dies before this file runs at all. It only
+ * looked like it worked while tests/.tmp survived from an earlier run.
+ *
+ * Nothing here imports from src/: 0.4.0 deleted the TypeScript engine, and this file was the
+ * last thing holding a reference to it.
+ *
+ * Nothing here touches the network either — that is the whole subject of the next comment.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveConfig, type RepoSourceConfig } from '../../src/lib/config/index';
-import userConfig from '../../frznforge.config';
-import { ensureMirror, ingest, writeArtifact, type PrepareRemoteDeps } from '../../src/lib/ingest';
-import type { ImportedRepoMeta, Importer } from '../../src/lib/importers/index';
-import type { Release } from '../../src/lib/data/schema';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const TMP = path.join(ROOT, 'tests', '.tmp', 'e2e');
@@ -28,6 +38,25 @@ const DATA = path.join(TMP, 'data');
 const DIST = path.join(TMP, 'dist');
 /** Second build of the SAME artifact under `site.base: '/mysite'` (0.2.0 base-path e2e). */
 const DIST_BASE = path.join(TMP, 'dist-base');
+/**
+ * The project root the binary is pointed at: its own config, its own copies of public/ and web/.
+ * `frznforge.config.jsonc` is the only filename config.Load looks for and there is no env
+ * override for it, so a fixture config means a fixture root.
+ */
+const SITE = path.join(TMP, 'site');
+/**
+ * Built once per run, and deliberately OUTSIDE tests/.tmp/e2e: step 1 wipes that directory, and
+ * on Windows a running executable cannot be deleted — a dev server from a previous run that had
+ * not finished dying would otherwise make the wipe fail rather than the server.
+ */
+const BIN = path.join(ROOT, 'tests', '.tmp', `frznforge${process.platform === 'win32' ? '.exe' : ''}`);
+
+/**
+ * Token variables stripped from every child. The fixture must never authenticate as the
+ * developer: if a seeding mistake did send a request to a real provider (see the gate at the
+ * bottom), it should fail as an anonymous stranger rather than spend their rate limit.
+ */
+const TOKEN_VARS = ['GITHUB', 'GITLAB', 'GITEA', 'FORGEJO'].flatMap((p) => [`FRZNFORGE_${p}_TOKEN`, `${p}_TOKEN`]);
 
 const gitEnv = (date: string) => ({
   ...process.env,
@@ -62,59 +91,204 @@ function makeRepo(name: string, init: (dir: string) => void) {
   return makeRepoIn(REPOS, name, init);
 }
 
-/* ---- provider stand-ins ---------------------------------------------------
- * charlie and delta are ingested through the REAL remote code path —
- * `prepareRemote` → `git clone --mirror` into the ingest cache → `scanRepo` on the bare
- * mirror — with exactly two seams swapped so the build stays offline:
- *   • `createImporter` returns a stub that hands back canned metadata + releases instead of
- *     calling a REST API;
- *   • `ensureMirror` is the production function, called with the local `origins/<name>`
- *     directory as the clone URL instead of the provider's https URL.
- * Everything downstream (cache layout, mirror scan, metadata precedence, releaseMode,
- * warnings) is production code, so the artifact these produce is shaped exactly like a real
- * provider import.
+/* ---- running the binary --------------------------------------------------- */
+
+/**
+ * Run `frznforge` from the repository root.
+ *
+ * cwd is ROOT and never SITE: on Windows a process's working directory is locked against
+ * deletion, and the next run's wipe removes SITE. `--root` is what points the binary at the
+ * fixture — the same split tests/e2e/wizard.spec.ts uses for the same reason.
+ */
+function frznforge(args: string[], extraEnv: Record<string, string> = {}): string {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    // The fixture config already says both of these. They are passed anyway so that a child
+    // which somehow lost --root still writes into tests/.tmp/e2e instead of the developer's
+    // real data/ and .frznforge-cache/ — a hermeticity failure that leaves no trace in the
+    // suite's own output, only in their working tree.
+    FRZNFORGE_OUT_DIR: DATA,
+    FRZNFORGE_CACHE_DIR: CACHE,
+  };
+  // A developer with FRZNFORGE_BASE exported would otherwise get it applied to BOTH builds.
+  delete env.FRZNFORGE_BASE;
+  for (const name of TOKEN_VARS) delete env[name];
+
+  try {
+    return execFileSync(BIN, args, { cwd: ROOT, stdio: 'pipe', env: { ...env, ...extraEnv } }).toString();
+  } catch (err) {
+    const e = err as { stdout?: Buffer; stderr?: Buffer; message?: string };
+    throw new Error(
+      `frznforge ${args.join(' ')} failed\n${e.stdout?.toString() ?? ''}${e.stderr?.toString() ?? ''}${e.message ?? ''}`,
+    );
+  }
+}
+
+/* ---- offline provider repos -----------------------------------------------
+ * charlie and delta are ingested through the REAL remote code path — `PrepareRemote` → the
+ * provider response cache → the bare mirror in the ingest cache → `ScanRepo` on that mirror —
+ * with NO seam of any kind opened in the binary. The TypeScript harness swapped two function
+ * arguments (`createImporter` and `ensureMirror`) to stay offline; a compiled binary has no such
+ * handle, and adding a `FRZNFORGE_*_FIXTURE` env var would have made the ingest's only
+ * test-shaped branch the one thing standing between the suite and the network.
+ *
+ * Instead the setup pre-seeds exactly what a successful previous run would have left on disk —
+ * a mirror clone, and the `<mirror>.meta.json` provider response cache beside it — and runs
+ * `frznforge ingest --backfill-metadata`. Backfill means "only fetch repos that have no cached
+ * metadata, and never touch git": internal/ingest/remote.go returns from the replay branch
+ * before the importer is constructed and before EnsureMirror is called, so this run makes zero
+ * HTTP requests and zero network git invocations through unmodified production code. It also
+ * emits NO warning, which is what keeps the artifact byte-identical to the one the TypeScript
+ * harness produced — `ingest.fetch: "never"` would have been offline too, but at the price of
+ * two `remote-cache-stale` warnings that render into every page's footer and would make the
+ * fixture's permanent baseline "a degraded offline build".
+ *
+ * Two things follow from leaning on that branch, and both are defended rather than assumed:
+ *   • Backfill's offline-ness is incidental to its documented purpose (API quota), so
+ *     TestBackfillReplayTouchesNothing in internal/ingest pins it in the language that owns it.
+ *     If that branch changes shape, a Go test goes red before a spec does.
+ *   • A mis-seeded cache degrades to the LIVE network silently: `backfillSatisfied` is false,
+ *     the importer is built and api.github.com is called for real, and the only symptom is a
+ *     metadata-less charlie. Hence assertFixtureArtifact() at the end of this file.
+ *
+ * The one thing this stops exercising is EnsureMirror's clone-from-a-URL. That is covered in Go
+ * against a local origin — internal/ingest/remote_test.go, TestEnsureMirrorClonesThenFetches and
+ * its neighbours — not dropped.
  * ------------------------------------------------------------------------ */
 
-/** Stable key for a configured remote source (fixture repo names are unique). */
-function remoteKey(source: RepoSourceConfig): string {
-  if (source.type === 'local') return '';
-  return source.type === 'gitlab' ? source.project : `${source.owner}/${source.repo}`;
+/** One configured remote source, in the shape internal/config reads it. */
+interface RemoteSource {
+  type: string;
+  host: string;
+  owner: string;
+  repo: string;
 }
 
-interface RemoteFixture {
-  /** Local git repo the mirror is cloned from. */
-  origin: string;
-  meta: ImportedRepoMeta;
-  releases: Release[];
+/**
+ * The mirror directory a remote source resolves to, re-spelled from
+ * `config.MirrorDirName` (internal/config/config.go): flat, lower-cased, no digest suffix,
+ * `<type>-<host minus scheme>-<owner>-<repo>` with everything outside [a-z0-9._-] mapped to '-'.
+ *
+ * A two-place invariant, which the project's house rules dislike — but the alternative is
+ * parsing JSONC in Node to recover the sources, and this cache layout is user-documented anyway
+ * (docs/user/importing.md). The gate at the bottom is what makes the duplication safe: get this
+ * name wrong and no cache is found, the replay branch does not fire, and the artifact fails the
+ * post-condition rather than quietly reaching for the network.
+ */
+function mirrorDirName(source: RemoteSource): string {
+  const safe = (v: string) => v.toLowerCase().replace(/[^a-z0-9._-]/g, '-');
+  const host = safe(source.host.replace(/^https?:\/\//, ''));
+  return `${source.type}-${host}-${safe(source.owner)}-${safe(source.repo)}`;
 }
 
-const remoteFixtures = new Map<string, RemoteFixture>();
+/** The provider response cache file, from `ProviderCachePathFor` (internal/ingest/remote.go). */
+function providerCachePath(mirrorPath: string): string {
+  return `${mirrorPath.replace(/\.git$/i, '')}.meta.json`;
+}
 
-const remoteDeps: PrepareRemoteDeps = {
-  // No token is ever resolved: the env the token comes from is empty.
-  env: {},
-  createImporter: (source) => {
-    const fixture = remoteFixtures.get(remoteKey(source));
-    if (!fixture) return null;
-    const importer: Importer = {
-      provider: source.type as Importer['provider'],
-      fetchMeta: async () => fixture.meta,
-      fetchReleases: async () => ({ releases: fixture.releases, truncated: false }),
-    };
-    return importer;
-  },
-  ensureMirror: (source, cachePath, opts) => {
-    const fixture = remoteFixtures.get(remoteKey(source));
-    if (!fixture) throw new Error(`no remote fixture registered for ${remoteKey(source)}`);
-    // forward slashes: git accepts them on Windows and they keep the arg quoting simple
-    return ensureMirror(source, cachePath, { ...opts, cloneUrl: fixture.origin.replace(/\\/g, '/') });
-  },
-};
+/** Provider metadata, matching `ImportedRepoMeta`'s JSON tags key for key. */
+interface RepoMeta {
+  name: string;
+  description: string | null;
+  homepage: string | null;
+  topics: string[];
+  license: string | null;
+  defaultBranch: string;
+  webUrl: string;
+  cloneUrl: string;
+  issuesUrl: string | null;
+  template: boolean;
+  archived: boolean;
+}
+
+/** A release, matching `model.Release`. `assets` must be `[]` and never null, or it is dropped. */
+interface Release {
+  tag: string;
+  name: string;
+  body: string;
+  url: string;
+  prerelease: boolean;
+  /** `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$` — anything else is silently discarded on read. */
+  publishedAt: string;
+  author: string;
+  assets: Array<{ name: string; url: string; size: number; contentType: string }>;
+}
+
+/**
+ * Write one remote repo's cache: a bare mirror cloned from its local origin, and the provider
+ * answers beside it. `version: 1` is `providerCacheVersion`; any other value reads as no cache.
+ */
+function seedRemote(source: RemoteSource, origin: string, meta: RepoMeta, releases: Release[]): void {
+  const mirrors = path.join(CACHE, 'mirrors');
+  fs.mkdirSync(mirrors, { recursive: true });
+  const mirrorPath = path.join(mirrors, mirrorDirName(source));
+  // Byte for byte what ensureMirrorLocked runs. Forward slashes: git accepts them on Windows and
+  // they keep the arg quoting simple.
+  git(mirrors, ['clone', '--mirror', '--quiet', '--', origin.replace(/\\/g, '/'), mirrorPath]);
+  fs.writeFileSync(providerCachePath(mirrorPath), `${JSON.stringify({ version: 1, meta, releases }, null, 2)}\n`);
+}
+
+
+/* ---- the two fixture servers ---------------------------------------------- */
+
+const PORT = 4399;
+/** The base-path build (0.2.0): the same fixture artifact served under /mysite. */
+const BASE_PORT = 4398;
+
+/**
+ * Start `frznforge dev` over one built directory.
+ *
+ * This is the same server a person gets from `frznforge dev` — internal/serve is the single
+ * implementation that replaced both scripts/dev.ts and the 54-line tests/e2e/serve.ts. A dev
+ * server that is not the server the specs assert against can be wrong exactly where nobody
+ * looks, which is how the two once disagreed about whether a `.ps1` file was text or a download.
+ *
+ * `--dir` says "serve these files", which also suppresses the missing-artifact preflight: there
+ * is no project artifact behind a fixture directory to have an opinion about. `--base` is passed
+ * on BOTH servers, empty on the first: an absent flag means "inherit site.base from the config
+ * --root finds", and only an explicit `--base=` says "serve at the root". `--root` points at the
+ * fixture site so no server reads the developer's own config for anything.
+ *
+ * Spawned directly rather than through a shell: the argument vector goes to the binary as-is,
+ * so a path containing a space needs no quoting and cmd.exe never sees it.
+ */
+function startServer(dir: string, port: number, base: string): ChildProcess {
+  const args = ['dev', `--dir=${dir}`, `--root=${SITE}`, `--port=${port}`, `--base=${base}`, '--quiet'];
+  const child = spawn(BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  child.stderr?.on('data', (b: Buffer) => process.stderr.write(`[dev :${port}] ${b}`));
+  child.on('exit', (code) => {
+    if (code !== 0 && code !== null) process.stderr.write(`[dev :${port}] exited ${code}\n`);
+  });
+  return child;
+}
+
+/** Poll until the server answers, so no spec races the listener. */
+async function waitForPort(port: number, base: string, child: ChildProcess): Promise<void> {
+  const url = `http://localhost:${port}${base}/`;
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    if (child.exitCode !== null) throw new Error(`frznforge dev on :${port} exited ${child.exitCode} before answering`);
+    try {
+      const res = await fetch(url);
+      if (res.ok) return;
+    } catch {
+      // not listening yet
+    }
+    if (Date.now() > deadline) throw new Error(`frznforge dev did not answer ${url} within 30s`);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
 
 export default async function globalSetup() {
   fs.rmSync(TMP, { recursive: true, force: true });
   fs.mkdirSync(TMP, { recursive: true });
   fs.writeFileSync(path.join(TMP, 'gitconfig-empty'), '');
+
+  // Built rather than `go run`: `go run` recompiles on every invocation (five of them here plus
+  // two dev servers), and it leaves a parent process between Playwright's teardown and the
+  // server holding the port. Same call, same reasoning, as tests/e2e/wizard.spec.ts.
+  fs.mkdirSync(path.dirname(BIN), { recursive: true });
+  execFileSync('go', ['build', '-o', BIN, './cmd/frznforge'], { cwd: ROOT, stdio: 'pipe' });
 
   // alpha — normal repo with README, .frznforge.json, tags, two languages, recent-ish date
   const alpha = makeRepo('alpha', (d) => {
@@ -141,7 +315,7 @@ export default async function globalSetup() {
     // URL-hostile committed names, in this same commit so the commit-day count is unchanged.
     // A space must survive percent-encoding (it used to emit an invalid href); '#' and '%'
     // cannot be served statically at all, so they must be listed-but-unlinked rather than
-    // aborting the build. See src/lib/routes.ts `isRawServable`.
+    // aborting the build. See internal/routes `IsRawServable`.
     fs.writeFileSync(path.join(d, 'docs', 'read me.md'), '# Read me\n\nA name with a space.\n');
     fs.writeFileSync(path.join(d, 'docs', '50% off.txt'), 'percent in the name\n');
     fs.writeFileSync(path.join(d, 'docs', 'c#-tips.md'), '# C# tips\n\nHash in the name.\n');
@@ -164,9 +338,9 @@ export default async function globalSetup() {
     git(d, ['tag', '-a', 'v1.0.0', '-m', 'First release'], '2024-02-01T00:00:00Z');
     git(d, ['tag', '-a', '--cleanup=verbatim', 'v1.1.0', '-m', 'Second release\n\n## Highlights\n\n- adds a *guide*\n- new `extra` module\n'], '2024-03-01T00:00:00Z');
     git(d, ['tag', 'light'], '2024-03-02T00:00:00Z');
-    // gh-pages: a tiny BUILT site, served at /alpha-site/ by the hosting config below
-    // (0.2.0, schema v7). Its own links are relative on purpose — hosted content is user
-    // content, and the base-path build's leak scan must not trip over it.
+    // gh-pages: a tiny BUILT site, served at /alpha-site/ by the hosting config (0.2.0, schema
+    // v7). Its own links are relative on purpose — hosted content is user content, and the
+    // base-path build's leak scan must not trip over it.
     git(d, ['checkout', '-q', '-b', 'gh-pages'], '2024-03-05T00:00:00Z');
     git(d, ['rm', '-r', '-q', 'src', 'docs', 'assets', 'README.md', '.frznforge.json', 'LICENSE'], '2024-03-05T00:00:00Z');
     fs.writeFileSync(path.join(d, 'index.html'), '<!doctype html><meta charset="utf-8"><title>alpha site</title><link rel="stylesheet" href="style.css"><h1>built by alpha</h1><script src="app.js"></script>');
@@ -238,9 +412,13 @@ export default async function globalSetup() {
     commitAll(d, 'prepare the release candidate', '2024-05-01T12:00:00Z');
     git(d, ['tag', '-a', 'v2.2.0-rc.1', '-m', 'Release candidate'], '2024-05-01T12:00:00Z');
   });
-  remoteFixtures.set('fixture/charlie', {
-    origin: charlieOrigin,
-    meta: {
+  seedRemote(
+    // Must match the `github` entry in fixture.config.jsonc, including the defaulted host:
+    // internal/config applies `https://api.github.com` when none is given, and that string is
+    // half of the mirror directory name.
+    { type: 'github', host: 'https://api.github.com', owner: 'fixture', repo: 'charlie' },
+    charlieOrigin,
+    {
       name: 'charlie',
       description: 'Charlie fixture: metadata imported from a provider API.',
       homepage: 'https://example.com/charlie',
@@ -253,7 +431,7 @@ export default async function globalSetup() {
       template: false,
       archived: false,
     },
-    releases: [
+    [
       {
         tag: 'v2.1.0',
         // a title distinct from the tag: exercises the name + tag-chip branch
@@ -299,7 +477,7 @@ export default async function globalSetup() {
         assets: [],
       },
     ],
-  });
+  );
 
   // delta — a provider repo that has published nothing yet (and has no annotated tags, so
   // `resolveReleases` cannot fall back to git): the provider-flavoured empty state
@@ -308,9 +486,10 @@ export default async function globalSetup() {
     fs.writeFileSync(path.join(d, 'app.ts'), 'export const delta = 0;\n'.repeat(8));
     commitAll(d, 'first push', '2024-03-20T00:00:00Z');
   });
-  remoteFixtures.set('fixture/delta', {
-    origin: deltaOrigin,
-    meta: {
+  seedRemote(
+    { type: 'gitea', host: 'https://gitea.example.com', owner: 'fixture', repo: 'delta' },
+    deltaOrigin,
+    {
       name: 'delta',
       description: 'Delta fixture: a Gitea repo with no releases.',
       homepage: null,
@@ -323,113 +502,135 @@ export default async function globalSetup() {
       template: false,
       archived: false,
     },
-    releases: [],
-  });
+    // Empty on purpose, and the cache must still SAY so: an absent releases list would leave
+    // the replay branch with nothing to hand back and releases.spec.ts's "No releases published
+    // on Gitea" empty state would be testing a fetch failure instead.
+    [],
+  );
 
-  // uncommitted noise in alpha: must NOT show up anywhere
+  // uncommitted noise in alpha: must NOT show up anywhere. The scanners read git, never the
+  // working tree, and this is the end-to-end proof of it.
   fs.writeFileSync(path.join(alpha, 'UNTRACKED-SECRET.txt'), 'should never be published');
   fs.writeFileSync(path.join(alpha, 'README.md'), '# MODIFIED BUT NOT COMMITTED\n');
 
-  // resolveConfig honours these env vars; the fixture picks its own directories
-  delete process.env.FRZNFORGE_OUT_DIR;
-  delete process.env.FRZNFORGE_CACHE_DIR;
+  writeSiteRoot();
 
-  const cfg = resolveConfig(
-    {
-      ...userConfig,
-      repos: [
-        // `org` here exercises the repo → organization direction of membership; `bravo` is
-        // claimed from the other side, by the organization's own `repos` list below.
-        { type: 'local', path: path.join(REPOS, 'alpha'), org: 'canadian-coding' },
-        { type: 'local', path: path.join(REPOS, 'bravo') },
-        { type: 'local', path: path.join(REPOS, 'empty') },
-        { type: 'github', owner: 'fixture', repo: 'charlie' },
-        { type: 'gitea', host: 'https://gitea.example.com', owner: 'fixture', repo: 'delta' },
-      ],
-      // The shipped config's organization points at `frznforge`, which this fixture does not
-      // build, so its members are re-pointed at fixture repos. The SLUG is kept so the org
-      // still picks up the real `content/orgs/canadian-coding.md` (body, sites, links) — the
-      // markdown half of an organization is repo content, not fixture data.
-      organizations: [
-        {
-          slug: 'canadian-coding',
-          name: 'Canadian Coding',
-          description: "Small, sturdy, source-available tools that keep working when the server doesn't.",
-          repos: ['bravo'],
-          // schema v8: an org picture. `logo.png` is a real file already in public/, so the
-          // fixture needs no image of its own and the assertion covers a genuine round-trip.
-          avatar: 'logo.png',
-        },
-      ],
-      // schema v8: the owner has a picture, one contributor is configured (and merges two
-      // addresses), and a second entry deliberately matches nobody so the
-      // `contributor-unknown-email` warning is exercised end to end.
-      owner: { ...userConfig.owner, avatar: 'logo.png' },
-      contributors: [
-        {
-          name: 'Fixture Author (configured)',
-          emails: ['fixture@example.com', 'also-fixture@example.invalid'],
-          avatar: 'logo.png',
-          description: 'the fixture commit author',
-          url: 'https://example.com/fixture-author',
-        },
-        { name: 'Nobody At All', emails: ['nobody@example.invalid'] },
-      ],
-      // alpha's gh-pages branch served as a real site (0.2.0, schema v7); hosting.spec.ts
-      // and the base-path leak scan both drive it.
-      hosting: { sites: [{ repo: 'alpha', slug: 'alpha-site' }] },
-      // `insights.samples` is deliberately below bravo's active-month count so the build
-      // exercises checkpoint THINNING (`sampled: true`) rather than measuring every month —
-      // the path a real repo with years of history takes. Every other knob stays at its
-      // shipped default so the fixture keeps testing what users actually get.
-      ingest: {
-        ...(userConfig.ingest ?? {}),
-        outDir: DATA,
-        cacheDir: CACHE,
-        insights: { ...(userConfig.ingest?.insights ?? {}), samples: 6 },
-      },
-    },
-    ROOT,
-  );
-  const { data, blobs, archives } = await ingest({ ...cfg, outDir: DATA }, {}, { remote: remoteDeps });
-  await writeArtifact(data, blobs, archives, DATA);
+  // The ingest. --backfill-metadata is what reaches the offline replay branch; see the long
+  // comment above for why that flag and not `ingest.fetch: "never"`. Its console summary reads
+  // oddly on purpose — "0 filled, 0 still missing, 2 already had metadata (no network)" is a
+  // correct description of a run that was never meant to fill anything.
+  frznforge(['ingest', '--backfill-metadata', `--root=${SITE}`]);
+  assertFixtureArtifact();
 
-  // `FRZNFORGE_CACHE_DIR` is passed to the *build* too, not just the ingest above: since 0.2.0
-  // the build itself writes a cache (the highlight memo, `<cacheDir>/highlight/`). Without it
-  // these children fall back to the schema default and would read and write the developer's
-  // real `.frznforge-cache`, leaving the suite non-hermetic and dropping fixture entries into
-  // the actual site's cache.
-  buildSite(DIST, { FRZNFORGE_OUT_DIR: DATA, FRZNFORGE_CACHE_DIR: CACHE });
+  // --no-ingest is load-bearing: `frznforge build` scans before it renders, so without the flag
+  // this would re-ingest over the artifact the line above just produced. (Not hypothetical — it
+  // happened during 0.4.0, against the developer's real config, and every spec stayed green
+  // while asserting on the wrong corpus.) It also cannot be combined with --backfill-metadata,
+  // which is why the ingest and the builds are separate commands.
+  frznforge(['build', '--no-ingest', `--root=${SITE}`, `--out=${DIST}`]);
 
-  // The same artifact again, deployed under a sub-path: `FRZNFORGE_BASE` flows through
-  // resolveConfig → astro.config.ts → Astro's `base` → import.meta.env.BASE_URL, which is
-  // everything the site reads. `base-path.spec.ts` drives this dist (served with the
-  // matching prefix by serve.ts on port 4398) and asserts no root-absolute URL leaked.
-  buildSite(DIST_BASE, { FRZNFORGE_OUT_DIR: DATA, FRZNFORGE_CACHE_DIR: CACHE, FRZNFORGE_BASE: '/mysite' });
+  // The same artifact again, deployed under a sub-path: FRZNFORGE_BASE flows through
+  // config.Resolve → site.base → every URL the renderer emits. `base-path.spec.ts` drives this
+  // dist (served with the matching prefix on port 4398) and asserts no root-absolute URL leaked.
+  frznforge(['build', '--no-ingest', `--root=${SITE}`, `--out=${DIST_BASE}`], { FRZNFORGE_BASE: '/mysite' });
+
+  // Only now, with both directories on disk, do the servers exist. Returning the teardown is
+  // what makes globalSetup responsible for them: Playwright awaits it after the last test, so
+  // neither process outlives the run even when the run fails.
+  const root = startServer(DIST, PORT, '');
+  const base = startServer(DIST_BASE, BASE_PORT, '/mysite');
+  try {
+    await Promise.all([waitForPort(PORT, '', root), waitForPort(BASE_PORT, '/mysite', base)]);
+  } catch (err) {
+    root.kill();
+    base.kill();
+    throw err;
+  }
+  return () => {
+    root.kill();
+    base.kill();
+  };
 }
 
 /**
- * Render the fixture artifact into `outDir`, with whichever engine is being tested.
+ * Assemble the fixture project root: the config, and the two asset trees a build copies verbatim.
  *
- * `FRZNFORGE_E2E_ENGINE=go` runs the Go build instead of Astro. Both read the SAME artifact —
- * the one this file just ingested, via `FRZNFORGE_OUT_DIR` — and the same site settings, so the
- * specs that run against the result are comparing engines and nothing else. That is the point:
- * the suite is the invariant across the 0.4.0 rewrite, and it must not be edited to accommodate
- * either side.
+ * public/ and web/ are COPIED, not linked. `copyAssets` walks <root>/web with filepath.WalkDir,
+ * which lstats its own root — a Windows junction or a symlink is yielded as a non-directory
+ * entry with no descent, and the build then tries to read a directory as a file. web/ is ~3.8 MB
+ * (mostly web/vendor/mermaid); one copy per suite run is cheaper than the class of bug that
+ * "dist is a verbatim copy of on-disk bytes" exists to prevent.
  *
- * The switch is temporary. When Astro goes (Phase 9) the Astro branch goes with it and this
- * becomes a single command.
+ * content/ is NOT copied: owner.profile, content.orgs and notes.dir in the fixture config are
+ * absolute paths into the real repository, because the checked-in profile and
+ * content/orgs/canadian-coding.md are what several specs assert against.
  */
-function buildSite(outDir: string, extraEnv: Record<string, string>): void {
-  const env = { ...process.env, ...extraEnv };
-  if (process.env.FRZNFORGE_E2E_ENGINE === 'go') {
-    execFileSync('go', ['run', './cmd/frznforge', 'build', `--out=${outDir}`], {
-      cwd: ROOT,
-      stdio: 'pipe',
-      shell: true,
-      env,
-    });
-    return;
+function writeSiteRoot(): void {
+  fs.mkdirSync(SITE, { recursive: true });
+  const template = fs.readFileSync(path.join(ROOT, 'tests', 'e2e', 'fixture.config.jsonc'), 'utf8');
+  // Forward slashes throughout: they are absolute on Windows as far as filepath.IsAbs is
+  // concerned, and they need no JSON escaping, so the template stays readable.
+  const slash = (p: string) => p.replace(/\\/g, '/');
+  const config = template
+    .replaceAll('__ROOT__', slash(ROOT))
+    .replaceAll('__REPOS__', slash(REPOS))
+    .replaceAll('__TMP__', slash(TMP));
+  fs.writeFileSync(path.join(SITE, 'frznforge.config.jsonc'), config);
+
+  fs.cpSync(path.join(ROOT, 'public'), path.join(SITE, 'public'), { recursive: true });
+  fs.cpSync(path.join(ROOT, 'web'), path.join(SITE, 'web'), { recursive: true });
+}
+
+/**
+ * Fail loudly if the fixture artifact is not the one the specs were written against.
+ *
+ * The seeded caches are the suite's only tie to the offline replay path, and a broken seed does
+ * not fail the ingest — it falls through to the live provider API, comes back empty, and the
+ * first symptom is a selector error in a spec three files away. Everything asserted here is a
+ * property the replay produced and a live-but-offline fetch could not.
+ */
+function assertFixtureArtifact(): void {
+  interface Artifact {
+    warnings: Array<{ code: string; repo: string | null; message: string }>;
+    repos: Array<{
+      slug: string;
+      license: { spdx: string | null } | null;
+      releases: unknown[];
+      source: { type: string } | null;
+    }>;
   }
-  execFileSync('npx', ['astro', 'build', '--outDir', outDir], { cwd: ROOT, stdio: 'pipe', shell: true, env });
+  const file = path.join(DATA, 'forge.json');
+  const data = JSON.parse(fs.readFileSync(file, 'utf8')) as Artifact;
+  const bad: string[] = [];
+
+  // Any remote-* warning means the network was consulted, or the cache was not: either way the
+  // artifact is a degraded one, and it would render into every page's footer tooltip.
+  for (const w of data.warnings) {
+    if (w.code.startsWith('remote-')) bad.push(`unexpected ${w.code} (${w.repo ?? 'site'}): ${w.message}`);
+  }
+
+  const repo = (slug: string) => data.repos.find((r) => r.slug === slug);
+  const charlie = repo('charlie');
+  if (!charlie) bad.push('charlie is missing from the artifact');
+  else {
+    // Both come from the seeded provider response and from nowhere else: the mirror has no
+    // LICENSE file to sniff, and no annotated-tag fallback runs in "provider" release mode.
+    if (charlie.license?.spdx !== 'Apache-2.0') bad.push(`charlie.license.spdx = ${JSON.stringify(charlie.license)}`);
+    if (charlie.releases.length !== 2) bad.push(`charlie has ${charlie.releases.length} releases, want 2`);
+  }
+  const delta = repo('delta');
+  if (!delta) bad.push('delta is missing from the artifact');
+  else {
+    if (delta.source?.type !== 'gitea') bad.push(`delta.source.type = ${JSON.stringify(delta.source)}`);
+    // Empty, but present and imported — the provider-flavoured empty state, not a fetch failure.
+    if (delta.releases.length !== 0) bad.push(`delta has ${delta.releases.length} releases, want 0`);
+  }
+
+  if (bad.length > 0) {
+    throw new Error(
+      `the fixture artifact is not what the specs assert against (${file}):\n  - ${bad.join('\n  - ')}\n\n` +
+        'The provider caches under tests/.tmp/e2e/cache/mirrors are most likely mis-seeded — check\n' +
+        'mirrorDirName() in this file against config.MirrorDirName in internal/config/config.go.',
+    );
+  }
 }

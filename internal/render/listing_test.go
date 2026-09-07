@@ -46,6 +46,11 @@ func TestListingMatchesBrowser(t *testing.T) {
 			Page      int      `json:"page"`
 			PageCount int      `json:"pageCount"`
 		} `json:"listings"`
+		BlankQueries []struct {
+			Query      string `json:"query"`
+			MatchesAll bool   `json:"matchesAll"`
+			Kept       int    `json:"kept"`
+		} `json:"blankQueries"`
 	}
 
 	raw, err := os.ReadFile(filepath.Join("..", "..", "tests", "fixtures", "listing-cases.json"))
@@ -57,6 +62,31 @@ func TestListingMatchesBrowser(t *testing.T) {
 	}
 	if len(golden.Listings) == 0 {
 		t.Fatal("golden is empty — a vacuous pass is worse than no test")
+	}
+
+	// A query of nothing but whitespace has no terms, so it filters nothing. Both sides have to
+	// tokenise before they decide: JavaScript splits on /\s+/ and drops the empties, Go calls
+	// strings.Fields. Neither an empty string nor a real word reaches that branch, and a listing
+	// that emptied itself when somebody leant on the space bar would read as the site breaking.
+	if len(golden.BlankQueries) == 0 {
+		t.Fatal("the golden has no blankQueries — regenerate with `node tests/fixtures/gen-listing-cases.mjs`")
+	}
+	for _, c := range golden.BlankQueries {
+		all := true
+		for _, r := range golden.Repos {
+			if !MatchesQuery(r, c.Query) {
+				all = false
+				break
+			}
+		}
+		if all != c.MatchesAll {
+			t.Errorf("MatchesQuery(%q) matched all = %v, the browser says %v", c.Query, all, c.MatchesAll)
+		}
+		q := DefaultQuery(50)
+		q.Q = c.Query
+		if got := ApplyListing(golden.Repos, q).Total; got != c.Kept {
+			t.Errorf("ApplyListing with q=%q kept %d repos, the browser keeps %d", c.Query, got, c.Kept)
+		}
 	}
 
 	t.Run("facets", func(t *testing.T) {

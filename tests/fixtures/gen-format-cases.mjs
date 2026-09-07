@@ -9,6 +9,7 @@
  *
  * Run:  node tests/fixtures/gen-format-cases.mjs
  */
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +29,20 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
+/**
+ * The fixture records the sha256 of the source it was generated from.
+ *
+ * Without it the golden is a snapshot with no expiry: change web/js/format.js, forget to re-run this
+ * script, and the Go test keeps passing against the OLD behaviour while the browser ships the
+ * new one — the exact divergence the fixture exists to prevent, made invisible by the fixture
+ * itself. The Go side re-hashes the file and fails loudly when the two disagree.
+ */
+function sourceStamp(rel) {
+  const abs = path.join(ROOT, rel);
+  return { file: rel, sha256: crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex') };
+}
+
+
 /** A fixed reference instant, so every case is reproducible. */
 const NOW = '2026-09-06T12:00:00Z';
 const now = new Date(NOW);
@@ -44,6 +59,7 @@ const OFFSETS = [
 const dates = OFFSETS.map((s) => new Date(now.getTime() - s * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z'));
 
 const cases = {
+  source: sourceStamp('web/js/format.js'),
   now: NOW,
   heat: DEFAULT_HEAT,
   relativeTime: dates.map((d) => ({ in: d, out: relativeTime(d, now) })),

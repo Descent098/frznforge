@@ -27,6 +27,13 @@ import (
 // The things this actually catches are the ones that are invisible by eye: a `date` key present
 // on the wrong kinds, `keywords` missing the repo slug, the doc ORDER, `<` escaped when it
 // should not be, and the fallback details for a note or an org with no description.
+//
+// FROZEN as of 0.4.0. The generator and the TypeScript it read were deleted in Phase 9, so this
+// golden can no longer be regenerated — it is now a record of what the previous engine emitted
+// rather than a live comparison. That is the correct status for it: its job was to hold the Go
+// port to the behaviour it replaced, and that job is finished. A deliberate change to this
+// output means editing the golden by hand and saying why in the commit; an accidental one still
+// fails here, which is the whole point of keeping it.
 func TestSearchIndexMatchesTypeScript(t *testing.T) {
 	wantRaw, err := os.ReadFile(filepath.Join("testdata", "expected-search-index.json"))
 	if err != nil {

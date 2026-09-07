@@ -1,0 +1,134 @@
+// The e2e fixture's site configuration — the template for the one real config file the suite
+// builds from.
+//
+// tests/e2e/global-setup.ts copies this to <tests/.tmp/e2e/site>/frznforge.config.jsonc with the
+// __TOKENS__ below replaced by absolute, forward-slashed paths, then runs `frznforge ingest` and
+// `frznforge build` against that directory. It is a checked-in file rather than a template
+// literal in the setup script because the REASONS these values are what they are matter more
+// than the values: nearly every one of them is a spec somewhere, and a comment beside it is the
+// only place that link survives. (`frznforge.config.jsonc` is the only name config.Load looks
+// for and there is no env override for it, which is why the fixture needs a site root at all.)
+//
+// It is NOT the developer's ./frznforge.config.jsonc, and that is the point: until 0.4.0 the
+// fixture ARTIFACT came from here while the fixture BUILD read the real config next to the
+// repository, so editing the shipped config quietly changed what the specs rendered against.
+// Everything with no fixture-specific reason to differ is therefore spelled exactly as the
+// shipped config spells it — site.title, theme.palette, owner.name/handle, listing.pageSize.
+// Those four are build-time inputs that no spec asserts on directly (a11y.spec.ts's contrast
+// checks read computed colours, so a palette swap would move them without naming itself), so a
+// divergence here would show up only as a mysterious dist diff.
+{
+  "site": {
+    "title": "frznforge",
+  },
+
+  "owner": {
+    "name": "Kieran Wood",
+    "handle": "kieran",
+    // Absolute, into the REAL repository: the fixture deliberately publishes the checked-in
+    // profile — its frontmatter links and pinned repos are what the profile specs assert — and
+    // alpha's one recent commit is authored as this identity so the contribution graph has data
+    // inside its window. Nothing is copied into the site root for it; resolveFrom takes an
+    // absolute path as-is.
+    "profile": "__ROOT__/content/profile.md",
+    // schema v8: the owner has a picture. `logo.png` is a real file already in public/, so the
+    // fixture needs no image of its own. It has no e2e assertion on purpose — see the note in
+    // orgs.spec.ts — but it stays configured so the value is at least exercised by the loader.
+    "avatar": "logo.png",
+  },
+
+  "theme": {
+    "palette": "hearth",
+  },
+
+  "content": {
+    // The real content/orgs, so `canadian-coding` below picks up the checked-in
+    // canadian-coding.md (body, sites, links). The markdown half of an organization is repo
+    // content, not fixture data.
+    "orgs": "__ROOT__/content/orgs",
+  },
+
+  "repos": [
+    // `org` here exercises the repo → organization direction of membership; `bravo` is claimed
+    // from the other side, by the organization's own `repos` list below.
+    { "type": "local", "path": "__REPOS__/alpha", "org": "canadian-coding" },
+    { "type": "local", "path": "__REPOS__/bravo" },
+    { "type": "local", "path": "__REPOS__/empty" },
+
+    // charlie and delta are ingested through the REAL remote code path — provider response
+    // cache, mirror scan, metadata precedence, releaseMode, warnings — with the network replaced
+    // by a pre-seeded cache rather than by a stub. global-setup.ts explains how and why.
+    //
+    // Neither host is real. `github` defaults its host to https://api.github.com, and that
+    // default is load-bearing twice over: it lands in the artifact as repos[].source.host, and
+    // it is half of the mirror directory name the setup has to seed.
+    { "type": "github", "owner": "fixture", "repo": "charlie" },
+    { "type": "gitea", "host": "https://gitea.example.com", "owner": "fixture", "repo": "delta" },
+  ],
+
+  // The shipped config's organization points at `frznforge`, which this fixture does not build,
+  // so its members are re-pointed at fixture repos. The SLUG is kept so the org still picks up
+  // the real content/orgs/canadian-coding.md.
+  "organizations": [
+    {
+      "slug": "canadian-coding",
+      "name": "Canadian Coding",
+      "description": "Small, sturdy, source-available tools that keep working when the server doesn't.",
+      "repos": ["bravo"],
+      // schema v8: an org picture, again the real public/logo.png, so the assertion covers a
+      // genuine round-trip rather than a fixture-only file.
+      "avatar": "logo.png",
+    },
+  ],
+
+  // schema v8: one contributor is configured and MERGES two addresses; the second entry
+  // deliberately matches nobody, so the `contributor-unknown-email` warning is exercised end to
+  // end (it is the only site-level warning in the fixture artifact).
+  "contributors": [
+    {
+      "name": "Fixture Author (configured)",
+      "emails": ["fixture@example.com", "also-fixture@example.invalid"],
+      "avatar": "logo.png",
+      "description": "the fixture commit author",
+      "url": "https://example.com/fixture-author",
+    },
+    { "name": "Nobody At All", "emails": ["nobody@example.invalid"] },
+  ],
+
+  // alpha's gh-pages branch served as a real site (0.2.0, schema v7); hosting.spec.ts and the
+  // base-path leak scan both drive it.
+  "hosting": {
+    "sites": [{ "repo": "alpha", "slug": "alpha-site" }],
+  },
+
+  // The real content/notes, for the same reason as content/orgs above. Declaring the block at
+  // all also matters: config.NotesConfigured is what keeps a site that never opted into notes
+  // from raising notes-dir-missing, and the fixture has to be on the opted-in side of that.
+  "notes": {
+    "dir": "__ROOT__/content/notes",
+  },
+
+  "ingest": {
+    // Absolute and inside tests/.tmp/e2e, so neither the ingest nor the two builds can read or
+    // write the developer's real data/ or .frznforge-cache/. (The build writes a cache too since
+    // 0.2.0 — the highlight memo under <cacheDir>/highlight/.) global-setup.ts also passes
+    // FRZNFORGE_OUT_DIR and FRZNFORGE_CACHE_DIR with the same two values, so a child that
+    // somehow missed --root still lands in the fixture rather than in the developer's tree.
+    "outDir": "__TMP__/data",
+    "cacheDir": "__TMP__/cache",
+    // The shipped values, verbatim — the fixture should keep testing what users actually get.
+    "maxBlobBytes": 524288, // 512 * 1024
+    "maxCommits": null,
+    "concurrency": 4,
+    "insights": {
+      // Deliberately below bravo's active-month count, so the build exercises checkpoint
+      // THINNING (`sampled: true`) rather than measuring every month — the path a real repo with
+      // years of history takes. Every other insights knob stays at its default.
+      "samples": 6,
+    },
+  },
+
+  "listing": {
+    "pageSize": 50,
+  },
+}

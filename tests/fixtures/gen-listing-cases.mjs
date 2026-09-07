@@ -9,12 +9,27 @@
  *
  * Run:  node tests/fixtures/gen-listing-cases.mjs
  */
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyListing, defaultQuery, facets, matchesFilters, matchesQuery, sortRepos } from '../../web/js/listing.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/**
+ * The fixture records the sha256 of the source it was generated from.
+ *
+ * Without it the golden is a snapshot with no expiry: change web/js/listing.js, forget to re-run this
+ * script, and the Go test keeps passing against the OLD behaviour while the browser ships the
+ * new one — the exact divergence the fixture exists to prevent, made invisible by the fixture
+ * itself. The Go side re-hashes the file and fails loudly when the two disagree.
+ */
+function sourceStamp(rel) {
+  const abs = path.join(ROOT, rel);
+  return { file: rel, sha256: crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex') };
+}
+
 
 /** A corpus chosen to exercise every tiebreak: same dates, same names, mixed case, nulls. */
 const repos = [
@@ -58,6 +73,7 @@ const [languages, tags] = (() => {
 })();
 
 const out = {
+  source: sourceStamp('web/js/listing.js'),
   repos,
   facets: { languages, tags, templates: facets(repos).templates },
   sorts: Object.fromEntries(
@@ -70,6 +86,15 @@ const out = {
     slug: r.slug,
     query: matchesQuery(r, 'a'),
     filters: matchesFilters(r, { ...defaultQuery(50), languages: ['Go'] }),
+  })),
+  // A query of nothing but whitespace matches everything: it has no terms, and a listing that
+  // hid every repo the moment someone leant on the space bar would read as the site breaking.
+  // Both sides tokenise before they decide, and this is the only case that proves it — neither
+  // an empty string nor a real word exercises the same branch.
+  blankQueries: ['', ' ', '   ', '\t\n'].map((q) => ({
+    query: q,
+    matchesAll: repos.every((r) => matchesQuery(r, q)),
+    kept: applyListing(repos, { ...defaultQuery(50), q }).total,
   })),
   listings: queries.map(({ name, q }) => {
     const result = applyListing(repos, q);

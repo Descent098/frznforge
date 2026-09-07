@@ -1,36 +1,17 @@
 {
   "name": "frznforge",
+  "private": true,
   "type": "module",
   "version": "0.4.0",
   "engines": {
     "node": ">=22.12.0"
   },
+  "comment": "Node builds nothing here. 0.4.0 made frznforge a Go binary: `go build ./cmd/frznforge` produces it, and `frznforge ingest`/`build`/`dev` replace every script this file used to carry. What is left is the Playwright suite, which is the one thing that still needs a browser and therefore Node.",
   "scripts": {
-    "dev": "tsx scripts/dev.ts",
-    "frznforge": "tsx scripts/cli.ts",
-    "ingest": "tsx scripts/ingest.ts",
-    "build": "tsx scripts/build.ts",
-    "preview": "astro preview",
-    "astro": "astro",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "check": "astro check",
-    "test:e2e": "playwright test",
-    "smoke:remote": "tsx scripts/smoke-remote.ts",
-    "measure": "tsx scripts/measure-build.ts",
-    "test:all": "npm test && npm run test:e2e"
-  },
-  "dependencies": {
-    "astro": "^7.2.9",
-    "marked": "^18.0.11",
-    "mermaid": "^11.17.2",
-    "typescript": "^6.0.3"
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.10",
     "@playwright/test": "^1.63.0",
-    "@types/node": "^26.4.1",
-    "tsx": "^4.23.13",
-    "vitest": "^4.1.11"
+    "@types/node": "^26.4.1"
   }
 }

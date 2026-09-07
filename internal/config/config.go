@@ -242,6 +242,30 @@ type ListingConfig struct {
 	PageSize int `json:"pageSize"`
 }
 
+// PostprocessConfig is the `postprocess` block: one command run over the finished output
+// directory after a build, and the only place a user's own tooling gets to touch the output.
+// frznforge itself never minifies, bundles or hashes.
+//
+// The fields live here rather than in internal/build — which owns the running of them — because
+// the loader decodes with DisallowUnknownFields: without a field on Config, a file that declares
+// the block is rejected outright as a mistyped setting, and the user is told their config is
+// wrong when it is the thing this version added.
+//
+// It has no zod counterpart. The TypeScript engine had no such hook, so nothing in
+// testdata/ts-config.json can describe it.
+type PostprocessConfig struct {
+	// Command is a shell command line — the platform shell runs it, so a pipe, a glob or an `&&`
+	// all work. Empty means the hook is off, which is the default and stays the default.
+	Command string `json:"command,omitempty"`
+	// Dir is the command's working directory, relative to the project root. Empty means the root
+	// itself; the output directory reaches the command through $FRZNFORGE_DIST_DIR instead,
+	// because a hook that also reads package.json or a tool config needs the root.
+	Dir string `json:"dir,omitempty"`
+}
+
+// Configured reports whether anything would run.
+func (p PostprocessConfig) Configured() bool { return strings.TrimSpace(p.Command) != "" }
+
 // Config is the file's contents with defaults applied. Paths are still as written.
 type Config struct {
 	Site          SiteConfig           `json:"site"`
@@ -256,6 +280,7 @@ type Config struct {
 	Hosting       HostingConfig        `json:"hosting"`
 	Ingest        IngestConfig         `json:"ingest"`
 	Listing       ListingConfig        `json:"listing"`
+	Postprocess   PostprocessConfig    `json:"postprocess,omitempty"`
 
 	// notesConfigured records whether the file declared a `notes` block at all. notes.dir has
 	// a default, so NotesDir always points somewhere; without this flag a site that never
@@ -519,6 +544,9 @@ func Validate(c *Config) error {
 	if _, _, err := c.Ingest.BranchTreesLimit(); err != nil {
 		bad("%s", err.Error())
 	}
+	if err := ValidatePostprocess(c.Postprocess); err != nil {
+		bad("%s", err.Error())
+	}
 	for _, p := range []struct {
 		name, value string
 	}{
@@ -614,6 +642,35 @@ func Validate(c *Config) error {
 	return nil
 }
 
+// ValidatePostprocess checks the `postprocess` block.
+//
+// Exported because internal/build reads the block straight out of the file for a directory whose
+// config will not otherwise load (`frznforge build --postprocess=…` in a half-configured repo),
+// and a rule that only one of the two paths enforced would be a rule the user meets by accident.
+//
+// It cannot check the command itself — that is a shell line, and the shell is the only thing
+// that knows whether it means anything — so it checks the two mistakes that are decidable here:
+// a block that would never run, and a `dir` that only works on the machine it was written on.
+func ValidatePostprocess(p PostprocessConfig) error {
+	if !p.Configured() {
+		switch {
+		case p.Command != "":
+			return fmt.Errorf("postprocess.command is blank — write the command to run, or delete the whole block to turn the hook off")
+		case p.Dir != "":
+			return fmt.Errorf("postprocess.dir is %q but postprocess.command is empty, so nothing would run — add a command, or delete the whole block", p.Dir)
+		}
+		return nil
+	}
+	// A backslash is a path separator on Windows and an ordinary filename character everywhere
+	// else, so `"dir": "tools\\min"` runs in tools/min on one machine and fails to find a
+	// directory literally called `tools\min` on the next. Same rule as checkPublicPath, same
+	// reason.
+	if strings.Contains(p.Dir, `\`) {
+		return fmt.Errorf("postprocess.dir %q must use forward slashes — a backslash is a path separator only on Windows", p.Dir)
+	}
+	return nil
+}
+
 // checkPublicPath enforces the PublicPath rules: a path inside public/, never a URL, never
 // escaping with "..". Local only, deliberately — frznforge's published pages call no third
 // party, and an avatar pointing at a forge's CDN would break that for every visitor.
@@ -664,6 +721,21 @@ func Resolve(c *Config, root string) (*Resolved, error) {
 		NotesDir:    resolveFrom(abs, c.Notes.Dir),
 		OrgsDir:     resolveFrom(abs, c.Content.Orgs),
 	}
+	// owner.avatar is the one PublicPath the renderer reads straight off the config rather than
+	// out of the artifact, so it is the one that never got the zod schema's leading-slash
+	// transform in the port. Applied here, on the resolved COPY, so the parsed Config the wizard
+	// reads and writes back keeps the value the user typed ("logo.png", not "/logo.png").
+	//
+	// Without it every page emitted `src="logo.png"` — correct at the root, a 404 anywhere
+	// deeper — and the sub-path build concatenated it into `/mysitelogo.png`. Organization and
+	// contributor pictures were never affected: those travel through the artifact, where ingest
+	// already calls PublicPath on them. Nothing caught it because the e2e fixture's build read
+	// the developer's own config, which sets no owner avatar; that gap is what pointing the
+	// fixture build at its own config closed.
+	if r.Owner.Avatar != "" {
+		r.Owner.Avatar = PublicPath(r.Owner.Avatar)
+	}
+
 	r.Sources = make([]ResolvedSource, 0, len(c.Repos))
 	for _, s := range c.Repos {
 		rs := ResolvedSource{RepoSourceConfig: s}

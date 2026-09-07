@@ -18,7 +18,12 @@ import (
 // sequences (both must DROP the key rather than half-parse it), quoting, comments that are and
 // are not comments, CRLF and a BOM.
 //
-// Regenerate with that command if the cases change; a diff here is a real difference.
+// FROZEN as of 0.4.0. The generator and the TypeScript it read were deleted in Phase 9, so this
+// golden can no longer be regenerated — it is now a record of what the previous engine emitted
+// rather than a live comparison. That is the correct status for it: its job was to hold the Go
+// port to the behaviour it replaced, and that job is finished. A deliberate change to this
+// output means editing the golden by hand and saying why in the commit; an accidental one still
+// fails here, which is the whole point of keeping it.
 func TestMatchesTypeScript(t *testing.T) {
 	var golden struct {
 		Parse []struct {

@@ -15,11 +15,14 @@ package main
 // unwritable outDir, git missing) or for ingest.failOnDegraded — and even then the artifact has
 // already been written, because a partial artifact plus a red build is easier to debug than
 // neither.
+//
+// runIngest is split out from the command because `frznforge build` runs the same scan in
+// process. scripts/build.ts had to spawn `tsx scripts/ingest.ts` and forward signals to it; a
+// function call needs neither, and the two paths cannot print different things.
 
 import (
 	"context"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -30,7 +33,7 @@ import (
 )
 
 // ingestCmd runs the pipeline over the config in the current directory.
-func ingestCmd(argv []string) error {
+func ingestCmd(argv []string, io *Io) error {
 	root := "."
 	outDir := ""
 	// --root and --out are this command's own; everything else goes to the ported flag parser,
@@ -50,7 +53,14 @@ func ingestCmd(argv []string) error {
 	if err != nil {
 		return err
 	}
+	return runIngest(root, outDir, args, io)
+}
 
+// runIngest scans the repositories configured under root and writes the artifact.
+//
+// outDir overrides ingest.outDir when it is non-empty; `frznforge build` passes "" because it
+// has no artifact-directory flag of its own.
+func runIngest(root, outDir string, args ingest.IngestArgs, io *Io) error {
 	cfg, err := config.Load(root)
 	if err != nil {
 		return err
@@ -63,18 +73,18 @@ func ingestCmd(argv []string) error {
 	}
 
 	if args.BackfillMetadata {
-		fmt.Println("  --backfill-metadata: only repos with no cached provider metadata will be fetched, " +
+		io.log("  --backfill-metadata: only repos with no cached provider metadata will be fetched, " +
 			"and git is not touched at all.")
 	}
 	if args.NoCache {
 		// Ingest forces a full fetch and reads no provider/scan caches for this run; fresh
 		// results are still recorded (under the real config's hash) for the next ordinary run.
-		fmt.Println("  --no-cache: fetching everything; provider/scan caches ignored for this run")
+		io.log("  --no-cache: fetching everything; provider/scan caches ignored for this run")
 	}
 
-	fmt.Printf("frznforge ingest → %s\n", cfg.OutDir)
+	io.logf("frznforge ingest → %s", cfg.OutDir)
 	if len(cfg.Sources) == 0 {
-		fmt.Println("  (no repos configured — writing an empty artifact)")
+		io.log("  (no repos configured — writing an empty artifact)")
 	}
 	remoteCount := 0
 	for _, src := range cfg.Sources {
@@ -87,25 +97,25 @@ func ingestCmd(argv []string) error {
 		if args.NoCache {
 			fetch = "always [--no-cache]"
 		}
-		fmt.Printf("  %d remote source(s) — cache %s (fetch: %s)\n", remoteCount, cfg.CacheDir, fetch)
+		io.logf("  %d remote source(s) — cache %s (fetch: %s)", remoteCount, cfg.CacheDir, fetch)
 	}
 
 	started := time.Now()
 	res, err := ingest.Ingest(context.Background(), cfg, ingest.Hooks{
-		OnRepoStart: func(slug string) { fmt.Printf("  ▸ %s\n", slug) },
+		OnRepoStart: func(slug string) { io.logf("  ▸ %s", slug) },
 		OnRemote: func(s ingest.RemoteStatus) {
 			if s.Cooldown {
-				fmt.Printf("    ⚠️ %s: this repo is on cooldown\n", s.Slug)
+				io.logf("    ⚠️ %s: this repo is on cooldown", s.Slug)
 				return
 			}
-			fmt.Printf("    ⇄ %s (%s: %s)\n", s.Slug, s.Provider, s.Action)
+			io.logf("    ⇄ %s (%s: %s)", s.Slug, s.Provider, s.Action)
 		},
 		OnRepoDone: func(repo *model.Repo) {
 			empty := ""
 			if repo.Empty {
 				empty = " (empty)"
 			}
-			fmt.Printf("    ✓ %s: %d commits, %d branches, %d tags, %d files%s\n",
+			io.logf("    ✓ %s: %d commits, %d branches, %d tags, %d files%s",
 				repo.Slug, repo.CommitCount, len(repo.Branches), len(repo.GitTags), len(repo.Files), empty)
 		},
 	}, ingest.Options{NoCache: args.NoCache, BackfillMetadata: args.BackfillMetadata})
@@ -133,7 +143,7 @@ func ingestCmd(argv []string) error {
 		if w.Repo != nil {
 			scope = " " + *w.Repo + ":"
 		}
-		fmt.Fprintf(os.Stderr, "  ⚠ [%s]%s %s\n", w.Code, scope, w.Message)
+		io.errf("  ⚠ [%s]%s %s", w.Code, scope, w.Message)
 	}
 
 	// Repos that ended the run on cached-or-missing provider data. Read twice below.
@@ -155,14 +165,14 @@ func ingestCmd(argv []string) error {
 				filled = append(filled, r.Slug)
 			}
 		}
-		fmt.Printf("  backfill: %d filled, %d still missing, %d already had metadata (no network)\n",
+		io.logf("  backfill: %d filled, %d still missing, %d already had metadata (no network)",
 			len(filled), len(stillMissing), len(replayed))
 		if len(filled) > 0 {
-			fmt.Printf("    ✓ filled: %s\n", strings.Join(filled, ", "))
+			io.logf("    ✓ filled: %s", strings.Join(filled, ", "))
 		}
 		if len(stillMissing) > 0 {
-			fmt.Printf("    ⚠️ still missing: %s\n", strings.Join(stillMissing, ", "))
-			fmt.Println("      Run it again later — the quota resets, and each run only spends it on these.")
+			io.logf("    ⚠️ still missing: %s", strings.Join(stillMissing, ", "))
+			io.log("      Run it again later — the quota resets, and each run only spends it on these.")
 		}
 	}
 
@@ -188,7 +198,7 @@ func ingestCmd(argv []string) error {
 		if len(skipped) > 0 {
 			parts = append(parts, fmt.Sprintf("%d skipped (%s)", len(skipped), strings.Join(skipped, ", ")))
 		}
-		fmt.Printf("  ! remote sources: %s — see the warnings above; the build continued.\n", strings.Join(parts, "; "))
+		io.logf("  ! remote sources: %s — see the warnings above; the build continued.", strings.Join(parts, "; "))
 	}
 
 	// Notes and organizations are reported only when there are any: most sites configure neither,
@@ -204,7 +214,7 @@ func ingestCmd(argv []string) error {
 	if len(extras) > 0 {
 		prefix = strings.Join(extras, ", ") + ", "
 	}
-	fmt.Printf("done: %d repo(s), %s%d blob(s), %d archive(s), %d warning(s) in %dms\n",
+	io.logf("done: %d repo(s), %s%d blob(s), %d archive(s), %d warning(s) in %dms",
 		len(res.Data.Repos), prefix, len(res.Blobs), len(res.Archives), len(res.Data.Warnings),
 		time.Since(started).Milliseconds())
 

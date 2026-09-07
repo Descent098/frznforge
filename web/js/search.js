@@ -66,7 +66,13 @@ export function scoreDoc(doc, query) {
     }
     score += s;
   }
-  score += KIND_BONUS[doc.kind];
+  // ?? 0, not a bare lookup. An unlisted kind makes the lookup undefined, which turns the whole
+  // score into NaN — and `score > 0` is false for NaN, so the document would not rank last, it
+  // would vanish from the palette with nothing logged anywhere. That used to be a closed loop:
+  // one file built the index and this one read it. Since 0.4.0 the index is built in Go
+  // (internal/build/search_index.go) and ranked here, so a kind added on that side and not on
+  // this one is a live possibility rather than a typo.
+  score += KIND_BONUS[doc.kind] ?? 0;
   score += Math.max(0, 2 - title.length / 40); // shorter titles edge ahead
   // exact repo-name match wins outright (max title-length bonus is 2, so 5 clears any tie)
   if (doc.kind === 'repo' && title === query.trim().toLowerCase()) score += 5;

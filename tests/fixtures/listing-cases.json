@@ -1,4 +1,8 @@
 {
+  "source": {
+    "file": "web/js/listing.js",
+    "sha256": "1a97ec1f9c57f3be0310891728c1fc189949a2f2753559a38002bf4be84f5ce5"
+  },
   "repos": [
     {
       "slug": "alpha",
@@ -234,6 +238,28 @@
       "slug": "foxtrot",
       "query": false,
       "filters": true
+    }
+  ],
+  "blankQueries": [
+    {
+      "query": "",
+      "matchesAll": true,
+      "kept": 6
+    },
+    {
+      "query": " ",
+      "matchesAll": true,
+      "kept": 6
+    },
+    {
+      "query": "   ",
+      "matchesAll": true,
+      "kept": 6
+    },
+    {
+      "query": "\t\n",
+      "matchesAll": true,
+      "kept": 6
     }
   ],
   "listings": [

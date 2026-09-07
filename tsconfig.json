@@ -1,16 +1,33 @@
 {
-  "extends": "astro/tsconfigs/strict",
-  "include": [
-    ".astro/types.d.ts",
-    "**/*"
+  "//": [
+    "Editor support for the Playwright suite. Nothing builds with this.",
+    "",
+    "0.4.0 closed the TypeScript 7 deferral by removing TypeScript instead of upgrading it. The",
+    "blocker was @astrojs/check and @astrojs/svelte pinning `typescript: ^5 || ^6`; both are gone,",
+    "and so is the reason to have the compiler at all. Playwright transpiles .ts specs with its own",
+    "bundled transform, so the suite runs with no compiler installed and there is no `npm run check`",
+    "any more.",
+    "",
+    "The specs keep their type annotations — they are the assertions the whole rewrite is measured",
+    "against and may not be rewritten — so this file stays to tell an editor how to read them. An",
+    "editor brings its own TypeScript; @types/node is the only dependency it needs from here, and it",
+    "contributes nothing at runtime.",
+    "",
+    "The trade: the harness is no longer type-checked in CI. It is thirteen spec files that fail",
+    "loudly and immediately when they are wrong, which is a cheaper guard than a compiler nobody",
+    "else needs."
   ],
-  "exclude": [
-    "dist",
-    "docs",
-    "tests/.tmp",
-    "data",
-    // Vendored, pre-built browser code. `allowJs` is on, so without this TypeScript parses
-    // all 3.5 MB of minified mermaid on every `astro check` — which crashes it outright.
-    "web/vendor"
-  ]
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true
+  },
+  "include": ["tests/**/*.ts", "playwright.config.ts"]
 }

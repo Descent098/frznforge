@@ -99,7 +99,8 @@ Same for `.ExtraScripts` (`/js/mermaid.js` on a page whose markdown holds a diag
 ## What "done" means
 
 1. `gofmt -w`, `go build ./...`, `go vet ./...`, `go test ./...` clean.
-2. `go run ./cmd/frznforge build --out=/tmp/site` gets past your family.
+2. `go run ./cmd/frznforge build --no-ingest --out=/tmp/site` gets past your family. (`--no-ingest`
+   because `build` scans first otherwise, and a render check has no business touching the network.)
 3. The markup matches what the Astro component emitted — same classes, same ids, same
    attributes, same nesting. The e2e suite asserts on those selectors and **may not be edited**.
    `dist/` holds Astro's current output: read the real HTML for the page you are porting rather

@@ -1,4 +1,8 @@
 {
+  "source": {
+    "file": "web/js/format.js",
+    "sha256": "96e5c2c02ea3bfd9c8fbc63112950923d72e6c7579009e463669285aacdd4af6"
+  },
   "now": "2026-09-06T12:00:00Z",
   "heat": {
     "hot": 7,

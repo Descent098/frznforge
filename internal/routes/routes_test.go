@@ -17,8 +17,12 @@ import (
 // same set in a different order — the two renderers would build different sites from the same
 // artifact, and this is the cheapest possible place to find that out.
 //
-// Regenerate with that command whenever the fixture changes; a diff here is a real difference,
-// not test drift.
+// FROZEN as of 0.4.0. The generator and the TypeScript it read were deleted in Phase 9, so this
+// golden can no longer be regenerated — it is now a record of what the previous engine emitted
+// rather than a live comparison. That is the correct status for it: its job was to hold the Go
+// port to the behaviour it replaced, and that job is finished. A deliberate change to this
+// output means editing the golden by hand and saying why in the commit; an accidental one still
+// fails here, which is the whole point of keeping it.
 func TestAllRoutesMatchesTypeScript(t *testing.T) {
 	data := loadFixture(t)
 

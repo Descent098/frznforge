@@ -131,6 +131,11 @@ func TestMatchesTypeScriptDefaults(t *testing.T) {
 		}
 	}
 
+	// postprocess is a 0.4.0 addition with no zod counterpart, so testdata/ts-config.json can
+	// never contain it and the backstop below would fail the day this repository configures its
+	// own hook. Cleared here rather than left as a trap; postprocess_test.go covers the block.
+	got.Postprocess, want.Postprocess = PostprocessConfig{}, PostprocessConfig{}
+
 	// Backstop: catches a field added to Config that the table above forgot.
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("a field outside the table differs\n Go: %s\n TS: %s", mustJSON(t, got), mustJSON(t, want))
@@ -303,5 +308,45 @@ func TestValidateRejectsAuthoringMistakes(t *testing.T) {
 				t.Error("expected the load to fail")
 			}
 		})
+	}
+}
+
+// TestResolveNormalisesOwnerAvatar pins the leading slash on owner.avatar.
+//
+// It is the one PublicPath the renderer reads straight off the config — organization and
+// contributor pictures reach it through the artifact, where ingest has already normalised them —
+// so it was also the one that lost the zod schema's transform in the port. The symptom was
+// invisible for a whole phase: `src="logo.png"` is correct on the index page and a 404 on every
+// deeper one, and under a deploy base it concatenated into `/mysitelogo.png`.
+//
+// The parsed Config must keep the value the user typed: `frznforge init --web` edits that file
+// by key path and writing "/logo.png" back into it would rewrite input nobody changed.
+func TestResolveNormalisesOwnerAvatar(t *testing.T) {
+	cfg, err := ParseBytes([]byte(`{"owner":{"name":"K","handle":"k","avatar":"images/me.png"}}`))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	r, err := Resolve(cfg, t.TempDir())
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if r.Owner.Avatar != "/images/me.png" {
+		t.Errorf("resolved owner.avatar = %q, want %q", r.Owner.Avatar, "/images/me.png")
+	}
+	if cfg.Owner.Avatar != "images/me.png" {
+		t.Errorf("the parsed config was rewritten to %q; the wizard writes that value back", cfg.Owner.Avatar)
+	}
+
+	// An unset avatar stays unset, or the sidebar would ask for "/" and lose the initials.
+	bare, err := ParseBytes([]byte(`{"owner":{"name":"K","handle":"k"}}`))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	plain, err := Resolve(bare, t.TempDir())
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if plain.Owner.Avatar != "" {
+		t.Errorf("resolved owner.avatar = %q, want empty", plain.Owner.Avatar)
 	}
 }

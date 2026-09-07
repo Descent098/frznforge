@@ -1,41 +1,65 @@
 ## Development
 
-`npm run dev` (`scripts/dev.ts`) prints a notice and runs `astro preview` over `dist/`: it serves the **most recent `npm run build`** and rebuilds nothing. It exits 1 with instructions if `dist/` or `data/forge.json` is missing. To see a code or content change, run `npm run build`.
+frznforge is a **Go binary**. Build it with `go build ./cmd/frznforge`; there is no Node in the
+build path and no bundler, transpiler or minifier anywhere.
 
-The raw Astro dev server (HMR, but `loadForgeData` memoises `data/forge.json` for the process lifetime, so a re-ingest 404s until restart) is `npm run astro dev`. When starting it, use background mode:
+- `frznforge ingest` → `data/forge.json` + `data/blobs/` + `data/archives/` (all gitignored).
+- `frznforge build` = ingest + render. `frznforge build --no-ingest` renders the artifact already
+  on disk, which is what you want while iterating on templates or CSS. It refuses when there is
+  no artifact rather than quietly building an empty site over a good one.
+- `frznforge dev` serves the **last build** over `dist/` and rebuilds nothing. It exits 1 with
+  instructions if `dist/` or `data/forge.json` is missing. To see a change, run `build` again.
+- `frznforge init [--web]`, `frznforge new <dir>` — set up a site, or scaffold one.
+- `frznforge verify [<forge.json>]` reads, validates and re-serializes the artifact, and compares
+  byte for byte with the file on disk.
+- `frznforge config migrate` converts a 0.3.0 `frznforge.config.ts` into `frznforge.config.jsonc`,
+  comments and all.
 
-```
-astro dev --background
-```
-
-Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
-
-## Documentation
-
-Full documentation: https://docs.astro.build
-
-Consult these guides before working on related tasks:
-
-- [Adding pages, dynamic routes, or middleware](https://docs.astro.build/en/guides/routing/)
-- [Working with Astro components](https://docs.astro.build/en/basics/astro-components/)
-- Browser code: `web/` (no framework, no build step — see the house rule below)
-- [Adding or managing content](https://docs.astro.build/en/guides/content-collections/)
-- [Adding styles or using Tailwind](https://docs.astro.build/en/guides/styling/)
-- [Supporting multiple languages](https://docs.astro.build/en/guides/internationalization/)
+There is no watch mode and no HMR. The render is fast enough that a rebuild is the loop.
 
 ## Project layout & commands
 
-- `frznforge.config.ts` — site config (owner, repos to ingest, palette). `content/profile.md` — profile page.
-- `npm run ingest` → `data/forge.json` + `data/blobs/` (gitignored). `npm run build` = ingest + `astro build`.
-- `src/lib/data/schema.ts` is the ingest ↔ site contract (zod). Bump `SCHEMA_VERSION` + `docs/dev/data-model.md` + snapshots on any change.
-- `src/lib/ingest/*` reads git via the CLI only (never the working tree). `src/lib/{site,routes,markdown}.ts` are site helpers.
-- `web/` is the browser half and is served **verbatim** — plain ES modules, no transpile, no bundler, relative imports with `.js` extensions. `web/js/{format,listing,search,base}.js` are THE implementations; `src/lib/{format,listing,search,base}.ts` re-export them and add the parts that take artifact types. Never fork one into a second copy. `web/vendor/` is pre-built third-party code (mermaid); it is excluded from `tsconfig.json` because `allowJs` would otherwise parse 3.5 MB of minified JS on every `astro check`.
-- Styles: plain CSS only, `hf-` prefix, tokens at the top of `web/css/global.css` (site-wide) + `web/css/repo.css` (repo sub-pages). No Tailwind/Sass.
+- `frznforge.config.jsonc` — site config (owner, repos to ingest, palette). JSON with comments;
+  the comments are the configuration's documentation and every tool that edits it preserves them.
+  `content/profile.md` — profile page.
+- `cmd/frznforge/` — the CLI. `internal/` — the engine:
+  - `internal/model` is the ingest ↔ site contract (schema **v8**). Bump `SchemaVersion` +
+    `docs/dev/data-model.md` + the golden fixtures on any change.
+  - `internal/ingest/*` reads git **via the CLI only, never the working tree**. This is the
+    load-bearing invariant of the project; `internal/ingest/uncommitted_test.go` guards it.
+  - `internal/build/pages_*.go` are the page families; `internal/routes` predicts every route and
+    `internal/build/sync_test.go` holds the two to each other in both directions.
+  - `internal/{render,markdown,highlight,theme,serve,scaffold,wizard,config,frontmatter}`.
+- `web/` is the browser half, served **verbatim** — plain ES modules, no transpile, no bundler,
+  relative imports with `.js` extensions. `web/js/{format,listing,search,base}.js` are THE
+  implementations. Never fork one into a second copy. `web/vendor/` is pre-built third-party code
+  (mermaid). Note `web/` is copied from the PROJECT, not embedded in the binary: a site that does
+  not carry it builds pages with no stylesheet and no command palette.
+- Two Go dependencies, both pure Go: goldmark (markdown) and chroma (highlighting).
+- Styles: plain CSS only, `hf-` prefix, tokens at the top of `web/css/global.css` (site-wide) +
+  `web/css/repo.css` (repo sub-pages). No Tailwind/Sass.
+
+## House rules
+
+- **Determinism is the central invariant.** Two machines must emit identical bytes from identical
+  input. Never range a Go map without sorting the keys; never use a locale-aware comparison; never
+  read the clock — take `now time.Time` as a parameter.
+- **Comments explain why, not what.** Name the bug the code prevents, the alternative rejected, or
+  the invariant at stake. A comment that restates the next line is worse than none.
+- **Usability beats accessibility when the two collide.** This is a personal app.
+- The **cross-language goldens** in `tests/fixtures/` are generated FROM `web/js/*.js`, which makes
+  the JavaScript the reference and Go the thing checked against it. Change one of those files and
+  re-run its generator in the same commit — `internal/render/golden_test.go` fails with the exact
+  command if you forget.
 
 ## Testing
 
-- `npm test` — vitest unit tests (`tests/unit`), fixture git repos in temp dirs.
-- `npm run test:e2e` — Playwright; builds the site from fixture repos into `tests/.tmp/e2e` first.
-- `npm run check` — `astro check`. Keep all three green before committing.
-- Plans & phase checklist: `docs/dev/plans/plan-phases.md`.
-
+- `go test ./...` — the whole engine. Fixture git repos in temp dirs; nothing reaches the network.
+- `npm run test:e2e` — Playwright. `tests/e2e/global-setup.ts` builds fixture repos, seeds the
+  provider caches so the two "remote" repos import offline, runs the binary for ingest and build,
+  then starts two `frznforge dev` servers. Node is needed for this and nothing else.
+- There is **no `npm run check`**: 0.4.0 removed TypeScript rather than upgrading it. Playwright
+  transpiles the specs itself. `tsconfig.json` exists for editors only.
+- The e2e specs are the invariant the rewrite is measured against and **may not be edited** to
+  accommodate a change in the engine. The harness around them may.
+- Plans & phase checklist: `docs/dev/plans/`. Coverage audit: `docs/dev/architecture.md`.

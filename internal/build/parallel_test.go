@@ -20,10 +20,16 @@ import (
 // trees. If they ever differ, something is sharing state that should not be, and this says so
 // with the file name rather than leaving it to be noticed as a dirty diff months later.
 func TestSerialAndParallelAgree(t *testing.T) {
-	root := repoRoot(t)
-	if _, err := os.Stat(filepath.Join(root, "data", "forge.json")); err != nil {
-		t.Skip("no artifact on this machine")
+	workers := runtime.GOMAXPROCS(0)
+	if workers < 2 {
+		t.Skip("single-core machine: there is no parallel mode to compare")
 	}
+	for _, project := range buildRoots(t) {
+		t.Run(project.name, func(t *testing.T) { assertSerialAndParallelAgree(t, project.root, workers) })
+	}
+}
+
+func assertSerialAndParallelAgree(t *testing.T, root string, workers int) {
 	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 
 	serial := filepath.Join(t.TempDir(), "serial")
@@ -31,10 +37,6 @@ func TestSerialAndParallelAgree(t *testing.T) {
 
 	if _, err := build.Run(build.Options{Root: root, OutDir: serial, Now: now, Workers: 1}); err != nil {
 		t.Fatalf("serial build: %v", err)
-	}
-	workers := runtime.GOMAXPROCS(0)
-	if workers < 2 {
-		t.Skip("single-core machine: there is no parallel mode to compare")
 	}
 	if _, err := build.Run(build.Options{Root: root, OutDir: parallel, Now: now, Workers: workers}); err != nil {
 		t.Fatalf("parallel build (%d workers): %v", workers, err)

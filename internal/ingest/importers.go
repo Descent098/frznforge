@@ -161,7 +161,9 @@ func TokenEnvFor(source config.RepoSourceConfig) []string {
 // `Env{}` means "this build has no tokens", not "go look at os.Environ".
 type Env map[string]string
 
-func (e Env) lookup(name string) string {
+// Lookup reads one variable. It is exported because the wizard reports WHICH variable a token
+// came from, and it has to ask the same environment the resolver did — including the nil case.
+func (e Env) Lookup(name string) string {
 	if name == "" {
 		return ""
 	}
@@ -175,7 +177,7 @@ func (e Env) lookup(name string) string {
 // none is set. Tokens live in the environment only — a token never comes from the config file.
 func ResolveToken(source config.RepoSourceConfig, env Env) string {
 	for _, name := range TokenEnvFor(source) {
-		if v := strings.TrimSpace(env.lookup(name)); v != "" {
+		if v := strings.TrimSpace(env.Lookup(name)); v != "" {
 			return v
 		}
 	}
