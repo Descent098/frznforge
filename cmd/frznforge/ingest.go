@@ -30,10 +30,21 @@ import (
 	"frznforge/internal/config"
 	"frznforge/internal/ingest"
 	"frznforge/internal/model"
+	"frznforge/internal/timings"
 )
 
+// stepUnder opens a step under parent, or a top-level one when the run has none — the CLI's copy
+// of the same two-line rule internal/build and internal/ingest each need, because Child on a nil
+// *Step is the no-op for "timings are off" and not for "there is no parent".
+func stepUnder(parent *timings.Step, kind, name string) *timings.Step {
+	if parent == nil {
+		return timings.Start(kind, name)
+	}
+	return parent.Child(kind, name)
+}
+
 // ingestCmd runs the pipeline over the config in the current directory.
-func ingestCmd(argv []string, io *Io) error {
+func ingestCmd(argv []string, io *Io, step *timings.Step) error {
 	root := "."
 	outDir := ""
 	// --root and --out are this command's own; everything else goes to the ported flag parser,
@@ -53,14 +64,16 @@ func ingestCmd(argv []string, io *Io) error {
 	if err != nil {
 		return err
 	}
-	return runIngest(root, outDir, args, io)
+	return runIngest(root, outDir, args, io, step)
 }
 
 // runIngest scans the repositories configured under root and writes the artifact.
 //
 // outDir overrides ingest.outDir when it is non-empty; `frznforge build` passes "" because it
 // has no artifact-directory flag of its own.
-func runIngest(root, outDir string, args ingest.IngestArgs, io *Io) error {
+//
+// step is the run's timings step, so `build` records its scan under the same run as its render.
+func runIngest(root, outDir string, args ingest.IngestArgs, io *Io, step *timings.Step) error {
 	cfg, err := config.Load(root)
 	if err != nil {
 		return err
@@ -118,12 +131,20 @@ func runIngest(root, outDir string, args ingest.IngestArgs, io *Io) error {
 			io.logf("    ✓ %s: %d commits, %d branches, %d tags, %d files%s",
 				repo.Slug, repo.CommitCount, len(repo.Branches), len(repo.GitTags), len(repo.Files), empty)
 		},
-	}, ingest.Options{NoCache: args.NoCache, BackfillMetadata: args.BackfillMetadata})
+	}, ingest.Options{NoCache: args.NoCache, BackfillMetadata: args.BackfillMetadata, Step: step})
 	if err != nil {
 		return err
 	}
 
-	if err := ingest.WriteArtifact(res.Data, res.Blobs, res.Archives, cfg.OutDir); err != nil {
+	// Timed separately from the scan: writing 25 MB of JSON plus the blob and archive mirrors is
+	// a disk cost with nothing to do with git or the network, and folding it into the scan would
+	// blame the wrong half when a slow disk is the answer.
+	write := stepUnder(step, "ingest.write", "artifact")
+	writeErr := ingest.WriteArtifact(res.Data, res.Blobs, res.Archives, cfg.OutDir)
+	write.Fail(writeErr).DoneWith(timings.Counts{
+		"blobs": int64(len(res.Blobs)), "archives": int64(len(res.Archives)),
+	})
+	if err := writeErr; err != nil {
 		// WriteArtifact validates before it writes, so this is an ingest bug rather than a
 		// warning — and a bare validation message says nothing about which repo produced the bad
 		// value, so name them.

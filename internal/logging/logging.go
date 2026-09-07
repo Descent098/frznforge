@@ -17,6 +17,23 @@
 //   - Every external process is logged around, not just after. A command that never returns
 //     leaves a "starting" record with no matching "finished" one, which is precisely the
 //     evidence the hour-long hang did not produce.
+//
+// There are two sinks and they are independent (see file.go):
+//
+//	Setup(level, stderr)     the user's choice, off unless --log or FRZNFORGE_LOG asks
+//	SetupFile(outDir, errOut) <outDir>/frznforge.log, every run, always at debug
+//
+// Neither call undoes the other, in either order, because the CLI installs the stderr sink from
+// the command line before it has read the config that says where outDir is.
+//
+// Whatever reaches either sink is redacted first, once, by the handler rather than by the call
+// sites (see redact.go). Nothing in this package writes to the site, to dist/ or to forge.json:
+// a diagnostic that could change what a build emits would be a determinism bug, not a feature.
+//
+// Records are logfmt — slog's TextHandler — in both sinks. The audience is a person reading a
+// terminal or a file, and logfmt stays parseable for a tool that wants to read the file back:
+// `time=… level=… msg=… key=value`, one record per line, with the file's timestamps carrying
+// the date and UTC offset that stderr's do not.
 package logging
 
 import (
@@ -61,21 +78,23 @@ func Level(name string) (slog.Level, bool) {
 	}
 }
 
-// Setup installs a handler at the given level, writing to w. Passing an empty name turns
-// logging off and leaves the discard handler in place.
+// Setup installs the stderr sink at the given level, writing to w. Passing an empty name turns
+// the stderr sink off; it does NOT touch the file sink, which is written on every run.
 //
 // Text, not JSON. The audience is a person reading a terminal or pasting a file into an issue,
 // and every field here is short enough to stay on one line.
 func Setup(name string, w io.Writer) {
 	level, on := Level(name)
 	if !on {
-		slog.SetDefault(slog.New(discard{}))
+		setSink(&sinks.stderr, nil)
 		return
 	}
 	if w == nil {
 		w = os.Stderr
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{
+	// Harvest the environment's secrets before the first record can carry one.
+	loadEnvSecrets()
+	setSink(&sinks.stderr, slog.NewTextHandler(w, &slog.HandlerOptions{
 		Level: level,
 		// The timestamp is what makes a hang readable: the gap between the last record and now
 		// is the answer. Seconds resolution would hide a fast loop, so it keeps milliseconds.
@@ -85,7 +104,7 @@ func Setup(name string, w io.Writer) {
 			}
 			return a
 		},
-	})))
+	}))
 }
 
 // FromEnv turns logging on if EnvVar is set. Returns whether it did, so a caller can say so.

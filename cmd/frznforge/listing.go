@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -191,9 +192,18 @@ func (r listRequest) headers(req *http.Request) {
 }
 
 // getJSON fetches one page, turning every failure into an error with the token scrubbed out.
+//
+// This is the second outbound HTTP client in the program — `init` lists an account's
+// repositories without going near internal/ingest's importers — so it carries the same pair of
+// records they do. A listing that stalls behind a corporate proxy is a hang with no output at
+// all otherwise: the prompt has already printed and the next thing a user sees is nothing.
 func (r listRequest) getJSON(target string) (int, []byte, http.Header, error) {
+	started := time.Now()
+	slog.Debug("http start", "url", target, "who", "init-listing")
+
 	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
+		slog.Debug("http failed", "url", target, "who", "init-listing", "err", err)
 		return 0, nil, nil, fmt.Errorf("not a usable URL: %s", target)
 	}
 	r.headers(req)
@@ -203,8 +213,12 @@ func (r listRequest) getJSON(target string) (int, []byte, http.Header, error) {
 	}
 	res, err := client.Do(req)
 	if err != nil {
+		slog.Debug("http failed", "url", target, "who", "init-listing",
+			"ms", time.Since(started).Milliseconds(), "err", err)
 		return 0, nil, nil, fmt.Errorf("could not reach %s: %s", target, ingest.RedactToken(err.Error(), r.token))
 	}
+	slog.Debug("http done", "url", target, "who", "init-listing",
+		"ms", time.Since(started).Milliseconds(), "status", res.StatusCode)
 	defer res.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(res.Body, 32<<20))
 	if err != nil {

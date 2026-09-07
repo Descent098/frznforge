@@ -17,6 +17,12 @@ build path and no bundler, transpiler or minifier anywhere.
 
 There is no watch mode and no HMR. The render is fast enough that a rebuild is the loop.
 
+**Every run leaves evidence.** `<outDir>/frznforge.log` is what the last run did (truncated per
+run; `frznforge dev` writes its own `frznforge-dev.log` so it cannot erase the build you are
+debugging) and `<outDir>/frznforge-timings.jsonl` is what each step cost (appended, trimmed when
+it grows). `frzndebugger` reads both — a TUI by default, `--web` for a browser, `--plain` for a
+script. It leads with steps that started and never finished, which is the answer when a run stops.
+
 **When something stalls, ask it.** Every command takes `--log=debug` (or `FRZNFORGE_LOG=debug`),
 which writes to stderr while progress stays on stdout: `frznforge build --log=debug 2> build.log`.
 Each git call and HTTP request is logged before it starts as well as after it finishes, so a
@@ -60,7 +66,16 @@ the culprit. Logging is off by default and free when off.
 
 ## Testing
 
-- `go test ./...` — the whole engine. Fixture git repos in temp dirs; nothing reaches the network.
+- `go test ./internal/... ./cmd/...` — the whole engine. Fixture git repos in temp dirs; nothing
+  reaches the network. **Scoped on purpose**: a built site under `dist/` contains the raw source
+  files of every repository it publishes, so a corpus with Go repos in it puts hundreds of stray
+  `.go` files inside this module and `./...` tries to parse them (`malformed import path … invalid
+  char ' '`). Build the site elsewhere — `frznforge build --out=_dist` — if you want `./...` back;
+  the Go tool ignores directories starting with `_`.
+- The heavy gates are opt-in. `FRZNFORGE_FULL_CORPUS=1 go test ./internal/build/ -timeout 90m`
+  renders your own corpus twice to prove determinism and serial/parallel agreement; without it the
+  same tests run against a fixture they build themselves, which is what keeps them honest on a
+  clean clone.
 - `npm run test:e2e` — Playwright. `tests/e2e/global-setup.ts` builds fixture repos, seeds the
   provider caches so the two "remote" repos import offline, runs the binary for ingest and build,
   then starts two `frznforge dev` servers. Node is needed for this and nothing else.

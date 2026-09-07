@@ -11,7 +11,7 @@ Nothing in this folder is edited. To refresh one, bump the package in `package.j
 
 Client-side renderer for ` ```mermaid ` fences. Loaded lazily by `web/js/mermaid.js` — only
 once a diagram nears the viewport, and only on pages whose markdown actually contains one
-(`containsMermaid()` in `src/lib/markdown.ts` decides).
+(`ContainsMermaid` in `internal/markdown/markdown.go` decides).
 
 Source: `node_modules/mermaid/dist`, the **`esm.min`** variant — the one mermaid publishes for
 browsers, with its dependencies (cytoscape, katex, d3, …) already inside it and every import

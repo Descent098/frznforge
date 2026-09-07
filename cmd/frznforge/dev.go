@@ -23,6 +23,7 @@ import (
 
 	"frznforge/internal/config"
 	"frznforge/internal/serve"
+	"frznforge/internal/timings"
 )
 
 // devDefaultPort is what `npm run dev` served on: scripts/dev.ts handed the site to `astro
@@ -75,7 +76,7 @@ func parseDevArgs(argv []string) (devArgs, error) {
 }
 
 // devCmd serves the last build.
-func devCmd(argv []string, io *Io) error {
+func devCmd(argv []string, io *Io, step *timings.Step) error {
 	args, err := parseDevArgs(argv)
 	if err != nil {
 		return err
@@ -119,7 +120,12 @@ func devCmd(argv []string, io *Io) error {
 		io.log(strings.Join(serve.Notice(paths), "\n"))
 	}
 
+	// Only the bind is timed. The serving that follows lasts until someone presses Ctrl-C, and a
+	// step whose duration is "how long the developer left it open" would be the loudest row in
+	// every aggregate while meaning nothing at all.
+	bind := stepUnder(step, "serve.listen", paths.Dir)
 	srv, err := serve.Listen(serve.Options{Dir: paths.Dir, Base: base, Host: args.Host, Port: args.Port})
+	bind.Fail(err).Done()
 	if err != nil {
 		return err
 	}

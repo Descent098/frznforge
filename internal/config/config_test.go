@@ -9,13 +9,24 @@ import (
 	"testing"
 )
 
-// repoJSONC is this repository's own migrated config — the file `frznforge config migrate`
-// produced from frznforge.config.ts, and the one the Go engine actually loads.
+// repoJSONC is the migrated config this package is checked against: the file
+// `frznforge config migrate` produced from frznforge.config.ts, frozen into testdata.
+//
+// It used to read ../../frznforge.config.jsonc — the LIVE config of whoever owns the checkout —
+// and that made these tests fail the moment the owner edited their own site. They did: adding
+// their GitHub account took the file from one repository to 73, and two tests that assert
+// "exactly the self-host demo repo" started failing for a reason that had nothing to do with the
+// loader.
+//
+// The frozen copy is also the only correct subject now. testdata/ts-config.json is a dump of what
+// the ZOD schema produced, and the thing it must be compared against is the config that existed
+// when it was dumped — not a file that changes whenever someone publishes another repository. The
+// pair is frozen together or it means nothing.
 func repoJSONC(t *testing.T) []byte {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "..", Filename))
+	raw, err := os.ReadFile(filepath.Join("testdata", "migrated-config.jsonc"))
 	if err != nil {
-		t.Fatalf("read the repo's own %s (regenerate it with `frznforge config migrate`): %v", Filename, err)
+		t.Fatalf("read the frozen migrated config: %v", err)
 	}
 	return raw
 }

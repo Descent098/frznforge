@@ -395,6 +395,23 @@ func buildRoots(t *testing.T) []buildRoot {
 	t.Helper()
 	fixture, _ := syncFixture(t)
 	roots := []buildRoot{{"fixture", fixture}}
+
+	// The developer's own corpus is added only when asked for, and that is a change of heart
+	// worth explaining. It went in so these gates would run against something bigger and nastier
+	// than a fixture, and it did its job — until the owner published their whole account and the
+	// corpus went from one repository to 73. Each of these tests builds it TWICE, so
+	// `go test ./...` started taking 1,117 seconds and failing on the default ten-minute clock:
+	// a green suite that nobody can run is worth less than a smaller one that everybody does.
+	//
+	// The fixture still runs unconditionally, which is the property that matters — these gates
+	// must never quietly assert nothing on a clean clone. The big corpus is now the deeper run
+	// you ask for by name:
+	//
+	//	FRZNFORGE_FULL_CORPUS=1 go test ./internal/build/ -timeout 90m
+	if os.Getenv("FRZNFORGE_FULL_CORPUS") == "" {
+		t.Log("skipping the local corpus; set FRZNFORGE_FULL_CORPUS=1 to include it (slow)")
+		return roots
+	}
 	if real := repoRoot(t); real != "" {
 		if _, err := os.Stat(filepath.Join(real, "data", "forge.json")); err == nil {
 			roots = append(roots, buildRoot{"this repository", real})

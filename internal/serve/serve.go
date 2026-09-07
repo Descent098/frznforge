@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -30,6 +31,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Options configure one server.
@@ -82,12 +84,14 @@ func Listen(opts Options) (*Server, error) {
 	if tcp, ok := ln.Addr().(*net.TCPAddr); ok {
 		port = tcp.Port
 	}
-	return &Server{
+	srv := &Server{
 		URL: "http://" + net.JoinHostPort(host, strconv.Itoa(port)) + h.base + "/",
 		Dir: h.root,
 		ln:  ln,
 		srv: &http.Server{Handler: h},
-	}, nil
+	}
+	slog.Debug("serve listening", "url", srv.URL, "dir", srv.Dir, "base", h.base)
+	return srv, nil
 }
 
 // Serve accepts requests until Close is called. A closed server is a clean exit, not an error:
@@ -108,6 +112,7 @@ func (s *Server) Serve() error {
 // and the next run fails with "only one usage of each socket address". Closing an already-closed
 // listener returns an error rather than panicking, and that error is the uninteresting one.
 func (s *Server) Close() error {
+	slog.Debug("serve closing", "url", s.URL)
 	err := s.srv.Close()
 	if s.ln != nil {
 		if lnErr := s.ln.Close(); err == nil && !errors.Is(lnErr, net.ErrClosed) {
@@ -143,10 +148,26 @@ func newHandler(dir, base string) (*handler, error) {
 	return &handler{root: filepath.Clean(root), base: base}, nil
 }
 
+// ServeHTTP answers one request.
+//
+// Every request leaves one debug record carrying the status it was answered with. The status is
+// threaded back out of the helpers rather than captured by wrapping the ResponseWriter: a
+// wrapper would hide net/http's io.ReaderFrom from serveFile's io.Copy and turn every file into
+// a userspace copy, and making a diagnostic change how bytes are served is exactly the trade
+// this project does not make. "It shows a blank page" and "it 404s the CSS" look identical in a
+// browser and are one grep apart here.
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	status := http.StatusOK
+	defer func() {
+		slog.Debug("serve", "method", r.Method, "path", r.URL.Path, "status", status,
+			"ms", time.Since(started).Milliseconds())
+	}()
+
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
-		http.Error(w, "frznforge dev serves files; it answers GET and HEAD only", http.StatusMethodNotAllowed)
+		status = http.StatusMethodNotAllowed
+		http.Error(w, "frznforge dev serves files; it answers GET and HEAD only", status)
 		return
 	}
 
@@ -165,7 +186,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Not a 404.html: under a sub-path deploy this URL belongs to whatever else the host
 			// serves, and saying so plainly is what makes a leaked root-absolute link obvious.
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(http.StatusNotFound)
+			status = http.StatusNotFound
+			w.WriteHeader(status)
 			fmt.Fprintf(w, "not under the deploy base %s\n", h.base)
 			return
 		}
@@ -175,14 +197,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	file, ok, err := h.resolve(upath)
 	if err != nil {
 		// The only way here is a path that climbed out of the served directory.
-		http.Error(w, "forbidden", http.StatusForbidden)
+		status = http.StatusForbidden
+		http.Error(w, "forbidden", status)
 		return
 	}
 	if !ok {
-		h.notFound(w, r)
+		status = h.notFound(w, r)
 		return
 	}
-	h.serveFile(w, r, file, http.StatusOK)
+	status = h.serveFile(w, r, file, http.StatusOK)
 }
 
 // underBase splits the deploy prefix off a request path. "/mysite" and "/mysite/x" are inside;
@@ -245,17 +268,19 @@ func isFile(p string) bool {
 
 // notFound serves the site's own 404 page with a 404 status — the same pair a static host
 // gives, so a spec that asserts on both is asserting on production behaviour.
-func (h *handler) notFound(w http.ResponseWriter, r *http.Request) {
+//
+// It returns the status it wrote, for the request record in ServeHTTP.
+func (h *handler) notFound(w http.ResponseWriter, r *http.Request) int {
 	page := filepath.Join(h.root, "404.html")
 	if isFile(page) {
-		h.serveFile(w, r, page, http.StatusNotFound)
-		return
+		return h.serveFile(w, r, page, http.StatusNotFound)
 	}
 	// No 404.html means the directory is not a frznforge build (or the build was interrupted);
 	// the preflight normally catches that before the server starts.
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusNotFound)
 	fmt.Fprintln(w, "not found")
+	return http.StatusNotFound
 }
 
 // serveFile writes one file with the type MimeFor gives it.
@@ -263,24 +288,28 @@ func (h *handler) notFound(w http.ResponseWriter, r *http.Request) {
 // http.ServeContent is deliberately not used: it would sniff or re-derive the content type from
 // the OS's own tables, and this server's whole reason for existing is that it types files the
 // way the built site does.
-func (h *handler) serveFile(w http.ResponseWriter, r *http.Request, file string, status int) {
+// It returns the status it wrote, for the request record in ServeHTTP.
+func (h *handler) serveFile(w http.ResponseWriter, r *http.Request, file string, status int) int {
 	f, err := os.Open(file)
 	if err != nil {
+		slog.Debug("serve: cannot open", "file", file, "err", err)
 		http.Error(w, "cannot read "+filepath.Base(file), http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
+		slog.Debug("serve: cannot stat", "file", file, "err", err)
 		http.Error(w, "cannot read "+filepath.Base(file), http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError
 	}
 
 	w.Header().Set("Content-Type", MimeFor(file))
 	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
 	w.WriteHeader(status)
 	if r.Method == http.MethodHead {
-		return
+		return status
 	}
 	io.Copy(w, f)
+	return status
 }

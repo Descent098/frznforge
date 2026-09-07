@@ -1,6 +1,18 @@
 # Data model (ingest artifact)
 
-`npm run ingest` turns the repositories listed in `frznforge.config.ts` — local directories
+> **Schema v8, and 0.4.0 did not move it.** Replacing the Astro/TypeScript engine with a Go
+> binary changed the producer and the consumer and left the contract between them alone, on
+> purpose. That is the headline of the 0.4.0 migration: an existing `data/` directory keeps
+> working as it stands, so re-ingesting is an option rather than a requirement. It is also what
+> made the rewrite checkable — with the artifact frozen, "the Go ingest is correct" is a
+> byte-identity statement against the TypeScript ingest rather than a judgement call. See
+> [Version history](#version-history).
+>
+> `.frznforge-cache/` is the part that *does* go cold on the first 0.4.0 run, and by design — see
+> [the cache section](#remote-mirror-cache-schema-v3). A cache miss costs time, never
+> correctness.
+
+`frznforge ingest` turns the repositories listed in `frznforge.config.jsonc` — local directories
 and, since schema v3, repos hosted on GitHub / GitLab / Gitea / Forgejo — into one JSON
 artifact plus a blob store. Since schema v4 it also collects **notes** (a plain folder of
 files on disk) and resolves **organizations** (groupings of repos) into the same artifact, and
@@ -14,9 +26,74 @@ configured rather than derived from git.
 Every page of the site is built from this artifact and nothing else — the site never talks to
 git and never talks to a forge.
 
-The schema is defined once, as zod objects + inferred types, in `src/lib/data/schema.ts`.
-This document explains the layout and the meaning of each field; the schema file is the
-source of truth for exact shapes.
+The schema is defined once, as Go structs plus a validator, in **`internal/model`**
+(`internal/model/model.go:44` for the version constant). That package is the boundary: ingest
+writes through it, the site reads through it, and nothing else in the codebase describes the
+artifact's shape. This document explains the layout and the meaning of each field; the package is
+the source of truth for exact shapes.
+
+Three properties of that package are part of the contract rather than implementation detail:
+
+- **Field order is key order.** `encoding/json` marshals struct fields in declaration order, and
+  the artifact's key order is exactly that (`internal/model/model.go:19-24`). Reordering two
+  declarations changes the bytes, and `TestRoundTrip` fails on real ones.
+- **Optional and nullable are different things.** A key that is *absent* (`RepoLinks`' four
+  fields) is a pointer with `omitempty`; a key that is *present and null* (`Repo.description`,
+  `insights`, `readme`) is a pointer **without** it, because `omitempty` would drop the key.
+  Slices and maps are always emitted and must never be nil — nil marshals as `null`, not `[]`.
+- **Serialization is `JSON.stringify(data, null, 2)` plus a newline**, and matching it takes
+  three deliberate choices: `SetEscapeHTML(false)` (Go would otherwise escape `<`, `>` and `&`,
+  which every README with HTML in it contains), two-space indent, and no trailing newline of our
+  own because `Encoder.Encode` already appends one (`internal/model/serialize.go:11-33`).
+
+`frznforge verify [<forge.json>]` is the check: parse, validate, re-serialize, compare byte for
+byte, and name the first differing byte when it does not match (`cmd/frznforge/main.go:459`).
+
+## The shape of the contract
+
+Three things cross the seam — one JSON file and two byte stores — and everything on the right of
+it is a pure function of the three.
+
+```mermaid
+flowchart LR
+  subgraph writes["writes it — internal/ingest"]
+    scan["ScanRepo<br/>scan.go:123"]
+    asm["Assemble<br/>assemble.go:69"]
+    wr["WriteArtifact<br/>assemble.go:293<br/>validates, mirrors, prunes"]
+    scan --> asm --> wr
+  end
+
+  subgraph art["&lt;ingest.outDir&gt;/ — the artifact"]
+    direction TB
+    fj[("forge.json<br/>schemaVersion 8")]
+    bl[("blobs/&lt;sha&gt;<br/>content-addressed")]
+    ar[("archives/&lt;slug&gt;/&lt;ref&gt;.zip")]
+  end
+
+  subgraph model["describes it — internal/model"]
+    st["structs, declaration order = key order<br/>model.go:44"]
+    ser["Serialize / Parse / Validate<br/>serialize.go:25, :37, :66"]
+  end
+
+  subgraph reads["reads it — internal/build"]
+    pr["model.Parse, once per build<br/>build.go:166"]
+    rtr["routes.AllRoutes<br/>routes.go:581"]
+    em["page emitters<br/>pages_*.go"]
+    bb["Builder.Blob<br/>build.go:428"]
+    pr --> rtr --> em
+    bb --> em
+  end
+
+  wr --> fj & bl & ar
+  fj --> pr
+  bl --> bb
+  ar --> em
+  model -.both sides use it.-> writes
+  model -.both sides use it.-> reads
+```
+
+`ForgeData` itself is six keys — `schemaVersion`, `repos`, `notes`, `organizations`, `hosting`,
+`warnings` — and everything below is the meaning of the fields beneath them.
 
 ## Layout on disk
 
@@ -30,12 +107,17 @@ source of truth for exact shapes.
         └── <ref-slug>.zip    zip source archive per ref (default branch + treed tags)
 ```
 
-- `forge.json` is read by `loadForgeData(outDir)` (`src/lib/data/load.ts`), which validates
-  it with `parseForgeData`. A missing artifact is not an error — the site builds empty.
+- `forge.json` is read once per build by `model.Parse` (`internal/model/serialize.go:37`),
+  which decodes with `DisallowUnknownFields` and then validates. A **missing** artifact is now an
+  error rather than an empty site: `frznforge build` says which file it wanted and which command
+  creates it (`internal/build/build.go:158-164`). An artifact of the **wrong schema version** is
+  refused by name (`internal/model/serialize.go:67`).
 - `blobs/<sha>` holds the bytes of each file whose `FileInfo.stored` is `true` — since
   schema v2 this includes binary files within the size cap. The sha is the git blob object
   id, so identical content across repos/paths/branches is stored once.
-  `readBlob(outDir, sha)` returns it as UTF-8 text. Since schema v4 **note** content lives in
+  `Builder.Blob(sha)` reads it (`internal/build/build.go:428`), and a missing blob is an error
+  rather than an empty file — `FileInfo.stored` said it was there, and silently writing nothing
+  would publish a truncated copy of somebody's source. Since schema v4 **note** content lives in
   the same directory, keyed by `NoteFile.sha` — `sha1('note <len>\0' + bytes)`. The `note`
   prefix mirrors git's own `blob <len>\0` domain separation and is load-bearing: the two key
   spaces share one directory, so hashing note bytes bare would let a note whose raw bytes
@@ -47,9 +129,15 @@ source of truth for exact shapes.
   (committed content only, never the working tree). `<ref-slug>` is the ref name with every
   `/` replaced by `~` (git refnames can never contain `~`, so this is collision-free), e.g.
   tag `rel/1.0` → `rel~1.0.zip`. The prefix inside the zip is `<slug>-<ref-slug>/`.
-- `writeArtifact(data, blobs, archives, outDir)` makes `blobs/` and `archives/` mirror the
-  current artifact exactly: missing or size-mismatched files are (re)written and any file
-  not referenced by the current run is deleted.
+- `WriteArtifact(data, blobs, archives, outDir)` (`internal/ingest/assemble.go:293`) validates
+  the artifact **before writing a byte**, then makes `blobs/` and `archives/` mirror the current
+  artifact exactly: missing or size-mismatched files are (re)written and any file not referenced
+  by the current run is deleted. A structurally invalid artifact is an ingest bug rather than a
+  repo-state problem, so it fails the run instead of becoming a warning.
+- Two more files live in this directory and are **not** part of the artifact: `frznforge.log`
+  (what the last run did, truncated per run) and `frznforge-timings.jsonl` (what each step cost,
+  appended). Neither is ever read by the site or published to `dist/` — see
+  [build-steps.md § Where success and failure are recorded](./build-steps.md#4-where-success-and-failure-are-recorded).
 
 ### Remote mirror cache (schema v3)
 
@@ -59,47 +147,58 @@ git-ignored) and the ordinary local scanner then runs on that bare mirror:
 
 ```
 <ingest.cacheDir>/
-├── last-run.json                          run log: fetch status + ref heads (v2, 0.3.0)
-├── scan/
-│   └── <digest>.json                      per-repo scan cache (0.2.0)
-├── highlight/
-│   └── <key>.gz                           memoized Shiki output (0.2.0, written at render)
-└── <provider>/                            github | gitlab | gitea | forgejo
-    └── <host-slug>/                       api.github.com, gitea.example.com-3000, …
-        ├── <owner>/<repo>-<digest>.git    bare mirror (GitLab: the namespace nests)
-        └── <owner>/<repo>-<digest>.meta.json   last successful importer answers
+├── last-run.json                                run log: fetch status + ref heads (v2, 0.3.0)
+├── mirrors/
+│   ├── <type>-<host>-<owner>-<repo>/            bare mirror
+│   └── <type>-<host>-<owner>-<repo>.meta.json   last successful importer answers
+└── scan/
+    └── <16 hex>.json                            per-repo scan cache (0.2.0)
 ```
 
-- The path is computed by `cachePathFor(cacheDir, source)` (`src/lib/config/index.ts`) and is
-  what `ResolvedConfig.repos[].absPath` points at for a remote source, so everything
-  downstream sees a single shape. It may not exist yet on the first build.
-- `<host-slug>` is the host URL with the scheme stripped and every character outside
-  `[a-z0-9.-]` (notably `:` and `/`, illegal in Windows paths) replaced by `-`. Owner, repo
-  and namespace segments are sanitised the same way, capped at 48 characters, and reserved
-  Windows basenames (`con`, `aux`, `com1`, …) are prefixed with `_`.
-- `<digest>` is the first 8 hex characters of sha256 over the source's *unsanitised* identity
-  (provider, host, and `<owner>/<repo>` or the GitLab project path). The sanitising above is
-  lossy — it folds case and collapses every non-ASCII name to the same slug — so the digest is
-  what makes the mapping injective. Without it two unrelated repos could share one mirror and
-  each be published with the other's git content.
+**The layout is flatter in 0.4.0.** 0.3.0 nested a mirror under
+`<provider>/<host-slug>/<owner>/<repo>-<digest>.git`; the Go loader puts every mirror in one
+`mirrors/` directory under a single name derived from the source's identity (`MirrorDirName`,
+`internal/config/config.go:769`). This is a **cache-layout change, not a schema change** — nothing
+here reaches the artifact.
+
+Practically, the whole directory goes cold on the first 0.4.0 run and all three reasons are
+benign: an 0.3.0 mirror is not found under the new name, the run log's `configHash` is computed
+over a Go struct so it never matches one a TypeScript run wrote, and a scan-cache entry is never a
+hit across implementations because the two languages spell a struct's fields differently in the
+digest input. That last one is deliberate rather than tolerated
+(`internal/ingest/reuse.go:45-51`): **a cache miss costs time, never correctness**, so a digest
+that cannot be trusted to mean the same thing on both sides must not match. The price is one
+re-clone and one re-scan per repository, once.
+
+- The path is computed by `config.Resolve` (`internal/config/config.go:745`) and is what
+  `ResolvedSource.AbsPath` points at for a remote source, so everything downstream sees a single
+  shape. It may not exist yet on the first build.
+- The directory name is `<type>-<host>-<owner>-<repo>`, or `<type>-<host>-<project>` for GitLab,
+  with the scheme stripped from the host and every character outside `[a-z0-9._-]` (notably `:`
+  and `/`, illegal in Windows paths) replaced by `-`. Uppercase folds to lowercase.
 - The sibling `.meta.json` caches the importer's *normalised* answers (`ImportedRepoMeta` +
-  `Release[]`): no tokens, no timestamps, no counters, so serving a build from it produces
-  the same bytes a live call would have. It is read whenever `ingest.fetch` is `'never'` or an
-  API call fails, which is what makes `remote-cache-stale` mean *stale* rather than *absent*.
-- Neither the mirror path nor its basename is ever user-visible: a remote repo's default
-  `slug` and `name` come from the config (and the provider's `name`), not from the directory.
-- First run: `git clone --mirror`. Later runs: `git remote update --prune`.
-- `ingest.fetch` controls the network: `'auto'` (default) fetches and falls back to the cache
-  on failure, `'never'` is offline and uses the cache only, `'always'` always refreshes.
-  None of the three can fail the build — see the warnings table.
-- The cache is disposable. Deleting it costs a re-clone, nothing else; it is never read by
-  the site and never referenced from the artifact.
+  `Release[]`): no tokens, no timestamps, no counters, so serving a build from it produces the
+  same bytes a live call would have (`ProviderCachePathFor`, `internal/ingest/remote.go:843`). It
+  is read whenever `ingest.fetch` is `"never"`, when an API call fails, or when one of the skips
+  in [build-steps.md](./build-steps.md#the-four-skips-and-why-each-is-safe) says the network is
+  not needed — which is what makes `remote-cache-stale` mean *stale* rather than *absent*.
+- Neither the mirror path nor its basename is ever user-visible: a remote repo's default `slug`
+  and `name` come from the config (and the provider's `name`), not from the directory.
+- First run: `git clone --mirror`. Later runs: `git remote update --prune`
+  (`internal/ingest/remote.go:488`, `:462`). Two sources resolving to one mirror path are
+  serialised by a per-destination lock, so a hand-written duplicate config entry cannot corrupt
+  anything (`internal/ingest/remote.go:329-333`).
+- `ingest.fetch` controls the network: `"auto"` (default) fetches and falls back to the cache on
+  failure, `"never"` is offline and uses the cache only, `"always"` always refreshes. None of the
+  three can fail the build — see the warnings table.
+- The cache is disposable. Deleting it costs a re-clone, nothing else; it is never read by the
+  site and never referenced from the artifact.
 
 ### Cross-run reuse sidecars (`ingest.reuse`, 0.2.0)
 
-Three more cacheDir entries exist so repeat builds can skip work **without changing a byte of
-output** — wall-clock timestamps are allowed here precisely because this directory never
-feeds the artifact:
+Two cacheDir entries exist so repeat builds can skip work **without changing a byte of output** —
+wall-clock timestamps are allowed here precisely because this directory never feeds the artifact.
+There were three until 0.4.0; the third is [gone](#the-highlight-memo-is-gone-040).
 
 - `last-run.json` — the **run log** (**version 2** since 0.3.0): per remote source (keyed by
   its mirror path), when the last real fetch happened, whether it was fully fresh (mirror
@@ -133,23 +232,25 @@ feeds the artifact:
   mirror-and-prune pass sees full maps; anything missing or invalid falls back to a real
   scan, silently. The cached entry is validated against the `Repo` schema on read — a
   corrupt cache degrades to a re-scan, never to a failed build.
-- `highlight/<key>.gz` — the **highlight memo**, and the only one of the three written during
-  `astro build` rather than ingest. Syntax highlighting is 84% of this site's render, and
-  `highlightToHtml` is a pure function, so its output is remembered: one gzipped entry per
-  distinct (source, language, line-id prefix, highlighter identity). "Highlighter identity" is
-  Shiki's package version plus a hash of one canary render, so a dependency upgrade or a theme
-  change invalidates every entry rather than serving the previous version's colours. A corrupt
-  or truncated entry is a miss, never an error. This is emphatically *not* the rejected
-  skip-unchanged-pages idea (see [performance.md](./performance.md)): no page is skipped or
-  copied forward — every page renders in full, every build, and a cached highlight is
-  byte-for-byte what a fresh one produces.
+`frznforge ingest --no-cache` reads neither of them (nor the provider `.meta.json`) for one run,
+but still records its fresh results for the next one. Nothing here is locked across processes: two
+ingests racing on one cacheDir can lose a run-log update, which costs a redundant fetch, never
+correctness.
 
-`npm run ingest -- --no-cache` reads none of the ingest-side caches (nor the provider
-`.meta.json`) for one run, but still records its fresh results for the next one;
-`FRZNFORGE_NO_HL_CACHE=1` does the same for the highlight memo, which lives on the render
-side. Nothing here is locked: two ingests racing on one cacheDir can lose a run-log update,
-which costs a redundant fetch, never correctness — and two renders writing the same highlight
-entry each write a temp file and rename, so a reader never sees a half-written one.
+#### The highlight memo is gone (0.4.0)
+
+`<cacheDir>/highlight/<key>.gz` was the third sidecar: a cross-run memo of Shiki's output, and the
+only one written during the render rather than during ingest. It existed because syntax
+highlighting was 84% of the TypeScript render.
+
+**0.4.0 ships no memo at all** (`internal/highlight/highlight.go:15-18`). chroma is a different
+order of tool, and a completely cold Go render came in comfortably inside the budget the
+TypeScript build achieved *warm*, so the cache was deleted rather than ported — with the numbers
+first, in [performance.md](./performance.md#measured-then-deleted-the-highlight-memo).
+
+An existing `highlight/` directory in your cacheDir is dead weight. Nothing writes it, nothing
+reads it, and deleting it is safe — it always was, since nothing ever pruned it.
+`FRZNFORGE_NO_HL_CACHE` is gone with it: there is no memo to bypass.
 
 ## Guarantees
 
@@ -186,13 +287,15 @@ but uncommitted changes are invisible; bare repositories work the same as checko
 
 Notes (schema v4) are the one deliberate exception, and they do not weaken the rule: `notes.dir`
 is a plain folder, not a git repository. There is no committed tree to prefer and no working
-copy to avoid, so `src/lib/ingest/notes.ts` reads it with `node:fs`. If you ever point
-`notes.dir` inside a checkout, ingest still sees whatever is on disk — that is the contract.
+copy to avoid, so `internal/ingest/notes.go` reads it with `os.ReadDir` / `os.ReadFile`
+(`CollectNotes`, `internal/ingest/notes.go:611`). If you ever point `notes.dir` inside a checkout,
+ingest still sees whatever is on disk — that is the contract.
 
 **Never fails on odd repositories.** Empty repos, repos whose HEAD tree is empty, unborn
 default branches, missing metadata files, etc. are reported as warnings; the repo entry is
 still emitted (and valid) and the build continues. Only hard problems (git missing,
-unwritable output dir, invalid site config) fail `npm run ingest`.
+unwritable output dir, invalid site config, an artifact that fails validation) fail
+`frznforge ingest` (`cmd/frznforge/ingest.go:13-17`).
 
 **Never fails on an unreachable forge.** A remote that is offline, unauthenticated, private
 or rate-limited produces a `remote-*` warning and the build continues, using the cached
@@ -213,7 +316,7 @@ fields are declared in `ForgeData`, and the snapshot tests compare bytes.
 
 | field           | meaning                                                                          |
 | --------------- | -------------------------------------------------------------------------------- |
-| `schemaVersion` | Literal `SCHEMA_VERSION` (currently `8`). The site refuses artifacts of another version — `loadForgeData` names the version it found and tells the reader to re-run the build, rather than surfacing a raw validation error. |
+| `schemaVersion` | Literal `model.SchemaVersion` (currently `8`, `internal/model/model.go:44`). The site refuses artifacts of another version — `model.Validate` names the version it found and tells the reader to re-run the build, rather than surfacing a raw validation error (`internal/model/serialize.go:67`). |
 | `repos`         | `Repo[]`, sorted by slug.                                                        |
 | `notes`         | `Note[]` (schema v4), date desc / undated last / title asc — see "Notes".         |
 | `organizations` | `Organization[]` (schema v4), sorted by slug — see "Organizations".               |
@@ -249,7 +352,7 @@ Git-derived:
 | `gitTags`       | Git tags, sorted by name.                                                                            |
 | `commits`       | Every commit listed in any branch's `commits`, keyed by sha (sorted). With `ingest.maxCommits` and/or `ingest.maxCommitAgeDays` set, only the kept commits are present. |
 | `commitCount`   | `Object.keys(commits).length`.                                                                       |
-| `extraCommits`  | `Record<sha, Commit>` (schema v6) — display-support commits: per-path `lastCommit` targets and tag targets that fall outside `commits`, so file tables, tag rows and release headers still resolve the commit they point at (each also gets a `/commit/` page). Two ways in: `ingest.maxCommits` / `ingest.maxCommitAgeDays` dropped the commit, or a tag points at a commit no branch reaches (a rebase-orphaned release tag) — so this is usually, but not always, `{}` with no limits configured. Disjoint from `commits`, and never feeds aggregates — contributors, insights, activity, the contribution graph and every count read `commits` alone. The site looks commits up through `commitFor()` (`src/lib/format.ts`). |
+| `extraCommits`  | `Record<sha, Commit>` (schema v6) — display-support commits: per-path `lastCommit` targets and tag targets that fall outside `commits`, so file tables, tag rows and release headers still resolve the commit they point at (each also gets a `/commit/` page). Two ways in: `ingest.maxCommits` / `ingest.maxCommitAgeDays` dropped the commit, or a tag points at a commit no branch reaches (a rebase-orphaned release tag) — so this is usually, but not always, `{}` with no limits configured. Disjoint from `commits`, and never feeds aggregates — contributors, insights, activity, the contribution graph and every count read `commits` alone. The site looks commits up through `Repo.CommitFor` (`internal/model/model.go:395`), which checks both maps. |
 | `tree`          | Flat listing of the default-branch HEAD tree — every blob, tree, symlink and submodule at every depth, sorted by path. |
 | `files`         | `FileInfo` for every blob/symlink in `tree`, keyed by path (sorted).                                 |
 | `refTrees`      | `Record<refName, RefTree>` — browsable trees for the most recently updated `ingest.branchTrees` **non-default** branches (schema v5; every non-default branch before that) plus the newest `ingest.tagTrees` tags (schema v2). The default branch is only in `tree`/`files`. Keys: branches first (name order), then treed tags (name order). |
@@ -318,7 +421,7 @@ Tags that point at trees or blobs (not commits) are not representable and are sk
 | `binary`   | A NUL byte occurs in the first 8000 bytes (git's heuristic).                  |
 | `tooLarge` | `size > ingest.maxBlobBytes`; content not stored.                             |
 | `stored`   | `size <= ingest.maxBlobBytes` — content written to `blobs/<sha>`. Since schema v2 this **includes binary files** within the cap (for raw file serving / image previews); before v2 binaries were never stored. On a HOSTED ref (schema v7) the cap is `hosting.maxFileBytes` instead. |
-| `language` | Language name from the extension/filename map (`src/lib/ingest/languages.ts`) or `null`. |
+| `language` | Language name from the extension/filename map (`DetectLanguage`, `internal/ingest/languages.go:296`) or `null`. Every name this map can emit is a key in the highlighter's own table, checked in both directions by `TestLanguageMapCoversIngest` — a name on one side and not the other is a test failure rather than an uncoloured file. |
 
 ### `RefTree` (schema v2)
 
@@ -370,7 +473,7 @@ Commits grouped by author email, lower-cased; `name` is the name used on the mos
 commit; `firstCommit`/`lastCommit` are author dates. Sorted by `commits` desc, then name.
 
 Since **schema v8** an entry may be decorated by a `contributors[]` config entry that claims
-one of its emails (`src/lib/ingest/contributors.ts`):
+one of its emails (`ContributorsFromCommits`, `internal/ingest/contributors.go:53`):
 
 | Field         | Meaning                                                                   |
 | ------------- | ------------------------------------------------------------------------- |
@@ -395,8 +498,8 @@ A contributor nobody configured is exactly what it was before v8, with the three
 
 `Repo.insights` is what `/repos/<slug>/insights/` renders: monthly series over the **default
 branch's** history, oldest first. `null` when the repo is empty or `ingest.insights.enabled`
-is `false` — the tab and the page then do not exist (`hasInsights(repo)` in
-`src/lib/routes.ts` is the single predicate for both).
+is `false` — the tab and the page then do not exist (`routes.HasInsights`,
+`internal/routes/routes.go:260`, is the single predicate for both).
 
 | field         | meaning                                                                          |
 | ------------- | ---------------------------------------------------------------------------------- |
@@ -521,8 +624,8 @@ absolute — otherwise the site would render it as a link into itself and 404.
 
 **No download counts, ever.** They are the archetypal volatile counter — see "Guarantees".
 
-The site reads releases through `resolveReleases(repo)` (`src/lib/routes.ts`), which returns
-`SiteRelease[]`: provider releases when `repo.releases` is non-empty, otherwise the
+The site reads releases through `routes.ResolveReleases` (`internal/routes/routes.go:311`),
+which returns `SiteRelease[]`: provider releases when `repo.releases` is non-empty, otherwise the
 annotated-tag derivation, newest first either way. `SiteRelease.source` (`'provider'` /
 `'tag'`) tells the UI which it got, and `SiteRelease.commit` is the tag target or `null`.
 
@@ -570,7 +673,8 @@ unreserved, so ordinary refs are unchanged).
 `#` and `%` survive no static round-trip — the build writes `c%23-tips.md` to disk, so even a
 correctly encoded request misses, and a literal `%` is invalid percent-encoding that aborts
 the build. Paths and refs holding either get no route at all: `isRawServable()` in
-`src/lib/routes.ts` gates `treeRoutes`/`blobRoutes`/`rawRoutes`, ingest raises
+`routes.IsRawServable` (`internal/routes/routes.go:117`) gates
+`TreeRoutes`/`BlobRoutes`/`RawRoutes` (`:358`, `:382`, `:399`), ingest raises
 `repo-path-unservable`, and the file table lists the entry unlinked rather than emitting a
 dead href. This is the same rule the notes side applies — see `note-file-unservable`.
 
@@ -634,7 +738,7 @@ frontmatter is left alone (it is part of their content).
 ### `NoteFile`
 
 Same shape as `FileInfo` plus `name` and `markdown`, so the note viewer reuses the repo file
-viewer's rendering (binary fallback, "too large" fallback, Shiki language) unchanged.
+viewer's rendering (binary fallback, "too large" fallback, highlighter language) unchanged.
 
 | field      | meaning                                                                            |
 | ---------- | ------------------------------------------------------------------------------------ |
@@ -651,8 +755,8 @@ viewer's rendering (binary fallback, "too large" fallback, Shiki language) uncha
 ### Routes
 
 `/notes/` (index, always built), `/notes/<slug>/`, and `/notes/<slug>/raw/<file-path>` for
-every stored file whose path `isRawServable()` accepts. Derived by `notesRoutes(data)` in
-`src/lib/routes.ts`.
+every stored file whose path `IsRawServable` accepts. Derived by `Router.NotesRoutes`
+(`internal/routes/routes.go:552`).
 
 Note file names are authored by hand rather than slugified, so each raw-URL segment is
 percent-encoded — `read me.md` → `/notes/n/raw/read%20me.md` — while `/` stays literal so the
@@ -661,7 +765,7 @@ excluded; see `note-file-unservable`.
 
 ## Organizations (schema v4)
 
-A named grouping of repos with its own overview page. Configured in `frznforge.config.ts`;
+A named grouping of repos with its own overview page. Configured in `frznforge.config.jsonc`;
 prose lives in an optional markdown file.
 
 ### Membership
@@ -689,25 +793,32 @@ that is not configured raises `repo-unknown-org` and the repo joins no org.
 An org with no members is still emitted — it has a page either way.
 
 **Images (schema v8).** `avatar` — here, on `Contributor`, and in `owner.avatar` — is always
-a path the site serves from `public/`, never a URL. Astro copies `public/` verbatim, so no
-blob-store or ingest plumbing is involved, and the published pages keep their guarantee of
+a path the site serves from `public/`, never a URL. The build copies `public/` verbatim
+(`copyAssets`, `internal/build/build.go:448`), so no blob-store or ingest plumbing is involved,
+and the published pages keep their guarantee of
 loading nothing from a third party (an avatar pointing at a forge's CDN would break that on
 every page it appears on). The config schema (`PublicPath`) rejects anything with a scheme,
 a leading `//`, a backslash, or a `..` segment.
 
 ### `<content.orgs>/<org-slug>.md`
 
-Optional, exactly the `content/profile.md` mechanism: an Astro content collection (`orgs` in
-`src/content.config.ts`) whose entry `id` is the filename without the extension — i.e. the org
-slug. Frontmatter is `{ description?, sites: url[] = [], links?: Record<string, url>,
-pinned: string[] = [] }` and the body is rendered on the overview. Missing file = the org
-still gets a page, built from config plus its member repos.
+Optional, exactly the `content/profile.md` mechanism. 0.3.0 read these through an Astro content
+collection; 0.4.0 walks the directory (`loadContent`, `internal/build/build.go:497`) — the
+collection was a loader plus a schema, and both halves already existed elsewhere. The file's name
+without its extension is the org slug. Frontmatter is `{ description?, sites: url[] = [],
+links?: map<string, url>, pinned: string[] = [] }` and the body is rendered on the overview. A
+missing file is not an error — the org still gets a page, built from config plus its member repos.
+
+A file **no** organization claims is surfaced on `/orgs/` rather than ignored
+(`routes.UnmatchedOrgContent`, `internal/routes/routes.go:601`): an orgs markdown file is only
+ever reached through a slug, so one typo in the filename would otherwise discard the whole file
+— prose, links, pinned repos — with no page and no other symptom.
 
 ### Routes
 
 `/orgs/` (index, always built), `/orgs/<slug>/` (overview) and `/orgs/<slug>/repos/` (the full
-repo listing scoped to the org, reusing the Phase 2 listing island). Derived by
-`orgRoutes(data)` in `src/lib/routes.ts`.
+repo listing scoped to the org, reusing the same `<hf-repo-listing>` element). Derived by
+`Router.OrgRoutes` (`internal/routes/routes.go:568`).
 
 ## Hosted static sites (schema v7)
 
@@ -739,10 +850,11 @@ consume the same answer. Two ingest-side consequences:
   that whole branch's stored-file cap, blob pages included.
 
 Every stored, servable file is emitted at its literal path under `/<slug>/…`
-(`hostedFiles()` in `src/lib/routes.ts`, folded into `allRoutes()`), so `/<slug>/` works
-through the directory-index resolution every static host already does. Paths holding
-`#`/`%` cannot be served (`hosting-file-unservable`). Hosted files multiply page count
-exactly like the `branchTrees` lever — `npm run measure` reports them as their own line.
+(`Router.HostedFiles`, `internal/routes/routes.go:436`, folded into `AllRoutes` at `:581`), so
+`/<slug>/` works through the directory-index resolution every static host already does. Paths
+holding `#`/`%` cannot be served (`hosting-file-unservable`). Hosted files multiply page count
+exactly like the `branchTrees` lever, and they are written as bytes rather than as pages — the
+`build.hosted` step in `frznforge-timings.jsonl` is where their cost shows up.
 
 ## Per-repo metadata: `.frznforge.json`
 
@@ -751,6 +863,36 @@ Shape is `RepoMetaInput`: `{ name?, description?, links?, tags?, template?, lice
 releaseMode? }`. The site config's `overrides` for that repo win field-by-field.
 
 ## Version history
+
+- **v8 under 0.4.0 — no bump, and that was the goal.** 0.4.0 replaced the entire engine: Astro,
+  Svelte, TypeScript, Shiki, marked and every npm dependency but Playwright were deleted, and one
+  Go binary took over both halves. The artifact did not move a byte. `SCHEMA_VERSION` staying at 8
+  for the whole version was a stated constraint of the plan rather than a happy accident, for two
+  reasons:
+
+  1. **It is what made the rewrite checkable.** With the contract frozen, "the Go ingest is
+     correct" is a *byte-identity* statement against the TypeScript ingest — the same repositories
+     at the same commits must produce an identical `forge.json`, the same blob shas and the same
+     archive bytes — rather than a judgement call. `frznforge verify` is that check as a command
+     (`cmd/frznforge/main.go:459`), and `internal/model/testdata/fixture-forge.json` — an artifact
+     produced by the *other* implementation — keeps the round-trip test non-circular.
+  2. **It is what makes the migration nothing.** An existing `data/` directory is read by 0.4.0 as
+     it stands, so `frznforge build --no-ingest` renders a site from an artifact the Astro build
+     wrote. What did *not* survive is `.frznforge-cache/`, and only because it is a cache: the
+     [mirror directory](#remote-mirror-cache-schema-v3) is flatter so old mirrors are not found,
+     the run log's config hash is computed over a Go struct so it never matches an 0.3.0 one, and
+     a scan-cache entry written by either implementation is never a hit for the other because Go
+     and JavaScript spell a struct's fields differently in the digest input
+     (`internal/ingest/reuse.go:45-51`). That is the safe direction, stated as a rule rather than
+     hoped for: a cache miss costs one re-clone and one re-scan, never a wrong byte. And
+     `<cacheDir>/highlight/` is [dead outright](#the-highlight-memo-is-gone-040).
+
+  The Go traps that could have broken byte identity — HTML escaping, the trailing newline,
+  optional versus nullable, map key order, invalid UTF-8 — each have a test that fails without the
+  fix (`internal/model/serialize.go:14-23`, `internal/model/model_test.go`). Only one of them bit:
+  `refTrees` is inserted branches-then-tags, which a Go map would have re-sorted, so it needed an
+  order-preserving type (`internal/model/reftreemap.go:9-27`). Both test corpora happened to hold
+  ref names where the two orders coincide, which is how nearly it was missed.
 
 - **v8** — people and pictures: `Contributor` gains `avatar` / `description` / `url`, and
   `Organization` gains `avatar`; new warning `contributor-unknown-email`; new config
@@ -808,18 +950,36 @@ releaseMode? }`. The site config's `overrides` for that repo win field-by-field.
   `tag-trees-capped`.
 - **v1** — initial schema.
 
-## Bumping `SCHEMA_VERSION`
+## Bumping `SchemaVersion`
 
-Any change to `src/lib/data/schema.ts` that changes the emitted JSON (new/removed/renamed
-field, changed meaning, changed ordering rule) must, in the same change:
+Any change to `internal/model` that changes the emitted JSON — a new, removed or renamed field, a
+changed meaning, a changed ordering rule, or **reordering two struct fields**, since declaration
+order *is* key order — must, in the same change:
 
-1. Bump `SCHEMA_VERSION` (the site only accepts the exact literal, so an old `data/` will
-   be rejected until `npm run ingest` is re-run — that is intended).
-2. Update this document.
-3. Update the snapshot in `tests/unit/__snapshots__/ingest.test.ts.snap`
-   (`npx vitest run -u tests/unit/ingest.test.ts`) and adjust the unit tests for the
-   extractor involved.
-4. Add a `CHANGELOG.md` entry.
+1. Bump `SchemaVersion` (`internal/model/model.go:44`). The site accepts only the exact literal,
+   so an old `data/` is rejected until `frznforge ingest` is re-run — that is intended, and the
+   message says so rather than surfacing a raw validation error
+   (`internal/model/serialize.go:67`).
+2. Update this document, including the [version history](#version-history).
+3. Regenerate the fixtures that pin the shape:
+   - `internal/model/testdata/fixture-forge.json` — the round-trip fixture, read by
+     `internal/model/model_test.go:28`, `internal/routes/routes_test.go:190` and
+     `internal/build/search_index_test.go:143`. **Read the note below before you regenerate it.**
+   - `internal/build/testdata/expected-search-index.json`, if the change touches anything the
+     search index projects.
+4. Adjust the tests for the extractor involved, and re-run `internal/build/sync_test.go` — it
+   builds fixture repositories, runs the real ingest and the real build, and will catch a field
+   that gained a route or lost one.
+5. Add a `CHANGELOG.md` entry, and a migration note if an existing `data/` cannot simply be
+   re-ingested.
 
-Purely additive *internal* changes (a new warning code, a new language in the map) do not
-change the shape and do not need a bump, but still update this document's tables.
+**About that fixture.** `fixture-forge.json` was produced by the *TypeScript* implementation,
+which is what made the round-trip test non-circular: Go was checked against bytes it did not
+write. That implementation is gone, so the first bump after 0.4.0 regenerates the fixture from Go
+and the test becomes a change-detector rather than a cross-implementation check. That is a real
+loss of evidence and worth naming in the commit rather than discovering later. What still bites is
+regenerating it *without* looking: the fixture's job is to fail when the bytes move, so a
+regenerated fixture that nobody diffed has asserted nothing.
+
+Purely additive *internal* changes — a new warning code, a new language in the map — do not change
+the shape and do not need a bump, but still update this document's tables.

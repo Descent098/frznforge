@@ -305,127 +305,13 @@ func identityCorpus(t *testing.T) corpus {
 
 /* ---- the tests ------------------------------------------------------------ */
 
-// TestIngestArtifactMatchesTypeScript is the acceptance bar: one corpus, two engines, one
-// config, compared byte for byte.
-func TestIngestArtifactMatchesTypeScript(t *testing.T) {
-	root := requireTsx(t)
-	c := identityCorpus(t)
-
-	tsOut := filepath.Join(c.root, "out-ts")
-	goOut := filepath.Join(c.root, "out-go")
-
-	runTypeScriptIngest(t, root, c, tsOut, filepath.Join(c.root, "cache-ts"))
-	runGoIngest(t, c, goOut, filepath.Join(c.root, "cache-go"))
-
-	// A corpus that silently collapsed — every repo skipped, say — would make the comparison
-	// pass while proving nothing, so assert the shape before comparing.
-	raw, err := os.ReadFile(filepath.Join(tsOut, ArtifactFilename))
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := model.Parse(raw)
-	if err != nil {
-		t.Fatalf("the TypeScript artifact does not parse: %v", err)
-	}
-	if len(data.Repos) != 6 {
-		t.Fatalf("fixture collapsed: %d repos, want 6 (%s)", len(data.Repos), artifactSlugs(data))
-	}
-	wantCodes := []string{
-		"slug-collision", "repo-not-found", "repo-empty", "note-slug-collision",
-		"org-unknown-repo", "repo-unknown-org", "contributor-unknown-email",
-		"hosting-unknown-repo", "commits-aged-out", "tag-trees-capped", "branch-trees-capped",
-	}
-	// `releases: "provider"` on a local source has no importer behind it, so both engines must
-	// let the scanner's own default stand. A port that honoured it here would give alpha-2 an
-	// empty provider release list instead of its git tags.
-	for _, r := range data.Repos {
-		if r.Slug == "alpha-2" && r.ReleaseMode != "tags" {
-			t.Errorf("alpha-2 releaseMode = %q, want \"tags\": a local source's `releases` must be ignored", r.ReleaseMode)
-		}
-	}
-	seen := map[string]bool{}
-	for _, w := range data.Warnings {
-		seen[w.Code] = true
-	}
-	for _, code := range wantCodes {
-		if !seen[code] {
-			t.Errorf("fixture no longer exercises %q; the identity comparison would not cover it", code)
-		}
-	}
-
-	compareArtifacts(t, tsOut, goOut)
-
-	// The two flags do not exist to change the artifact — they change what the run is allowed to
-	// READ — so each one is checked twice: the two engines against each other, and against the
-	// ordinary run above. The second comparison is the one that would catch a cache replay
-	// quietly serving something a fresh scan would not have produced.
-	t.Run("no-cache", func(t *testing.T) {
-		tsNC := filepath.Join(c.root, "out-ts-nocache")
-		goNC := filepath.Join(c.root, "out-go-nocache")
-		runTypeScriptIngestWith(t, root, c, tsNC, filepath.Join(c.root, "cache-ts"), map[string]any{"noCache": true})
-		runGoIngestWith(t, c, goNC, filepath.Join(c.root, "cache-go"), Options{NoCache: true})
-		compareArtifacts(t, tsNC, goNC)
-		compareArtifacts(t, tsOut, goNC)
-	})
-
-	// Backfill runs after the caches above exist, which is the case it is for: every repo already
-	// has provider metadata, so nothing talks to the network and everything replays.
-	t.Run("backfill-metadata", func(t *testing.T) {
-		tsBF := filepath.Join(c.root, "out-ts-backfill")
-		goBF := filepath.Join(c.root, "out-go-backfill")
-		// Rehydrating a cached scan reads blob bytes back from outDir, so each run needs the
-		// previous artifact's stores in place — the same situation a real repeat build is in.
-		copyTree(t, tsOut, tsBF)
-		copyTree(t, goOut, goBF)
-		runTypeScriptIngestWith(t, root, c, tsBF, filepath.Join(c.root, "cache-ts"), map[string]any{"backfillMetadata": true})
-		runGoIngestWith(t, c, goBF, filepath.Join(c.root, "cache-go"), Options{BackfillMetadata: true})
-		compareArtifacts(t, tsBF, goBF)
-		compareArtifacts(t, tsOut, goBF)
-	})
-}
-
-// TestIngestSelfHostMatchesTypeScript runs both engines over THIS repository with the shipped
-// config, which is the comparison the acceptance bar is literally written in: `npm run ingest`
-// versus `frznforge ingest`, on real history rather than a fixture.
-//
-// It reads the two config files — the TypeScript ingest still loads frznforge.config.ts and the
-// Go one loads frznforge.config.jsonc — so a divergence here can also mean the two configs have
-// drifted apart. That is worth failing over: while both exist they are one configuration.
-func TestIngestSelfHostMatchesTypeScript(t *testing.T) {
-	root := requireTsx(t)
-	if _, err := os.Stat(filepath.Join(root, ".git")); err != nil {
-		t.Skip("the project is not a git checkout here, so it cannot ingest itself")
-	}
-	if _, err := os.Stat(filepath.Join(root, config.Filename)); err != nil {
-		t.Skipf("no %s to ingest with", config.Filename)
-	}
-
-	dir := tempCorpusDir(t)
-	tsOut := filepath.Join(dir, "out-ts")
-	goOut := filepath.Join(dir, "out-go")
-
-	cmd := exec.Command(tsxBinary(root), filepath.Join("scripts", "ingest.ts"))
-	cmd.Dir = root
-	cmd.Env = envWith(map[string]string{
-		"FRZNFORGE_OUT_DIR":   tsOut,
-		"FRZNFORGE_CACHE_DIR": filepath.Join(dir, "cache-ts"),
-	})
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("tsx scripts/ingest.ts: %v\n%s", err, stderr.String())
-	}
-
-	runGoIngestAt(t, root, root, goOut, filepath.Join(dir, "cache-go"), Options{})
-	compareArtifacts(t, tsOut, goOut)
-}
-
 // TestIngestIsDeterministic pins the property the caches are allowed to change nothing about:
 // a second run over the same corpus — this time replaying the scan cache and the provider cache
 // the first run wrote — must produce the same artifact.
 func TestIngestIsDeterministic(t *testing.T) {
-	root := requireTsx(t)
-	_ = root
+	// No requireTsx here any more, and that is the point. This test never used tsx — it took the
+	// module root from the helper and threw it away — but the helper skipped when tsx was absent,
+	// so a determinism gate quietly stopped running the moment Phase 9 removed the dependency.
 	c := identityCorpus(t)
 
 	cache := filepath.Join(c.root, "cache-repeat")
@@ -440,42 +326,6 @@ func TestIngestIsDeterministic(t *testing.T) {
 }
 
 /* ---- running the two engines ---------------------------------------------- */
-
-func runTypeScriptIngest(t *testing.T, root string, c corpus, outDir, cacheDir string) {
-	t.Helper()
-	runTypeScriptIngestWith(t, root, c, outDir, cacheDir, nil)
-}
-
-// runTypeScriptIngestWith is the same, plus the per-run flags the driver understands.
-func runTypeScriptIngestWith(t *testing.T, root string, c corpus, outDir, cacheDir string, extra map[string]any) {
-	t.Helper()
-	request := map[string]any{
-		"root":       c.root,
-		"configPath": c.configPath,
-		"outDir":     outDir,
-		"cacheDir":   cacheDir,
-		"remotes":    c.remotes,
-	}
-	for k, v := range extra {
-		request[k] = v
-	}
-	raw, err := json.MarshalIndent(request, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	requestPath := filepath.Join(c.root, "ts-request-"+filepath.Base(outDir)+".json")
-	writeCorpusBytes(t, requestPath, raw)
-
-	cmd := exec.Command(tsxBinary(root), filepath.Join("internal", "ingest", "testdata", "ts-ingest.ts"), requestPath)
-	cmd.Dir = root
-	cmd.Env = envWith(nil)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("tsx ts-ingest.ts: %v\n%s\n%s", err, stdout.String(), stderr.String())
-	}
-}
 
 // runGoIngest runs the Go pipeline over the corpus with the same two seams the TypeScript
 // driver replaces: canned importer answers, and the production mirror driver pointed at a local
@@ -843,3 +693,68 @@ func TestIngestCancelledRunIsAnError(t *testing.T) {
 		t.Fatal("a cancelled ingest returned no error; it would have written an artifact missing every unscanned repo")
 	}
 }
+
+// firstDifference reports the first differing line of two documents with a little context.
+//
+// Kept when the parity tests went: it was written to explain a Go-versus-TypeScript diff, and it
+// now explains a run-versus-run one. The labels are deliberately not "TS"/"GO" any more — both
+// sides of every comparison left in this package are the same engine, twice.
+func firstDifference(want, got string) string {
+	wantLines := strings.Split(want, "\n")
+	gotLines := strings.Split(got, "\n")
+	for i := 0; i < len(wantLines) || i < len(gotLines); i++ {
+		w, g := "", ""
+		if i < len(wantLines) {
+			w = wantLines[i]
+		}
+		if i < len(gotLines) {
+			g = gotLines[i]
+		}
+		if w == g {
+			continue
+		}
+		var b strings.Builder
+		for j := max(0, i-6); j < i; j++ {
+			b.WriteString("    " + wantLines[j] + "\n")
+		}
+		b.WriteString("1st " + w + "\n")
+		b.WriteString("2nd " + g + "\n")
+		return b.String()
+	}
+	return "(no line differs; the documents differ only in trailing bytes)"
+}
+
+// encodeLikeArtifact serialises a Repo exactly as model.Serialize serialises the artifact around
+// it, so a difference here is a difference in the file that ships.
+func encodeLikeArtifact(t *testing.T, repo *model.Repo) string {
+	t.Helper()
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(repo); err != nil {
+		t.Fatalf("encode repo: %v", err)
+	}
+	return buf.String()
+}
+
+// projectRoot is the module root, for a test that needs a real file from the repository.
+func projectRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// mitLicense is a real licence body, kept from the deleted parity tests: the detector matches
+// on text, so a paraphrase would not exercise it.
+const mitLicense = `MIT License
+
+Copyright (c) 2024 Test User
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction.
+`

@@ -29,6 +29,16 @@ import (
 // rename: the emitter still writes /repos/x/releases/ after the router stopped predicting it,
 // and the only symptom is a file nobody can reach.
 func TestBuildEmitsEveryRoute(t *testing.T) {
+	// Same rule as buildRoots in sync_test.go, and for the same reason: this renders the
+	// developer's whole corpus, which went from one repository to 73 and took this single test
+	// from seconds to 490 of them — most of a default `go test` budget, for a claim
+	// TestSyncOnASelfBuiltProject already makes on a fixture it builds itself and cannot skip.
+	//
+	// So the fixture is the gate and this is the deeper run: FRZNFORGE_FULL_CORPUS=1.
+	if os.Getenv("FRZNFORGE_FULL_CORPUS") == "" {
+		t.Skip("set FRZNFORGE_FULL_CORPUS=1 to render the local corpus (slow); " +
+			"TestSyncOnASelfBuiltProject covers this claim on a fixture that never skips")
+	}
 	root := repoRoot(t)
 	cfg, err := config.Load(root)
 	if err != nil {
@@ -36,7 +46,7 @@ func TestBuildEmitsEveryRoute(t *testing.T) {
 	}
 	raw, err := os.ReadFile(filepath.Join(cfg.OutDir, "forge.json"))
 	if err != nil {
-		t.Skip("no artifact on this machine; run `npm run ingest` or `frznforge ingest` first")
+		t.Skip("no artifact on this machine; run `frznforge ingest` first")
 	}
 	data, err := model.Parse(raw)
 	if err != nil {

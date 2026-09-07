@@ -1,8 +1,7 @@
 // Command frznforge is the 0.4.0 engine: one binary that ingests repositories and renders the
 // static site.
 //
-// It is being built up phase by phase (docs/dev/plans/version-0.4.0-phased.md). Today it
-// carries:
+// It carries:
 //
 //   - `ingest`, the git-and-network half: it scans the configured repositories and writes
 //     forge.json plus its blob and archive stores. Its acceptance bar is byte identity with
@@ -38,6 +37,7 @@ import (
 	"frznforge/internal/ingest"
 	"frznforge/internal/logging"
 	"frznforge/internal/model"
+	"frznforge/internal/timings"
 )
 
 const usage = `frznforge — static forge site generator
@@ -108,10 +108,21 @@ Diagnostics
   --log[=<level>]                   Write what the run is doing to stderr, on any command:
                                     error, warn, info or debug (bare --log means debug).
                                     FRZNFORGE_LOG does the same without retyping the command.
-                                    Every git call and every HTTP request is recorded before it
-                                    starts and again when it finishes, so a run that stops names
-                                    what it stopped on:
+                                    Every git call, every HTTP request, every subprocess and
+                                    every wait on the worker pool is recorded before it starts
+                                    and again when it finishes, so a run that stops names what
+                                    it stopped on:
                                       frznforge build --log=debug 2> build.log
+
+  build, ingest and dev also write two files into <ingest.outDir> (data/ by default) on every
+  run, whether or not --log was given, so the run nobody was watching still leaves evidence:
+
+    data/frznforge.log               everything the run did, at debug. Replaced each run.
+    data/frznforge-timings.jsonl     how long each step took, one JSON object per line,
+                                     appended so runs can be compared against each other.
+
+  Neither file is ever published: they live beside forge.json, not in dist/. --log controls the
+  terminal only and does not turn either of them off.
 `
 
 func main() {
@@ -149,7 +160,7 @@ func setUpLogging(args []string, io *Io) []string {
 	return out
 }
 
-func run(args []string, io *Io) error {
+func run(args []string, io *Io) (err error) {
 	// --log is read before the subcommand and stripped from the arguments, so every command
 	// gets it without each one growing its own flag. It goes to stderr and is off unless asked
 	// for: progress belongs on stdout, diagnostics do not, and redirecting one must not disturb
@@ -160,13 +171,22 @@ func run(args []string, io *Io) error {
 		fmt.Fprint(io.Out, usage)
 		return nil
 	}
+
+	// The run log and the timings file, for the commands that have somewhere to put them. Opened
+	// after --log so the stderr sink is already installed and the two compose, and closed however
+	// this function returns. See diagnostics.go.
+	step, stop := startDiagnostics(args[0], args[1:], io)
+	// Named result, read here: the closer writes the run's verdict into both files, and a plain
+	// `defer stop()` would have nothing to write it from.
+	defer func() { stop(err) }()
+
 	switch args[0] {
 	case "ingest":
-		return ingestCmd(args[1:], io)
+		return ingestCmd(args[1:], io, step)
 	case "build":
-		return buildCmd(args[1:], io)
+		return buildCmd(args[1:], io, step)
 	case "dev":
-		return devCmd(args[1:], io)
+		return devCmd(args[1:], io, step)
 	case "init":
 		return initCmd(args[1:], io)
 	case "new":
@@ -263,7 +283,10 @@ func parseBuildArgs(argv []string) (buildArgs, error) {
 }
 
 // buildCmd ingests and renders.
-func buildCmd(argv []string, io *Io) error {
+//
+// step is the run's timings step, so the scan and the render are recorded as two children of one
+// run instead of as two unrelated top-level spans.
+func buildCmd(argv []string, io *Io, step *timings.Step) error {
 	args, err := parseBuildArgs(argv)
 	if err != nil {
 		return err
@@ -298,7 +321,7 @@ func buildCmd(argv []string, io *Io) error {
 		io.log("frznforge build: scanning first — pass --no-ingest to render the artifact on disk instead.")
 		// In-process, unlike scripts/build.ts, which had to spawn `tsx scripts/ingest.ts` and
 		// forward signals to it. One process means one exit code and no shim to find on PATH.
-		if err := runIngest(args.Root, "", args.Ingest, io); err != nil {
+		if err := runIngest(args.Root, "", args.Ingest, io, step); err != nil {
 			// A failed ingest means the artifact is missing or stale, so rendering it would
 			// publish something nobody asked for. Stop with the ingest's own message.
 			return err
@@ -307,6 +330,7 @@ func buildCmd(argv []string, io *Io) error {
 	}
 
 	args.Build.PostprocessOut = io.Out
+	args.Build.Step = step
 	res, err := build.Run(args.Build)
 	if err != nil {
 		return err
@@ -372,8 +396,8 @@ func configCmd(args []string, io *Io) error {
 // migrateConfig converts the config in the current directory.
 //
 // It never overwrites without --force and never deletes the TypeScript file: for one phase the
-// two coexist (the Astro build still reads the .ts), and a migration that destroys its own input
-// leaves the user with nothing to compare against when a value looks wrong.
+// nothing reads the .ts any more, and a migration that destroys its own input leaves the user
+// with nothing to compare against when a value looks wrong.
 func migrateConfig(force bool, io *Io) error {
 	src, err := os.ReadFile(config.TSFilename)
 	if err != nil {
@@ -410,7 +434,7 @@ func migrateConfig(force bool, io *Io) error {
 	}
 	io.logf("loads cleanly — %d repo(s), %d organization(s), %d contributor(s), palette %q",
 		len(cfg.Repos), len(cfg.Organizations), len(cfg.Contributors), cfg.Theme.Palette)
-	io.logf("./%s is left in place; both files are read this version, so keep them in step until the TypeScript build goes away.", config.TSFilename)
+	io.logf("./%s is left in place and nothing reads it any more — delete it whenever you are satisfied the conversion is right.", config.TSFilename)
 	return nil
 }
 

@@ -288,6 +288,11 @@ func (c *JSONClient) request(ctx context.Context, rawURL string) (*http.Response
 			continue
 		}
 		if attempt < attemptsPerRequest && c.retryDelay > 0 {
+			// Short, but it is still time the run spends doing nothing, and a log that jumps from
+			// "http failed" to "http start" with an unexplained gap sends a reader hunting for a
+			// stall that was deliberate.
+			slog.Debug("http retry wait", "url", rawURL, "ms", c.retryDelay.Milliseconds(),
+				"attempt", attempt, "of", attemptsPerRequest)
 			if serr := c.sleep(ctx, c.retryDelay); serr != nil {
 				cause = serr
 				break
@@ -316,7 +321,7 @@ func (c *JSONClient) attempt(
 	if err := c.backoff.BeforeRequest(ctx, origin, desc); err != nil {
 		return nil, false, err
 	}
-	resp, err = c.send(ctx, rawURL)
+	resp, err = c.send(ctx, rawURL, attempt)
 	if err != nil {
 		return nil, false, err
 	}
@@ -344,27 +349,41 @@ func (c *JSONClient) attempt(
 	return nil, false, fmt.Errorf("HTTP %d", resp.StatusCode)
 }
 
-func (c *JSONClient) send(ctx context.Context, rawURL string) (*http.Response, error) {
+// send makes one attempt. Every outbound request in the program passes through here — Get and
+// GetAll both funnel into request, and both retries and pagination come back round to it — so
+// the pair of records below covers every fetch the process makes, not just the first of each.
+//
+// The URL is logged raw. A token normally travels in a header (see headers), but a provider's
+// own next-page link can come back carrying one in the query string, so this is exactly the
+// record that must not be trusted to be clean: internal/logging's sink redacts credential-shaped
+// URL parameters and userinfo before anything is written. Redacting here as well would leave the
+// NEXT such call site — the one written in a hurry — uncovered, which is the argument for having
+// it at the sink at all.
+func (c *JSONClient) send(ctx context.Context, rawURL string, attempt int) (*http.Response, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	// Around the request, not after it. A provider that accepts the connection and then never
 	// answers is indistinguishable from a hang unless something recorded the attempt — the
 	// timeout above bounds it, but the log is what says which host and which URL.
 	reqStarted := time.Now()
-	slog.Debug("http start", "url", rawURL)
+	slog.Debug("http start", "url", rawURL, "attempt", attempt,
+		"timeoutMs", c.timeout.Milliseconds())
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, rawURL, nil)
 	if err != nil {
+		slog.Debug("http failed", "url", rawURL, "attempt", attempt, "ms", 0, "err", err)
 		cancel()
 		return nil, err
 	}
 	req.Header = c.headers()
 	resp, err := c.doer.Do(req)
 	if err != nil {
-		slog.Debug("http failed", "url", rawURL, "ms", time.Since(reqStarted).Milliseconds(), "err", err)
+		slog.Debug("http failed", "url", rawURL, "attempt", attempt,
+			"ms", time.Since(reqStarted).Milliseconds(), "err", err)
 		cancel()
 		return nil, err
 	}
-	slog.Debug("http done", "url", rawURL, "ms", time.Since(reqStarted).Milliseconds(), "status", resp.StatusCode)
+	slog.Debug("http done", "url", rawURL, "attempt", attempt,
+		"ms", time.Since(reqStarted).Milliseconds(), "status", resp.StatusCode)
 	// The body outlives this function, so the deadline has to as well: cancel once the body is
 	// closed rather than on return.
 	resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}

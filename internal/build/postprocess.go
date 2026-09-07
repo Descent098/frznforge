@@ -51,6 +51,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -169,6 +170,14 @@ func (p Postprocess) Run(root, outDir string, out io.Writer) error {
 	fmt.Fprintf(out, "postprocess: %s\n", p.Command)
 	started := time.Now()
 
+	// The third process this program can start, and the only one it did not write: a user's
+	// minifier that never returns hangs `frznforge build` exactly as a git that never returns
+	// does, so it gets the same before-and-after pair. The command is the user's own text and can
+	// carry anything — `curl -H "Authorization: Bearer $T"` is a realistic hook — so it reaches
+	// the log only through the sink's scrubber, which strips an Authorization header and a token
+	// query parameter whether or not this process ever knew the value.
+	slog.Debug("postprocess start", "command", p.Command, "dir", workDir, "dist", outAbs)
+
 	cmd := shellCommand(p.Command)
 	cmd.Dir = workDir
 	cmd.Stdout = out
@@ -183,6 +192,8 @@ func (p Postprocess) Run(root, outDir string, out io.Writer) error {
 	)
 
 	if err := cmd.Run(); err != nil {
+		slog.Debug("postprocess done", "command", p.Command,
+			"ms", time.Since(started).Milliseconds(), "err", err)
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
 			return fmt.Errorf("postprocess: the command exited %d\n  command: %s\n  in:      %s\n"+
@@ -194,6 +205,8 @@ func (p Postprocess) Run(root, outDir string, out io.Writer) error {
 			"  It runs through %s, so it has to be something that shell can find",
 			err, p.Command, shellName)
 	}
+	slog.Debug("postprocess done", "command", p.Command,
+		"ms", time.Since(started).Milliseconds(), "err", nil)
 	fmt.Fprintf(out, "postprocess: done in %s\n", time.Since(started).Round(time.Millisecond))
 	return nil
 }

@@ -1,8 +1,8 @@
 # Architecture
 
 > Written for 0.4.0, the version that replaced the Astro/TypeScript build with a single Go
-> binary. The parts of this document that describe the Go layout are filled in by Phase 10; what
-> is here now is the piece Phase 9 owes: **the test coverage audit**.
+> binary. Three things are in here: **the pipeline**, **the invariants it rests on**, and **the
+> test coverage audit** that proves the vitest suite was ported rather than dropped.
 
 ## The pipeline
 
@@ -34,6 +34,184 @@ The artifact is the seam. Everything left of it reads the world; everything righ
 function of the file. That is what makes the build reproducible, and it is why the tests below
 split so cleanly into "does ingest read git correctly" and "does the build render the artifact
 correctly".
+
+One thing the diagram does *not* show, because it never got built: the fetch/render overlap the
+plan called "the streaming pipeline". It was sized and dropped — on the four-repo benchmark
+corpus ingest is 7.1 s against a 204 s render, so overlapping the two can save seconds, while
+spreading the render across cores saves minutes (`internal/build/parallel.go:19-33`). What
+shipped instead is parallel rendering at two levels. The artifact is therefore still written
+once and read once (`internal/build/build.go:166`), which is why every page can render
+`len .Data.Warnings` in its footer (`internal/render/templates/shell.gohtml:54`) — the count is
+known before the first page is written, and the plan's "move the warning count to the client"
+decision never had to be paid for.
+
+---
+
+## The three invariants
+
+Everything else in this document is a consequence of these. They are stated in the order a
+violation is expensive: break the first and two machines emit different sites from the same input,
+break the second and a page starts depending on something outside the artifact, break the third
+and the site publishes code nobody committed.
+
+### 1. Determinism — the same artifact produces the same bytes
+
+Two machines, two days, two worker counts: identical input must emit an identical `dist/`. Go
+makes this harder than TypeScript did, in two specific ways, and each has a rule:
+
+| Hazard | Rule | Where |
+|---|---|---|
+| Map iteration is randomised | every ordered output sorts explicitly, with a plain `<` on the string | `internal/ingest/git.go:8-12` |
+| A locale-aware compare depends on the build machine's ICU data | code-point order everywhere, on both sides of the artifact | `internal/ingest/git.go:10-12` (ingest), `internal/build/pages_repo_refs.go:398-400` (the file table, where the `localeCompare` bug the port fixed was) |
+
+Concurrency is the third hazard and it is handled structurally rather than by rule: every unit
+writes a path derived from the artifact and no two units write the same path, so parallelism
+changes the *order* of writes and nothing about their content or their names
+(`internal/build/parallel.go:61-70`). `TestSerialAndParallelAgree`
+(`internal/build/parallel_test.go:22`) and `TestBuildIsDeterministic`
+(`internal/build/determinism_test.go:32`) are the gates, and both run over the fixture always and
+over the developer's own corpus when it is there (`buildRoots`, `internal/build/sync_test.go:394`).
+
+The clock is the fourth, and it is the one input a reproducible *site* is allowed to vary on:
+"3 days ago" legitimately changes with real time. So it is a parameter rather than a call.
+`Options.Now` flows into `render.Site.Now` and every relative date and heat bucket is computed
+from it (`internal/build/build.go:66-68`, `internal/render/format.go:30`). Same artifact plus
+same clock means same bytes, which is exactly what `TestBuildIsDeterministic` pins.
+
+Wall-clock values are *written down* in only two places, and neither reaches the artifact or
+`dist/`: the run log under `<cacheDir>` (`internal/ingest/reuse.go:117-119`) and the timings file,
+which measures elapsed time for a living and says so (`internal/timings/timings.go:51-56`).
+Nothing clock-derived may enter `forge.json` at all — every date there comes from git.
+
+### 2. The artifact is the seam
+
+`data/forge.json` is a hard boundary, not a convention. Left of it, code reads git, the network
+and the filesystem. Right of it, code reads the artifact and the blob store and **nothing else**
+— an emitter may not open a file except through `Builder.Blob`, may not read the clock, and may
+not sort with a locale-aware comparison (`internal/build/build.go:33-36`, restated for authors in
+`internal/build/CONTRACT.md`).
+
+This is what makes the rewrite checkable at all. Because the schema did not move, "the Go ingest
+is correct" is a byte-identity statement against the TypeScript ingest rather than a judgement
+call, and `frznforge verify` (`cmd/frznforge/main.go:459`) is that check as one command: parse,
+re-serialize, compare byte for byte, and point at the first differing byte when it does not
+match.
+
+It also draws the line for the two halves' failure modes. Ingest never fails a build over a
+repository's state — an empty repo, an unreachable forge, a missing path are warnings
+(`cmd/frznforge/ingest.go:13-17`). The renderer never *starts* one without an artifact:
+`--no-ingest` refuses rather than publishing an empty site over a good one
+(`cmd/frznforge/main.go:349`).
+
+### 3. Git is read through the CLI, never the working tree
+
+Every git call in `internal/ingest` is plumbing over the object database — `for-each-ref`,
+`rev-list`, `log`, `ls-tree`, `cat-file`, `rev-parse`. The index and the checkout are never
+consulted, so a dirty tree and a clean one produce the same artifact and a bare mirror works
+exactly like a checkout (`internal/ingest/git.go:16-18`).
+
+The guard is `TestUncommittedChangesNeverLeak` (`internal/ingest/uncommitted_test.go:26`), which
+dirties a fixture every way a tree can be dirtied and asserts the artifact comes out
+byte-identical. It is worth knowing that this test did not exist until the Phase 9 audit went
+looking for it: the invariant every other guarantee rests on is also the one most easily lost by
+accident, because the natural way to read a file is to open it.
+
+Notes are the one deliberate exception and they do not weaken the rule — `notes.dir` is a plain
+folder, not a repository, so there is no committed tree to prefer. See
+[data-model.md](./data-model.md#guarantees).
+
+---
+
+## The Go packages
+
+Two binaries over one set of internal packages. The arrows are real imports
+(`go list -deps ./cmd/...`), and the shape is the point: `internal/model` is at the bottom and
+depends on nothing, `internal/ingest` and `internal/build` never import each other, and nothing
+imports upward.
+
+```mermaid
+flowchart TD
+  subgraph cmds["cmd/"]
+    ff["frznforge<br/>cmd/frznforge/main.go:44"]
+    fd["frzndebugger<br/>cmd/frzndebugger/main.go:1"]
+  end
+
+  subgraph left["reads the world"]
+    ing["ingest<br/>git CLI + forge APIs"]
+    cfg["config<br/>JSONC + defaults + paths"]
+    wiz["wizard<br/>init --web"]
+    scaf["scaffold<br/>new"]
+  end
+
+  subgraph right["pure function of the artifact"]
+    bld["build<br/>page families + the pool"]
+    rnd["render<br/>html/template"]
+    hl["highlight<br/>chroma"]
+    md["markdown<br/>goldmark"]
+    rt["routes"]
+    fm["frontmatter"]
+  end
+
+  subgraph base["the contract, and the evidence"]
+    mdl["model<br/>schema v8"]
+    log["logging<br/>frznforge.log"]
+    tim["timings<br/>*-timings.jsonl"]
+    srv["serve<br/>frznforge dev"]
+  end
+
+  ff --> bld & ing & cfg & wiz & scaf & srv & mdl & log & tim
+  fd --> cfg & log & tim
+  bld --> rnd & hl & md & rt & fm & cfg & mdl & tim
+  ing --> cfg & mdl & rt & md & fm & log & tim
+  wiz --> cfg & ing & md
+  rnd --> cfg & mdl & rt
+  md --> mdl
+  rt --> mdl
+  tim --> log
+```
+
+| Package | What it owns | Start reading at |
+|---|---|---|
+| `internal/model` | the schema v8 structs, `Parse`, `Serialize`, `Validate` | `internal/model/model.go:44` |
+| `internal/config` | the JSONC dialect, defaults, absolute paths, `config migrate` | `internal/config/config.go:328`, `:702` |
+| `internal/ingest` | git, the forge importers, the four skips, assembly, `WriteArtifact` | `internal/ingest/ingest.go:136` |
+| `internal/routes` | every URL the site emits, and `AllRoutes` — the list the output is checked against | `internal/routes/routes.go:581` |
+| `internal/render` | the template set, the shell, and the server half of the browser pair | `internal/render/render.go:1` |
+| `internal/build` | the page families, the worker pool, the postprocess hook | `internal/build/build.go:144` |
+| `internal/markdown` | goldmark plus the two trust levels | `internal/markdown/markdown.go:1` |
+| `internal/highlight` | chroma, the language map, the per-lexer lock | `internal/highlight/highlight.go:1` |
+| `internal/frontmatter` | the YAML subset `profile.md`, org pages and notes use | `internal/frontmatter/frontmatter.go` |
+| `internal/serve` | `frznforge dev`, which is also the e2e suite's server | `internal/serve/serve.go:1` |
+| `internal/logging`, `internal/timings` | the two diagnostic files every run leaves behind | `internal/logging/file.go:13`, `internal/timings/timings.go:1` |
+| `internal/scaffold`, `internal/wizard` | `frznforge new`, and `init --web` | `internal/scaffold/scaffold.go`, `internal/wizard/wizard.go` |
+| `internal/theme` | the WCAG maths over the palette tokens — **build-time code with no build-time caller**: nothing imports it but its own tests, on purpose | `internal/theme/theme.go:1` |
+
+Two structural rules hold this shape in place:
+
+- **One file per page family.** Each `internal/build/pages_*.go` exports one emit function that
+  `build.go` calls (`internal/build/build.go:257` for the site-wide set, `:321` for the per-repo
+  set). Nothing else in the package is shared, which is what let the families be written
+  independently in Phase 5 — and what stops two of them quietly disagreeing about the shell.
+- **`internal/routes` is the only source of URLs.** An emitter never hand-builds an `href`,
+  because the router is also what the sync tests read; a URL builder only the renderer used
+  could disagree with the test meant to police it (`internal/routes/routes.go:4-7`).
+
+### The no-build asset rule
+
+`public/` and `web/` are copied into the output **verbatim** — no transform, no rename, no
+content hash (`internal/build/copyAssets`, `internal/build/build.go:448`). This is the rule a
+later convenience quietly breaks, so it is worth stating what depends on it: `web/js/*.js` are
+loaded by the browser as written, with relative imports carrying their `.js` extensions, and the
+cross-language goldens in `tests/fixtures/` are generated from those exact files. A build step
+between disk and browser would make the golden a check on something the browser never runs.
+
+`web/` is copied from the **project**, not embedded in the binary. A site directory that does not
+carry it builds pages with no stylesheet and no command palette — the build succeeds and the site
+is dead.
+
+The single sanctioned seam is the postprocess hook: one user-supplied command over the finished
+directory, after a build that succeeded, with nothing running by default
+(`internal/build/postprocess.go:3`).
 
 ---
 
@@ -143,8 +321,7 @@ Two defects surfaced immediately:
   a live risk now that a kind can be added on the Go side alone. Fixed, and pinned by a test.
 - **The dead-URL test is red against the Astro engine**, on exactly `docs/c#-tips.md` and
   `docs/50% off.txt`. That is the palette-404 bug already fixed in the Go build and recorded in
-  the changelog, rediscovered from the browser's side. It passes under
-  `FRZNFORGE_E2E_ENGINE=go` and goes green for good when Phase 9 repoints the harness.
+  the changelog, rediscovered from the browser's side. Phase 9 repointed the harness at the Go binary and deleted the Astro branch, so it is green: there is only one engine now.
 
 Two smaller things were seen while reading `web/js/` and deliberately **not** changed, because
 neither is a defect a visitor would notice and both alter ranking or URL output that other tests
@@ -206,7 +383,7 @@ Neither has a single Go file that owns it. `branchTrees` is exercised by `scan_t
 warnings and by `identity_test.go`, but the TypeScript test's sharpest assertion — that
 `repoRoutes()` actually *shrinks* — has no direct Go equivalent; it is implied by
 `sync_test.go` rather than asserted. `site.base` is covered at the config layer, at the router
-layer (`routes_test.go:34` runs `AllRoutes` under both `""` and `"/mysite"`), and end to end by
+layer (`internal/routes/routes_test.go:38` runs `AllRoutes` under both `""` and `"/mysite"`), and end to end by
 `tests/e2e/base-path.spec.ts`, but no Go test builds a whole site under a base and scans the
 output for leaked absolute URLs the way the e2e spec does.
 

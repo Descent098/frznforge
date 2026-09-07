@@ -26,7 +26,9 @@ Additional things to keep in mind:
 This section is for me to keep track of what I need to manually review, feel free to add to this
 
 - [ ] Decide whether the two JSONC splice engines get folded into one. `cmd/frznforge/entries.go` and `internal/wizard/{entries,edit}.go` implement the same thing twice (~1,600 lines). Of 20 shared functions 11 are byte-identical and 8 differ only cosmetically, but the twentieth had diverged into a data-loss bug (the wizard deleted the scaffolded config's commented-out examples). Fixed and tested on both sides; the fork itself is left for you to rule on — 0.4.0 or 0.4.1.
-- [ ] Walk the release checklist, including the item the last two releases both tripped on: the release commit is actually **pushed**. Nothing in 0.4.0 has been committed yet.
+- [ ] **Push the release commit.** This is the item the last two releases tripped on, and it is unresolved again: remote `master` is at `0f99315`, and a shallow clone of the published URL still yields the 0.3.0 tree (no `cmd/`, `VERSION` = 0.3.0). Local HEAD is 4 ahead, and `cmd/frzndebugger/` and `cmd/frznforge/diagnostics.go` are still UNTRACKED — a clean clone of HEAD cannot build the debugger, and the binary it can build writes no diagnostics at all. `git add` those before committing.
+- [ ] Decide whether the by-hand release checks stay by-hand. The rewritten `docs/dev/release-checklist.md` marks the browser items (hosted site, mermaid and code colours in both themes, the clone popup, avatars, palette 404s, the wizard's save-on-Done) as needing a person; nothing automates them, and the Playwright suite covers only some.
+- [ ] The deep gate takes 43 minutes on the 73-repo corpus (`FRZNFORGE_FULL_CORPUS=1`, now documented at `-timeout 90m`). Worth deciding whether that stays a release-time gate or becomes something you run rarely.
 
 ## Per change
 

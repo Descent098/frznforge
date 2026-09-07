@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>frzndebugger</title>
+<style>
+/* The token names are the site's own (web/css/global.css, Hearth palette) so this page looks
+   like the rest of the project rather than a stranger. They are copied rather than linked
+   because this file is embedded in a binary and the stylesheet lives in the project directory:
+   a viewer that only works when run from a checkout would be the wrong trade. */
+:root {
+  color-scheme: dark;
+  --hf-canvas: #171210; --hf-canvas-2: #1d1714;
+  --hf-surface: #221b17; --hf-surface-2: #29211c;
+  --hf-border: rgba(255, 220, 190, 0.10); --hf-border-strong: rgba(255, 220, 190, 0.2);
+  --hf-text: #f4ece4; --hf-text-2: #c2b3a6; --hf-text-3: #a4968a;
+  --hf-ember: #ff7a2f; --hf-ember-soft: rgba(255, 122, 47, 0.16);
+  --hf-amber: #f0a62a; --hf-amber-soft: rgba(240, 166, 42, 0.16);
+  --hf-ice: #6dbaf1; --hf-ice-soft: rgba(95, 177, 238, 0.16);
+  --hf-neutral: #8f877f;
+  --hf-code-bg: rgba(255, 220, 190, 0.08);
+  --hf-radius: 14px; --hf-radius-sm: 9px;
+  --hf-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --hf-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --hf-canvas: #f6f1ea; --hf-canvas-2: #efe8df;
+    --hf-surface: #fffcf8; --hf-surface-2: #f9f4ee;
+    --hf-border: rgba(70, 45, 25, 0.12); --hf-border-strong: rgba(70, 45, 25, 0.22);
+    --hf-text: #24190f; --hf-text-2: #5c4e43; --hf-text-3: #6a5c50;
+    --hf-ember: #b03f08; --hf-ember-soft: rgba(234, 90, 20, 0.12);
+    --hf-amber: #8f5a06; --hf-amber-soft: rgba(217, 140, 18, 0.14);
+    --hf-ice: #19669f; --hf-ice-soft: rgba(47, 134, 199, 0.12);
+    --hf-neutral: #8c8a86;
+    --hf-code-bg: rgba(70, 45, 25, 0.07);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--hf-canvas); color: var(--hf-text);
+  font-family: var(--hf-font); font-size: 14px; line-height: 1.45;
+}
+header { padding: 14px 20px 10px; border-bottom: 1px solid var(--hf-border); background: var(--hf-surface); }
+h1 { margin: 0; font-size: 16px; letter-spacing: 0.02em; }
+h1 span { color: var(--hf-ember); }
+.hf-paths { margin-top: 4px; font-family: var(--hf-mono); font-size: 12px; color: var(--hf-text-3); }
+.hf-paths div { overflow-wrap: anywhere; }
+.hf-controls { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+select, input, button {
+  font: inherit; color: var(--hf-text); background: var(--hf-surface-2);
+  border: 1px solid var(--hf-border-strong); border-radius: var(--hf-radius-sm); padding: 4px 8px;
+}
+button { cursor: pointer; }
+button:hover { border-color: var(--hf-ember); }
+input { font-family: var(--hf-mono); min-width: 16ch; }
+
+.hf-banner { padding: 10px 20px; font-weight: 600; border-bottom: 1px solid var(--hf-border); }
+.hf-banner.bad { background: var(--hf-ember-soft); color: var(--hf-ember); }
+.hf-banner.ok { background: var(--hf-surface-2); color: var(--hf-text-3); font-weight: 400; }
+
+nav { display: flex; gap: 4px; padding: 8px 20px 0; border-bottom: 1px solid var(--hf-border); background: var(--hf-surface); }
+nav button {
+  border: 1px solid transparent; border-bottom: none; background: none; color: var(--hf-text-2);
+  border-radius: var(--hf-radius-sm) var(--hf-radius-sm) 0 0; padding: 6px 14px;
+}
+nav button[aria-selected="true"] { background: var(--hf-canvas); border-color: var(--hf-border); color: var(--hf-text); }
+
+main { padding: 16px 20px 40px; }
+section[hidden] { display: none; }
+
+.hf-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.hf-note { color: var(--hf-text-3); font-size: 12px; }
+
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-family: var(--hf-mono); font-size: 12.5px; }
+thead th {
+  position: sticky; top: 0; z-index: 1; text-align: right; padding: 6px 8px; white-space: nowrap;
+  background: var(--hf-surface); border-bottom: 1px solid var(--hf-border-strong);
+  color: var(--hf-text-2); cursor: pointer; user-select: none;
+}
+thead th.left, tbody td.left { text-align: left; }
+thead th.plain { cursor: default; }
+tbody td { padding: 3px 8px; text-align: right; border-bottom: 1px solid var(--hf-border); white-space: nowrap; }
+/* The flexible column takes the slack so the numbers stay hard against the right-hand edge.
+   99% rather than 100%: at 100% a second cell asking for the same makes the layout fight. */
+tbody td.grow { width: 99%; }
+tbody td.record { white-space: pre-wrap; overflow-wrap: anywhere; }
+tbody tr:hover { background: var(--hf-surface-2); }
+tr.failed td { color: var(--hf-amber); }
+/* Indentation is padding, not spaces. A fixed-width inline-block whose content is whitespace
+   measures its height off nothing and inflates the row to several lines. */
+.twist { display: inline-block; width: 1.5ch; color: var(--hf-ember); }
+
+.card {
+  background: var(--hf-surface); border: 1px solid var(--hf-border-strong);
+  border-left: 3px solid var(--hf-ember); border-radius: var(--hf-radius);
+  padding: 12px 14px; margin-bottom: 12px;
+}
+.card h3 { margin: 0 0 4px; font-size: 14px; font-family: var(--hf-mono); color: var(--hf-ember); }
+.card .why { color: var(--hf-text-2); font-size: 12.5px; margin-bottom: 8px; }
+.card table { font-size: 12px; }
+
+.lvl { display: inline-block; min-width: 5ch; }
+tr.warn td { color: var(--hf-amber); }
+tr.err td { color: var(--hf-ember); }
+tr.dim td { color: var(--hf-text-3); }
+tr.raw td { color: var(--hf-amber); background: var(--hf-amber-soft); }
+.msg { color: inherit; }
+.attr { color: var(--hf-ice); }
+.empty { color: var(--hf-text-3); padding: 24px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>frzn<span>debugger</span></h1>
+  <div class="hf-paths">
+    <div id="p-dir"></div>
+    <div id="p-log"></div>
+    <div id="p-timings"></div>
+  </div>
+  <div class="hf-controls">
+    <label>run <select id="run"></select></label>
+    <button id="reload" type="button">Reload</button>
+    <span class="hf-note" id="status"></span>
+  </div>
+</header>
+
+<div class="hf-banner ok" id="banner">reading&hellip;</div>
+
+<nav role="tablist">
+  <button type="button" role="tab" data-view="0" aria-selected="true">Unfinished</button>
+  <button type="button" role="tab" data-view="1" aria-selected="false">Timings</button>
+  <button type="button" role="tab" data-view="2" aria-selected="false">Log</button>
+</nav>
+
+<main>
+  <section id="view-0">
+    <div id="unfinished"></div>
+  </section>
+
+  <section id="view-1" hidden>
+    <div class="hf-filters">
+      <span class="hf-note" id="run-note"></span>
+    </div>
+    <div class="scroll"><table id="timings">
+      <thead><tr>
+        <th class="left" data-sort="name">step</th>
+        <th data-sort="count">n</th>
+        <th data-sort="total">total</th>
+        <th data-sort="mean">mean</th>
+        <th data-sort="best">best</th>
+        <th data-sort="worst">worst</th>
+        <th data-sort="failed">fail</th>
+        <th class="plain">counts</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section id="view-2" hidden>
+    <div class="hf-filters">
+      <label>level
+        <select id="level">
+          <option value="">all</option>
+          <option value="debug">debug</option>
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="error">error</option>
+        </select>
+      </label>
+      <input id="grep" type="search" placeholder="contains&hellip;" autocomplete="off">
+      <button id="to-end" type="button">Jump to last record</button>
+      <span class="hf-note" id="log-note"></span>
+    </div>
+    <div class="scroll"><table id="log">
+      <thead><tr>
+        <th class="plain left" style="width:12ch">time</th>
+        <th class="plain left" style="width:6ch">level</th>
+        <th class="plain left">record</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+// The session key travels in the URL and in a header on every fetch, exactly as the wizard's
+// page does it. Without it the server answers 403, page included.
+var KEY = new URLSearchParams(location.search).get("s") || "";
+
+var data = null;
+var view = 0;
+var open = Object.create(null);   // node key -> expanded
+var sortBy = "total";
+var sortDesc = true;
+var wantRun = "";
+
+var $ = function (id) { return document.getElementById(id); };
+
+function text(tag, value, cls) {
+  var el = document.createElement(tag);
+  if (value !== undefined && value !== null) el.textContent = String(value);
+  if (cls) el.className = cls;
+  return el;
+}
+
+// The same rules as FormatDuration in view.go, so a number here and a number in the terminal
+// read the same. The arithmetic itself is never done here: every value below was computed by
+// internal/timings and arrived as milliseconds.
+function dur(ms) {
+  if (!(ms > 0)) return "0";
+  if (ms < 0.001) return Math.round(ms * 1e6) + "ns";
+  if (ms < 1) return sig(ms * 1000) + "us";
+  if (ms < 1000) return sig(ms) + "ms";
+  if (ms < 60000) return sig(ms / 1000) + "s";
+  var m = Math.floor(ms / 60000);
+  return m + "m" + sig((ms - m * 60000) / 1000) + "s";
+}
+function sig(v) { return v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : v.toFixed(0); }
+
+// The time of day only. The date and the UTC offset are the same on every line of one run's
+// file, so on screen they cost a third of the column and say nothing that tells two records
+// apart. This mirrors shortTime in view.go.
+function clock(stamp) {
+  if (!stamp) return "--:--:--";
+  var t = stamp.indexOf("T");
+  var s = t >= 0 ? stamp.slice(t + 1) : stamp;
+  return s.replace(/Z$/, "").replace(/[+-]\d\d:?\d\d$/, "");
+}
+
+function load() {
+  $("status").textContent = "loading…";
+  var url = "/api/data?s=" + encodeURIComponent(KEY) + "&run=" + encodeURIComponent(wantRun);
+  fetch(url, { headers: { "X-Frznforge-Session": KEY }, cache: "no-store" })
+    .then(function (r) {
+      if (!r.ok) return r.text().then(function (t) { throw new Error(t.trim() || ("HTTP " + r.status)); });
+      return r.json();
+    })
+    .then(function (payload) {
+      data = payload;
+      wantRun = payload.run;
+      $("status").textContent = "";
+      render();
+    })
+    .catch(function (err) { $("status").textContent = String(err.message || err); });
+}
+
+function render() {
+  if (!data) return;
+  $("p-dir").textContent = data.dir;
+  $("p-log").textContent = "log:     " + data.logPath + (data.logError ? "  -- " + data.logError : "  (" + data.log.length + " records)");
+  $("p-timings").textContent = "timings: " + data.timingsPath + (data.timingsError ? "  -- " + data.timingsError : "");
+
+  var sel = $("run");
+  sel.textContent = "";
+  var runs = data.runs.slice().reverse();
+  for (var i = 0; i < runs.length; i++) {
+    var o = text("option", runs[i].id + "  (" + dur(runs[i].wallMs) + ", " + runs[i].records + " steps)");
+    o.value = runs[i].id;
+    if (runs[i].id === data.run) o.selected = true;
+    sel.appendChild(o);
+  }
+  var all = text("option", "all runs");
+  all.value = "all";
+  if (data.run === "all") all.selected = true;
+  sel.appendChild(all);
+
+  var total = data.unfinished.length + data.unfinishedTruncated;
+  var banner = $("banner");
+  banner.className = "hf-banner " + (total > 0 ? "bad" : "ok");
+  banner.textContent = total > 0
+    ? total + " UNFINISHED " + (total === 1 ? "step" : "steps") + " -- started and never reported back"
+    : "no unfinished steps: every step that started also finished";
+
+  renderUnfinished();
+  renderTimings();
+  renderLog();
+}
+
+function renderUnfinished() {
+  var host = $("unfinished");
+  host.textContent = "";
+  if (!data.unfinished.length) {
+    var note = text("p", "A step writes its record when it finishes, so a step still running when the process "
+      + "stopped leaves a hole in the id sequence. There are no holes in this run.", "empty");
+    host.appendChild(note);
+    return;
+  }
+  data.unfinished.forEach(function (u) {
+    var card = text("div", null, "card");
+    card.appendChild(text("h3", "#" + u.id + "  in run " + u.run));
+    if (!u.since) {
+      card.appendChild(text("div", "It drew an id and never wrote a record, and nothing named it as a parent, "
+        + "so its kind and name were never written down. All that is known is that it started.", "why"));
+      host.appendChild(card);
+      return;
+    }
+    card.appendChild(text("div", "Running by " + clock(u.since) + ", still working at " + clock(u.lastSeen)
+      + " -- at least " + dur(u.atLeastMs) + ". The steps below named it as their parent and did finish.", "why"));
+    var scroll = text("div", null, "scroll");
+    var table = document.createElement("table");
+    var body = document.createElement("tbody");
+    (u.children || []).forEach(function (c) {
+      var tr = document.createElement("tr");
+      if (c.err) tr.className = "failed";
+      tr.appendChild(text("td", clock(c.ts)));
+      tr.appendChild(text("td", dur(c.ms)));
+      var label = c.kind + (c.name ? " " + c.name : "") + (c.err ? "   ERR " + c.err : "");
+      tr.appendChild(text("td", label, "left grow"));
+      body.appendChild(tr);
+    });
+    table.appendChild(body);
+    scroll.appendChild(table);
+    card.appendChild(scroll);
+    host.appendChild(card);
+  });
+  if (data.unfinishedTruncated > 0) {
+    host.appendChild(text("p", "… and " + data.unfinishedTruncated
+      + " more not listed (the file claims more missing ids than can plausibly be steps).", "empty"));
+  }
+}
+
+var sortFields = {
+  total: "totalMs", mean: "meanMs", count: "count",
+  best: "bestMs", worst: "worstMs", failed: "failed", name: "name", kind: "kind"
+};
+
+// Ordering only. Every number was aggregated in Go; re-sorting a column must never turn into
+// recomputing one, or the page and the terminal would eventually disagree.
+function sortNodes(nodes) {
+  var field = sortFields[sortBy] || "totalMs";
+  nodes.sort(function (a, b) {
+    var x = a[field], y = b[field];
+    if (x !== y) {
+      var less = typeof x === "string" ? x < y : x - y < 0;
+      return (sortDesc ? !less : less) ? -1 : 1;
+    }
+    if (a.kind !== b.kind) return a.kind < b.kind ? -1 : 1;
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+  });
+  nodes.forEach(function (n) { if (n.children) sortNodes(n.children); });
+}
+
+function renderTimings() {
+  var note = $("run-note");
+  var run = data.runs.filter(function (r) { return r.id === data.run; })[0];
+  note.textContent = data.run === "all"
+    ? "every run in the file (" + data.runs.length + ")"
+    : run ? "run " + run.id + " -- " + dur(run.wallMs) + " wall, " + run.records + " steps"
+      + (run.failed ? ", " + run.failed + " failed" : "")
+      : "no timings recorded yet";
+
+  var tree = data.tree || [];
+  sortNodes(tree);
+  var body = $("timings").tBodies[0];
+  body.textContent = "";
+  if (!tree.length) {
+    var tr = document.createElement("tr");
+    var td = text("td", "nothing recorded for this run", "left");
+    td.colSpan = 8;
+    tr.appendChild(td);
+    body.appendChild(tr);
+    return;
+  }
+  (function walk(nodes, depth) {
+    nodes.forEach(function (n) {
+      var tr = document.createElement("tr");
+      if (n.failed) tr.className = "failed";
+      var label = text("td", null, "left grow");
+      label.style.paddingLeft = (8 + depth * 16) + "px";
+      var opens = n.children && n.children.length > 0;
+      label.appendChild(text("span", opens ? (open[n.key] ? "-" : "+") : "", "twist"));
+      label.appendChild(document.createTextNode(" " + n.kind + (n.name ? " " + n.name : "")));
+      if (opens) {
+        label.style.cursor = "pointer";
+        label.addEventListener("click", function () {
+          if (open[n.key]) delete open[n.key]; else open[n.key] = true;
+          renderTimings();
+        });
+      }
+      tr.appendChild(label);
+      tr.appendChild(text("td", n.count));
+      tr.appendChild(text("td", dur(n.totalMs)));
+      tr.appendChild(text("td", dur(n.meanMs)));
+      tr.appendChild(text("td", dur(n.bestMs)));
+      tr.appendChild(text("td", dur(n.worstMs)));
+      tr.appendChild(text("td", n.failed || "."));
+      tr.appendChild(text("td", countsOf(n.counts), "left"));
+      body.appendChild(tr);
+      if (open[n.key] && n.children) walk(n.children, depth + 1);
+    });
+  })(tree, 0);
+
+  var heads = $("timings").tHead.rows[0].cells;
+  for (var i = 0; i < heads.length; i++) {
+    var key = heads[i].getAttribute("data-sort");
+    var base = heads[i].textContent.replace(/[ ▲▼]+$/, "");
+    heads[i].textContent = key === sortBy ? base + (sortDesc ? " ▼" : " ▲") : base;
+  }
+}
+
+function countsOf(counts) {
+  if (!counts) return "";
+  return Object.keys(counts).sort().map(function (k) { return k + "=" + counts[k]; }).join(" ");
+}
+
+var levelValues = { debug: -4, info: 0, warn: 4, error: 8 };
+
+function renderLog() {
+  var min = levelValues[$("level").value];
+  var needle = $("grep").value.toLowerCase();
+  var body = $("log").tBodies[0];
+  body.textContent = "";
+  var shown = 0;
+  data.log.forEach(function (r) {
+    // An unparsed line has no level to judge, and dropping it would hide the torn tail of a
+    // killed run -- the same rule FilterLog follows in Go.
+    if (min !== undefined && !r.unparsed && r.levelValue < min) return;
+    if (needle && r.raw.toLowerCase().indexOf(needle) < 0) return;
+    shown++;
+    var tr = document.createElement("tr");
+    if (r.unparsed) tr.className = "raw";
+    else if (r.levelValue >= 8) tr.className = "err";
+    else if (r.levelValue >= 4) tr.className = "warn";
+    else if (r.levelValue < 0) tr.className = "dim";
+    tr.appendChild(text("td", r.unparsed ? "" : clock(r.time), "left"));
+    tr.appendChild(text("td", r.unparsed ? "???" : r.level, "left"));
+    var cell = text("td", null, "left grow record");
+    cell.appendChild(text("span", r.msg, "msg"));
+    (r.attrs || []).forEach(function (a) {
+      cell.appendChild(document.createTextNode(" "));
+      cell.appendChild(text("span", a.k + "=" + a.v, "attr"));
+    });
+    tr.appendChild(cell);
+    body.appendChild(tr);
+  });
+  $("log-note").textContent = shown + " of " + data.log.length + " records";
+}
+
+function show(next) {
+  view = next;
+  document.querySelectorAll("nav button").forEach(function (b) {
+    b.setAttribute("aria-selected", String(Number(b.getAttribute("data-view")) === view));
+  });
+  for (var i = 0; i < 3; i++) $("view-" + i).hidden = i !== view;
+}
+
+document.querySelectorAll("nav button").forEach(function (b) {
+  b.addEventListener("click", function () { show(Number(b.getAttribute("data-view"))); });
+});
+document.querySelectorAll("#timings th[data-sort]").forEach(function (th) {
+  th.addEventListener("click", function () {
+    var key = th.getAttribute("data-sort");
+    if (key === sortBy) sortDesc = !sortDesc;
+    else { sortBy = key; sortDesc = key !== "name" && key !== "kind"; }
+    renderTimings();
+  });
+});
+$("reload").addEventListener("click", load);
+$("run").addEventListener("change", function () { wantRun = $("run").value; load(); });
+$("level").addEventListener("change", renderLog);
+$("grep").addEventListener("input", renderLog);
+$("to-end").addEventListener("click", function () {
+  show(2);
+  var rows = $("log").tBodies[0].rows;
+  if (rows.length) rows[rows.length - 1].scrollIntoView({ block: "end" });
+});
+
+load();
+</script>
+</body>
+</html>

@@ -66,7 +66,7 @@ var (
 func Validate(d *ForgeData) error {
 	if d.SchemaVersion != SchemaVersion {
 		return fmt.Errorf(
-			"artifact is schema version %d, this build reads version %d — re-run the build (`npm run build`) to regenerate it",
+			"artifact is schema version %d, this build reads version %d — re-run `frznforge build` to regenerate it",
 			d.SchemaVersion, SchemaVersion)
 	}
 	var problems []string

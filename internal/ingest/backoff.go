@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/rand"
 	"net/url"
@@ -172,6 +173,7 @@ func (b *OriginBackoff) BeforeRequest(ctx context.Context, origin, describeURL s
 	if s.blockedUntil.After(now) {
 		seconds := int(math.Ceil(s.blockedUntil.Sub(now).Seconds()))
 		b.mu.Unlock()
+		slog.Debug("backoff blocked", "origin", origin, "seconds", seconds)
 		return &ImporterError{
 			Kind:       KindRateLimit,
 			Message:    fmt.Sprintf("%s: %s is rate-limited for another %ds; not retrying", describeURL, origin, seconds),
@@ -180,16 +182,28 @@ func (b *OriginBackoff) BeforeRequest(ctx context.Context, origin, describeURL s
 	}
 	b.mu.Unlock()
 
+	// A run parked here is the one shape of stall that looks exactly like a hang from outside:
+	// no process running, no request in flight, nothing on stdout. So the wait says so before it
+	// starts and again when it ends, and the loop logs each pass — another goroutine can extend
+	// the window while this one sleeps, and three consecutive waits on one origin is a different
+	// story from one long one.
+	waited := time.Duration(0)
 	for {
 		b.mu.Lock()
 		remaining := b.state(origin).waitUntil.Sub(b.now())
 		b.mu.Unlock()
 		if remaining <= 0 {
+			if waited > 0 {
+				slog.Debug("backoff wait done", "origin", origin, "ms", waited.Milliseconds())
+			}
 			return nil
 		}
+		slog.Debug("backoff wait start", "origin", origin, "ms", remaining.Milliseconds())
 		if err := b.sleep(ctx, remaining); err != nil {
+			slog.Debug("backoff wait interrupted", "origin", origin, "err", err)
 			return err
 		}
+		waited += remaining
 	}
 }
 
@@ -239,7 +253,10 @@ func (b *OriginBackoff) NoteRateLimit(ctx context.Context, origin string, retryA
 		// repo on this host fails fast into its cache instead of queueing behind it.
 		s.blockedUntil = b.now().Add(delay)
 		s.waitUntil = time.Time{}
+		failures := s.failures
 		b.mu.Unlock()
+		slog.Debug("backoff blocking origin", "origin", origin, "ms", delay.Milliseconds(),
+			"failures", failures, "retryAfter", hasRetryAfter)
 		return false, nil
 	}
 
@@ -248,7 +265,12 @@ func (b *OriginBackoff) NoteRateLimit(ctx context.Context, origin string, retryA
 		s.waitUntil = until
 	}
 	maxAttempts := b.MaxAttempts
+	failures := s.failures
 	b.mu.Unlock()
+
+	slog.Debug("backoff scheduled", "origin", origin, "ms", delay.Milliseconds(),
+		"failures", failures, "attempt", attempt, "maxAttempts", maxAttempts,
+		"retryAfter", hasRetryAfter)
 
 	if attempt >= maxAttempts {
 		return false, nil

@@ -17,6 +17,15 @@ identities:
 ---
 
 # Hi, I'm Kieran 👋
+I do the things, pog
+
+```python
+import math
+```
+
+|name | age|
+|-----|----|
+|kieran | 28 |
 
 I make small, sturdy software: things that keep working when the Wi‑Fi drops, the vendor
 shuts down, or the server is a folder of HTML. Most of what's here is source-available —

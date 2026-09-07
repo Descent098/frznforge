@@ -3,6 +3,7 @@
 package highlight
 
 import (
+	"frznforge/internal/ingest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -117,35 +118,24 @@ func TestPlainTextLanguagesAreDeliberate(t *testing.T) {
 	}
 }
 
-// TestIngestLanguageListIsCurrent re-derives the name list from the TypeScript ingest map, so
-// the fixture cannot go stale while src/ still exists. It is a sync test between two languages,
-// which is why it reads the source rather than trusting a copy.
+// TestIngestLanguageListIsCurrent keeps the checked-in fixture honest against the real map.
+//
+// The fixture is what TestLanguageMapCoversIngest compares the highlighter against, so a stale
+// fixture makes that test pass while a language ingest can actually emit goes uncoloured — which
+// is exactly how `.cfg` and `.conf` shipped with no syntax colouring for a version.
+//
+// It used to derive the list by parsing src/lib/ingest/languages.ts. Phase 9 deleted that file
+// and this test began skipping instead of failing, so it covered nothing from then on. It reads
+// ingest.LanguageNames() now: the map itself rather than a copy of it, which is both simpler and
+// a stronger claim.
 func TestIngestLanguageListIsCurrent(t *testing.T) {
-	const langsTS = "../../src/lib/ingest/languages.ts"
-	raw, err := os.ReadFile(langsTS)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Phase 8 deletes src/. The checked-in fixture is then the only copy, and the map
-			// moves to internal/ingest — at which point this test should read that instead.
-			t.Skip("src/lib/ingest/languages.ts is gone; point this test at the Go language map")
-		}
-		t.Fatalf("reading %s: %v", langsTS, err)
-	}
-	nameRe := regexp.MustCompile(`\bL\(\s*'([^']+)'`)
-	seen := map[string]bool{}
-	var fromTS []string
-	for _, m := range nameRe.FindAllStringSubmatch(string(raw), -1) {
-		if !seen[m[1]] {
-			seen[m[1]] = true
-			fromTS = append(fromTS, m[1])
-		}
-	}
-	sort.Strings(fromTS)
+	fromIngest := ingest.LanguageNames()
 	fixture := ingestLanguageNames(t)
 	sort.Strings(fixture)
-	if strings.Join(fromTS, "\n") != strings.Join(fixture, "\n") {
-		t.Errorf("testdata/ingest-languages.txt is out of date with %s\nin ts only: %v\nin fixture only: %v",
-			langsTS, missing(fromTS, fixture), missing(fixture, fromTS))
+	if strings.Join(fromIngest, "\n") != strings.Join(fixture, "\n") {
+		t.Errorf("testdata/ingest-languages.txt is out of date with internal/ingest's language map\n"+
+			"in the map only: %v\nin the fixture only: %v",
+			missing(fromIngest, fixture), missing(fixture, fromIngest))
 	}
 }
 

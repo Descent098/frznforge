@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/exec"
@@ -167,9 +168,29 @@ func mirrorEnv(extra map[string]string) []string {
 
 // defaultGitRunner runs one network git invocation, turning a timeout into a killed process
 // rather than an error so the caller can report it as a timeout.
-func defaultGitRunner(ctx context.Context, args []string, opts GitRunContext) (GitRunResult, error) {
+//
+// This is the OTHER git in the program — the one that talks to a remote — and it gets the same
+// before-and-after pair GitRun gets, for the same reason: a clone of a large repository over a
+// slow link is the single longest thing a build does, and without a "git-net start" a run that
+// sits there for twenty minutes is indistinguishable from a hang. The argv is safe to log: the
+// credential travels in the child's ENVIRONMENT (see AuthEnv) precisely so it is not on argv,
+// and the log's own sink redacts a clone URL that carries userinfo anyway.
+func defaultGitRunner(ctx context.Context, args []string, opts GitRunContext) (res GitRunResult, runErr error) {
 	runCtx, cancel := context.WithTimeout(ctx, opts.Timeout)
 	defer cancel()
+
+	line := strings.Join(args, " ")
+	started := time.Now()
+	slog.Debug("git-net start", "args", line, "dir", opts.Dir,
+		"timeoutMs", opts.Timeout.Milliseconds())
+	// Named results, so the finish record reports what the CALLER is about to receive — including
+	// the spawn failure, which returns a zeroed result and would otherwise be logged as a
+	// successful run of zero bytes.
+	defer func() {
+		slog.Debug("git-net done", "args", line, "ms", time.Since(started).Milliseconds(),
+			"code", exitCodeOf(res.Code), "signal", res.Signal, "bytes", len(res.Stdout),
+			"err", runErr)
+	}()
 
 	cmd := exec.CommandContext(runCtx, "git", args...)
 	cmd.Dir = opts.Dir
@@ -179,7 +200,7 @@ func defaultGitRunner(ctx context.Context, args []string, opts GitRunContext) (G
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
-	res := GitRunResult{Stdout: stdout.String(), Stderr: stderr.String()}
+	res = GitRunResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 		res.Signal = "SIGKILL"
 		return res, nil
@@ -199,6 +220,15 @@ func defaultGitRunner(ctx context.Context, args []string, opts GitRunContext) (G
 	zero := 0
 	res.Code = &zero
 	return res, nil
+}
+
+// exitCodeOf renders a possibly-absent exit code for a log record. -1 is "the process did not
+// report one" — a timeout kill — which a nil pointer would print as an address.
+func exitCodeOf(code *int) int {
+	if code == nil {
+		return -1
+	}
+	return *code
 }
 
 // AuthEnv is the git configuration for one invocation, passed through the child's ENVIRONMENT.
@@ -314,6 +344,11 @@ type keyedMutexEntry struct {
 
 // lock takes the per-key mutex and returns its release, dropping the entry once nothing is
 // queued behind it so the map does not grow for the life of the process.
+//
+// This is a place a build can stop dead — the holder is doing a network clone with a timeout
+// measured in minutes — so the wait, the acquisition and the release are all logged with the key
+// and the queue depth. `refs` at the moment of the request IS the queue depth including this
+// caller, which is what turns "the build is quiet" into "eight repos are behind one clone of X".
 func (k *keyedMutex) lock(key string) func() {
 	k.mu.Lock()
 	if k.m == nil {
@@ -325,17 +360,35 @@ func (k *keyedMutex) lock(key string) func() {
 		k.m[key] = e
 	}
 	e.refs++
+	queued := e.refs
 	k.mu.Unlock()
 
+	// Only the contended case is worth a pair of records: an uncontended acquire is the normal
+	// path and there is one per remote source, not one per page.
+	waiting := queued > 1
+	started := time.Now()
+	if waiting {
+		slog.Debug("mirror lock waiting", "lock", "ingest.mirror", "key", key, "queued", queued)
+	}
 	e.mu.Lock()
+	held := time.Now()
+	if waiting {
+		slog.Debug("mirror lock acquired", "lock", "ingest.mirror", "key", key,
+			"waitedMs", held.Sub(started).Milliseconds())
+	}
 	return func() {
 		e.mu.Unlock()
 		k.mu.Lock()
 		e.refs--
+		remaining := e.refs
 		if e.refs == 0 {
 			delete(k.m, key)
 		}
 		k.mu.Unlock()
+		if waiting {
+			slog.Debug("mirror lock released", "lock", "ingest.mirror", "key", key,
+				"heldMs", time.Since(held).Milliseconds(), "queued", remaining)
+		}
 	}
 }
 

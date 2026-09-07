@@ -41,6 +41,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -53,6 +54,7 @@ import (
 	"frznforge/internal/model"
 	"frznforge/internal/render"
 	"frznforge/internal/routes"
+	"frznforge/internal/timings"
 )
 
 // Options steer one build.
@@ -77,6 +79,12 @@ type Options struct {
 	// the hook's output goes here — the build's own verbose lines still print directly, because
 	// a field named for one thing that quietly captured everything would be a trap.
 	PostprocessOut io.Writer
+	// Step is the timings step this build's own steps hang under, so `frznforge build` records
+	// the ingest and the render as two halves of one run. nil is fine and is what a test passes:
+	// the build then opens its own top-level step on the process recorder, or records nothing at
+	// all when no recorder is open. There is deliberately no ambient parent in internal/timings,
+	// which is why this is a field rather than something discovered.
+	Step *timings.Step
 }
 
 // Result reports what a build produced.
@@ -111,11 +119,36 @@ type Builder struct {
 	// the Builder, so printing directly would interleave lines from several repositories; the
 	// buffers are drained in artifact order once the pool is done.
 	log []string
+
+	// step is the timings step this Builder's work is recorded under: the site's span at the top
+	// level, a repository's own step inside a repo worker. It is carried on the Builder rather
+	// than passed down because the page families already take a *Builder and nothing else, and a
+	// second parameter threaded through eight emit signatures would be a worse trade than one
+	// field. A *timings.Step is safe to share across goroutines, and nil is a working no-op.
+	step *timings.Step
+}
+
+// childOrRoot opens a step under parent, or a top-level one when there is no parent.
+//
+// The two are not interchangeable: Child on a nil *Step returns the shared no-op, which is right
+// for "timings are off" and wrong for "this build was not handed a parent" — a `go test` that
+// opened a recorder would then record nothing at all.
+func childOrRoot(parent *timings.Step, kind, name string) *timings.Step {
+	if parent == nil {
+		return timings.Start(kind, name)
+	}
+	return parent.Child(kind, name)
 }
 
 // Run builds the site.
 func Run(opts Options) (Result, error) {
 	start := time.Now()
+	// The whole render, as one span. Everything below records under it, so the timings file
+	// answers "where did the build go" by nesting rather than by matching timestamps up — which
+	// under a parallel build would nest the wrong things.
+	span := childOrRoot(opts.Step, "build.site", "site")
+	defer span.Done()
+
 	cfg, err := config.Load(opts.Root)
 	if err != nil {
 		return Result{}, err
@@ -165,6 +198,7 @@ func Run(opts Options) (Result, error) {
 		OutDir:  outDir,
 		Verbose: opts.Verbose,
 		blobDir: filepath.Join(cfg.OutDir, "blobs"),
+		step:    span,
 	}
 	workers := opts.Workers
 	if workers == 0 {
@@ -183,7 +217,7 @@ func Run(opts Options) (Result, error) {
 		return Result{}, err
 	}
 
-	if err := b.copyAssets(); err != nil {
+	if err := b.timed("build.assets", "public+web", (*Builder).copyAssets); err != nil {
 		return Result{}, err
 	}
 	if err := b.emitAll(); err != nil {
@@ -199,6 +233,7 @@ func Run(opts Options) (Result, error) {
 	// tool's, and folding it into the build time would misattribute a slow minifier to this
 	// renderer.
 	res := Result{Routes: b.written, Bytes: b.bytes, Elapsed: time.Since(start)}
+	span.Add("pages", int64(b.written)).Add("bytes", b.bytes)
 
 	// The hook fires here and nowhere else: after every step above returned nil. Every early
 	// return in this function leaves a partial dist/ on disk, and handing a partial directory to
@@ -215,48 +250,98 @@ func Run(opts Options) (Result, error) {
 
 // emitAll walks every page family. The order matches routes.AllRoutes so a reader comparing
 // the two sees the same shape.
+//
+// Each family is timed by the same wrapper, so adding a family adds its timing with it. A family
+// that hangs leaves its step open and no record — which is what the run log's own before/after
+// pairing is for; the two diagnostics answer different halves of the question.
 func (b *Builder) emitAll() error {
-	if err := emitProfile(b); err != nil {
-		return err
+	for _, family := range []struct {
+		kind string
+		emit func(*Builder) error
+	}{
+		{"build.profile", emitProfile},
+		{"build.repos-listing", emitReposListing},
+		{"build.404", emitNotFound},
+		{"build.repos", (*Builder).emitRepos},
+		{"build.notes", emitNotes},
+		{"build.orgs", emitOrgs},
+		{"build.hosted", emitHosted},
+		{"build.search-index", emitSearchIndex},
+	} {
+		if err := b.timed(family.kind, "site", family.emit); err != nil {
+			return err
+		}
 	}
-	if err := emitReposListing(b); err != nil {
-		return err
-	}
-	if err := emitNotFound(b); err != nil {
-		return err
-	}
-	if err := b.emitRepos(); err != nil {
-		return err
-	}
-	if err := emitNotes(b); err != nil {
-		return err
-	}
-	if err := emitOrgs(b); err != nil {
-		return err
-	}
-	if err := emitHosted(b); err != nil {
-		return err
-	}
-	return emitSearchIndex(b)
+	return nil
+}
+
+// timed runs one unit of work under its own step and its own pair of log records: a site-wide
+// family, a repository's copy of one, or the asset copy.
+//
+// The page count is taken as the DIFFERENCE across the call rather than from the family itself.
+// Every family already increments the same two counters through writeAt, so asking each one to
+// report its own total would be a second place for the number to be wrong — and in the serial
+// path those counters are cumulative across the whole build, which a total would report as this
+// family's.
+func (b *Builder) timed(kind, name string, emit func(*Builder) error) error {
+	parent := b.step
+	s := parent.Child(kind, name)
+	// The family becomes the parent for its duration, so the per-repo and per-ref steps below it
+	// nest under the family rather than beside it.
+	b.step = s
+
+	// The run log gets the same pair, because the two files answer different questions: the
+	// timings file records a family that FINISHED, and the family that never finishes is the one
+	// worth naming. A start with no matching done is how a render that stops says where.
+	//
+	// Bounded by families, not by pages — eight for the site plus eight per repository — so this
+	// is hundreds of records on the largest corpus, not hundreds of thousands.
+	started := time.Now()
+	slog.Debug("family start", "family", kind, "of", name)
+
+	before, beforeBytes := b.written, b.bytes
+	err := emit(b)
+	b.step = parent
+	pages, bytesOut := int64(b.written-before), b.bytes-beforeBytes
+
+	slog.Debug("family done", "family", kind, "of", name,
+		"ms", time.Since(started).Milliseconds(), "pages", pages, "bytes", bytesOut, "err", err)
+	s.Fail(err).DoneWith(timings.Counts{"pages": pages, "bytes": bytesOut})
+	return err
+}
+
+// repoFamily is one page family of one repository. The kind is what the timings file groups by,
+// so it is the family's name and not a number: "build.history" aggregates across every repo and
+// every run, "step 4" aggregates nothing.
+type repoFamily struct {
+	kind string
+	emit func(*Builder, *model.Repo) error
+}
+
+var repoFamilies = []repoFamily{
+	// tree, blob and raw, which time themselves per ref as well; then the rest.
+	{"build.refs", emitRepoRefs},
+	{"build.history", emitRepoHistory}, // commits, commit, branches, tags
+	{"build.releases", emitRepoReleases},
+	{"build.insights", emitRepoInsights},
+	{"build.archives", emitRepoArchives},
 }
 
 // emitRepo emits every page of one repository. Split out so the streaming pipeline (Phase 7)
 // has exactly one function to call per repo.
 func emitRepo(b *Builder, repo *model.Repo) error {
-	if err := emitRepoOverview(b, repo); err != nil {
+	if err := b.timed("build.overview", repo.Slug, func(local *Builder) error {
+		return emitRepoOverview(local, repo)
+	}); err != nil {
 		return err
 	}
 	if repo.Empty {
 		return nil
 	}
-	for _, emit := range []func(*Builder, *model.Repo) error{
-		emitRepoRefs,     // tree, blob, raw
-		emitRepoHistory,  // commits, commit, branches, tags
-		emitRepoReleases, // releases index + one page per release
-		emitRepoInsights,
-		emitRepoArchives,
-	} {
-		if err := emit(b, repo); err != nil {
+	for _, family := range repoFamilies {
+		if err := b.timed(family.kind, repo.Slug, func(local *Builder) error {
+			return family.emit(local, repo)
+		}); err != nil {
 			return err
 		}
 	}

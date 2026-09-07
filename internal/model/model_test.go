@@ -214,10 +214,12 @@ func TestValidateRejectsAWrongSchemaVersion(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for schema v7")
 	}
-	// The message has to tell a reader what to DO, not just what is wrong: an artifact left
-	// over from an older version is fixed by re-running the build.
-	if !strings.Contains(err.Error(), "re-run the build") {
-		t.Errorf("error should say how to fix it, got: %v", err)
+	// The message has to tell a reader what to DO, not just what is wrong: an artifact left over
+	// from an older version is fixed by re-running the build. It names the actual command, which
+	// is the part that rots — this used to say `npm run build`, and went on saying it for a
+	// version after that command stopped existing.
+	if !strings.Contains(err.Error(), "frznforge build") {
+		t.Errorf("error should name the command that fixes it, got: %v", err)
 	}
 }
 

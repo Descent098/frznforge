@@ -13,6 +13,7 @@ import (
 	"frznforge/internal/model"
 	"frznforge/internal/render"
 	"frznforge/internal/routes"
+	"frznforge/internal/timings"
 )
 
 // The ref-scoped file browser — the port of src/pages/repos/[slug]/{tree,blob,raw}/… together
@@ -153,13 +154,45 @@ func hostOf(raw string) string {
 
 func emitRepoRefs(b *Builder, repo *model.Repo) error {
 	head := newRepoSubHead(b, repo)
-	if err := emitTreePages(b, repo, head); err != nil {
+	if err := b.timed("build.tree", repo.Slug, func(local *Builder) error {
+		return emitTreePages(local, repo, head)
+	}); err != nil {
 		return err
 	}
-	if err := emitBlobPages(b, repo, head); err != nil {
+	if err := b.timed("build.blob", repo.Slug, func(local *Builder) error {
+		return emitBlobPages(local, repo, head)
+	}); err != nil {
 		return err
 	}
-	return emitRawFiles(b, repo)
+	return b.timed("build.raw", repo.Slug, func(local *Builder) error {
+		return emitRawFiles(local, repo)
+	})
+}
+
+// refName is how a ref is named in the timings file: the repo it belongs to, then the ref.
+//
+// Both halves are needed. Without the slug every repository's "main" aggregates into one row,
+// which is exactly the wrong answer to "which ref is slow"; without the ref the repo's families
+// are indistinguishable from each other.
+func refName(slug, ref string) string { return slug + "@" + ref }
+
+// fileSegments splits a route list into one contiguous range per ref.
+//
+// BlobRoutes and RawRoutes both walk BrowsableRefs in order, so a ref's routes are always
+// adjacent and a segment is a pair of indices rather than a second copy of the list. That is
+// what lets each ref be rendered — and therefore measured — as its own parallel section without
+// re-sorting anything or changing which page lands where.
+func fileSegments(list []routes.FileRoute) [][2]int {
+	var out [][2]int
+	for i := 0; i < len(list); {
+		j := i + 1
+		for j < len(list) && list[j].Ref.Name == list[i].Ref.Name {
+			j++
+		}
+		out = append(out, [2]int{i, j})
+		i = j
+	}
+	return out
 }
 
 /* ---- tree ---------------------------------------------------------------- */
@@ -205,10 +238,21 @@ func emitTreePages(b *Builder, repo *model.Repo, head repoSubHead) error {
 		curRef   string
 		children map[string][]model.TreeEntry
 	)
+	// The per-ref step rides the same "the ref changed" edge the tree cache does. This loop is
+	// serial and in ref order, so the window between two edges IS that ref's tree build — no
+	// accounting needed beyond closing the previous step.
+	var refStep *timings.Step
+	refPages := int64(0)
+	closeRef := func(err error) {
+		refStep.Fail(err).DoneWith(timings.Counts{"pages": refPages})
+		refStep, refPages = nil, 0
+	}
 	for _, route := range b.Router.TreeRoutes(repo) {
 		if children == nil || route.Ref.Name != curRef {
+			closeRef(nil)
 			curRef = route.Ref.Name
 			children = childrenByDir(route.Ref.Tree)
+			refStep = b.step.Child("build.ref", refName(repo.Slug, curRef))
 		}
 		entries := children[route.Path]
 
@@ -231,7 +275,9 @@ func emitTreePages(b *Builder, repo *model.Repo, head repoSubHead) error {
 
 		readme, err := dirReadme(b, route.Ref, entries, trusted)
 		if err != nil {
-			return fmt.Errorf("readme in %s of %s: %w", route.Path, repo.Slug, err)
+			err = fmt.Errorf("readme in %s of %s: %w", route.Path, repo.Slug, err)
+			closeRef(err)
+			return err
 		}
 
 		title := repo.Name + " at " + route.Ref.Name
@@ -257,9 +303,12 @@ func emitTreePages(b *Builder, repo *model.Repo, head repoSubHead) error {
 			page.ExtraScripts = []string{b.Router.WithBase("/js/mermaid.js")}
 		}
 		if err := b.WritePage(route.URL, "page-tree", page); err != nil {
+			closeRef(err)
 			return err
 		}
+		refPages++
 	}
+	closeRef(nil)
 	return nil
 }
 
@@ -521,16 +570,31 @@ func emitBlobPages(b *Builder, repo *model.Repo, head repoSubHead) error {
 		}
 	}
 
-	return b.EachRoute(len(routeList),
-		func(i int) string { return "blob " + routeList[i].Entry.Path + " at " + routeList[i].Ref.Name },
-		func(local *Builder, i int) error {
-			route := routeList[i]
-			payload, err := newBlobPage(local, repo, route, head, trusted, byRef[route.Ref.Name])
-			if err != nil {
-				return err
-			}
-			return writeBlobPage(local, repo, route, payload, mermaid, copyJS)
-		})
+	// One parallel section per ref rather than one over the whole list. The pages are identical
+	// either way — each writes its own path — but a section is the only honest unit to put a
+	// wall-clock number on, and "ref main took 12s" is the question this file gets asked. A repo
+	// with a single browsable ref (most of them) takes exactly the path it took before.
+	for _, seg := range fileSegments(routeList) {
+		base, n := seg[0], seg[1]-seg[0]
+		s := b.step.Child("build.ref", refName(repo.Slug, routeList[base].Ref.Name))
+		err := b.EachRoute(n,
+			func(i int) string {
+				return "blob " + routeList[base+i].Entry.Path + " at " + routeList[base+i].Ref.Name
+			},
+			func(local *Builder, i int) error {
+				route := routeList[base+i]
+				payload, err := newBlobPage(local, repo, route, head, trusted, byRef[route.Ref.Name])
+				if err != nil {
+					return err
+				}
+				return writeBlobPage(local, repo, route, payload, mermaid, copyJS)
+			})
+		s.Fail(err).DoneWith(timings.Counts{"pages": int64(n)})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // writeBlobPage wraps one blob payload in a page and writes it.
@@ -696,15 +760,27 @@ func emitRawFiles(b *Builder, repo *model.Repo) error {
 	// Pure copies with no shared state — the easiest work in the build to spread out, and 439
 	// files of it on this project's own site.
 	routeList := b.Router.RawRoutes(repo)
-	return b.EachRoute(len(routeList),
-		func(i int) string { return "raw " + routeList[i].Entry.Path + " at " + routeList[i].Ref.Name },
-		func(local *Builder, i int) error {
-			route := routeList[i]
-			info := route.Ref.Files[route.Entry.Path]
-			content, err := local.Blob(info.Sha)
-			if err != nil {
-				return err
-			}
-			return local.WriteFile(route.URL, content)
-		})
+	// Per ref, for the reason emitBlobPages gives.
+	for _, seg := range fileSegments(routeList) {
+		base, n := seg[0], seg[1]-seg[0]
+		s := b.step.Child("build.ref", refName(repo.Slug, routeList[base].Ref.Name))
+		err := b.EachRoute(n,
+			func(i int) string {
+				return "raw " + routeList[base+i].Entry.Path + " at " + routeList[base+i].Ref.Name
+			},
+			func(local *Builder, i int) error {
+				route := routeList[base+i]
+				info := route.Ref.Files[route.Entry.Path]
+				content, err := local.Blob(info.Sha)
+				if err != nil {
+					return err
+				}
+				return local.WriteFile(route.URL, content)
+			})
+		s.Fail(err).DoneWith(timings.Counts{"pages": int64(n)})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

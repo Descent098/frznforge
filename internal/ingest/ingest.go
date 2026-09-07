@@ -27,6 +27,7 @@ import (
 
 	"frznforge/internal/config"
 	"frznforge/internal/model"
+	"frznforge/internal/timings"
 )
 
 // DegradedWarningCodes are the warning codes that mean a remote source was published from
@@ -89,6 +90,21 @@ type Options struct {
 	// BackfillMetadata is --backfill-metadata: only repos with no cached provider metadata talk
 	// to the network, and nothing talks to git. See PrepareRemoteOptions.BackfillMetadata.
 	BackfillMetadata bool
+	// Step is the timings step this scan's steps hang under, so `frznforge build` records the
+	// scan and the render as two halves of one run. nil opens a top-level step instead, which is
+	// what `frznforge ingest` and a test both want. internal/timings has no ambient parent by
+	// design, so the parent has to arrive as a value.
+	Step *timings.Step
+}
+
+// timingStep opens a step under parent, or a top-level one when there is no parent. Child on a
+// nil *Step is the no-op used when timings are off, which is not the same thing as "this call
+// was handed no parent".
+func timingStep(parent *timings.Step, kind, name string) *timings.Step {
+	if parent == nil {
+		return timings.Start(kind, name)
+	}
+	return parent.Child(kind, name)
 }
 
 // Result is the artifact plus the byte stores, and the remote report the CLI prints.
@@ -118,6 +134,9 @@ type scanned struct {
 // between runs — the caches under ingest.cacheDir — are proven-equivalent replays or are
 // ignored, and every ordered output is sorted explicitly rather than left to map iteration.
 func Ingest(ctx context.Context, cfg *config.Resolved, hooks Hooks, options Options) (Result, error) {
+	span := timingStep(options.Step, "ingest.run", "scan")
+	defer span.Done()
+
 	opts, err := ScanOptionsFromConfig(cfg)
 	if err != nil {
 		return Result{}, err
@@ -162,9 +181,10 @@ func Ingest(ctx context.Context, cfg *config.Resolved, hooks Hooks, options Opti
 
 	results := make([]scanned, len(order))
 	runPool(ctx, len(order), cfg.Ingest.Concurrency, func(i int) {
-		results[i] = ingestOne(ctx, order[i], cfg, remoteCfg, opts, hooks, options,
+		results[i] = ingestOne(ctx, order[i], cfg, remoteCfg, opts, hooks, options, span,
 			reuse, reuseReads, prevRemotes, havePrevRemotes, now)
 	})
+	span.Add("repos", int64(len(order)))
 
 	// A cancelled run leaves the tail of `results` at its zero value, which Assemble would read
 	// as "skipped, no warning" and quietly drop. Silently publishing a smaller site is the one
@@ -204,7 +224,9 @@ func Ingest(ctx context.Context, cfg *config.Resolved, hooks Hooks, options Opti
 		})
 	}
 
+	assembleStep := span.Child("ingest.assemble", "artifact")
 	assembled, err := Assemble(cfg, entries)
+	assembleStep.Fail(err).DoneWith(timings.Counts{"repos": int64(len(assembled.Data.Repos))})
 	if err != nil {
 		return Result{}, err
 	}
@@ -273,6 +295,7 @@ func ingestOne(
 	opts ScanOptions,
 	hooks Hooks,
 	options Options,
+	parent *timings.Step,
 	reuse config.ReuseConfig,
 	reuseReads bool,
 	prevRemotes map[string]RunLogEntry,
@@ -292,6 +315,10 @@ func ingestOne(
 	// point, N seconds in".
 	repoStarted := time.Now()
 	slog.Debug("repo start", "slug", slug, "path", src.AbsPath, "remote", src.IsRemote())
+	// The repo's own span. Its two children — the fetch and the scan — are what answer "was that
+	// minute the network or the disk", which is the first question anyone asks of a slow ingest.
+	repoStep := parent.Child("ingest.repo", slug)
+	defer repoStep.Done()
 	defer func() {
 		slog.Debug("repo done", "slug", slug, "ms", time.Since(repoStarted).Milliseconds())
 	}()
@@ -367,7 +394,18 @@ func ingestOne(
 
 		// One unreachable forge must never take the build down: PrepareRemote turns every failure
 		// it anticipates into a warning, and anything left is caught here as one too.
+		//
+		// This step spans BOTH halves of a fetch — the provider API calls and the mirror clone or
+		// update — because that is the wall time a user waits, and the individual requests inside
+		// it are already named in the run log.
+		fetchStep := repoStep.Child("ingest.fetch", slug)
 		prepared, err := PrepareRemote(ctx, src, remoteCfg, options.Remote, prepOpts)
+		if prepOpts.SkipFetch {
+			// So a 0 ms fetch reads as "the freshness window said not to" rather than as a
+			// suspiciously fast network.
+			fetchStep.Add("skipped", 1)
+		}
+		fetchStep.Fail(err).Done()
 		if err != nil {
 			out.remote = &RemoteStatus{Slug: slug, Provider: src.Type, Action: MirrorMissing, Skipped: true}
 			failed := false
@@ -426,6 +464,7 @@ func ingestOne(
 		}
 	}
 
+	scanStep := repoStep.Child("ingest.scan", slug)
 	replayed := false
 	if digest != "" && reuseReads {
 		if entry := ReadScanCache(cacheFile); entry != nil && entry.InputDigest == digest {
@@ -438,17 +477,36 @@ func ingestOne(
 		r, err := ScanRepo(ctx, source, opts)
 		if err != nil {
 			out.err = fmt.Errorf("scan %s: %w", source.AbsPath, err)
+			scanStep.Fail(out.err).Done()
 			return out
 		}
 		out.result = r
 		if digest != "" && r.Repo != nil {
 			WriteScanCache(cacheFile, digest, r)
 		}
+	} else {
+		// A replay and a real scan are the same step with wildly different costs. Marking the
+		// replay is what stops a cached run's numbers from being read as a fast scanner.
+		scanStep.Add("replayed", 1)
 	}
+	scanStep.DoneWith(scanCounts(out.result))
 	if out.result.Repo != nil && hooks.OnRepoDone != nil {
 		hooks.OnRepoDone(out.result.Repo)
 	}
 	return out
+}
+
+// scanCounts is the size of what a scan produced, for the timings record. A duration alone
+// cannot tell a slow scanner from a big repository; these are what make the number comparable
+// between two repos and between two runs of the same one.
+func scanCounts(r ScanResult) timings.Counts {
+	c := timings.Counts{"blobs": int64(len(r.Blobs)), "archives": int64(len(r.Archives))}
+	if r.Repo != nil {
+		c["files"] = int64(len(r.Repo.Files))
+		c["commits"] = r.Repo.CommitCount
+		c["branches"] = int64(len(r.Repo.Branches))
+	}
+	return c
 }
 
 // orderMissesFirst is cfg.Sources, stably partitioned so remote sources with no cached provider
@@ -503,10 +561,28 @@ func runPool(ctx context.Context, n, limit int, fn func(i int)) {
 	next := 0
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	// Workers are counted in and out so a scan that stops names how many were still running when
+	// it did. One repository parked in a clone with the other twenty finished is a very different
+	// picture from twenty parked together, and neither is visible from the progress lines.
+	live := 0
 	for w := 0; w < limit; w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			mu.Lock()
+			live++
+			started := live
+			mu.Unlock()
+			slog.Debug("ingest worker start", "pool", "ingest.repos", "worker", w,
+				"live", started, "limit", limit)
+			defer func() {
+				mu.Lock()
+				live--
+				remaining := live
+				mu.Unlock()
+				slog.Debug("ingest worker done", "pool", "ingest.repos", "worker", w,
+					"live", remaining, "limit", limit)
+			}()
 			for {
 				mu.Lock()
 				i := next

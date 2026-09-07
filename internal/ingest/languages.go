@@ -419,3 +419,20 @@ func sortedKeys[V any](m map[string]V) []string {
 	sort.Strings(out)
 	return out
 }
+
+// LanguageNames is every language name ingest can put on a file, sorted.
+//
+// Exported for internal/highlight's sync test, which has to check that the highlighter's map
+// covers everything ingest can label — a name ingest emits that the highlighter does not know is
+// a file rendered with no colour, which is how `.cfg` and `.conf` shipped uncoloured for a
+// version. That test used to derive the list by parsing src/lib/ingest/languages.ts; Phase 9
+// deleted it, and the test skipped from then on rather than failing, so it stopped covering
+// anything at all. Reading the real map is both simpler and stronger than parsing a copy of it.
+func LanguageNames() []string {
+	out := make([]string, 0, len(langs))
+	for _, def := range langs {
+		out = append(out, def.Name)
+	}
+	sort.Strings(out)
+	return out
+}

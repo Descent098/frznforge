@@ -448,14 +448,12 @@ test.describe('the ranking against the shipped index', () => {
   });
 
   test('every result the palette would show points at a page that exists', async ({ page }) => {
-    // KNOWN RED AGAINST THE ASTRO ENGINE, and deliberately not weakened for it. Run with
-    // FRZNFORGE_E2E_ENGINE=go this passes; run against Astro it fails on exactly two files,
-    // `docs/c#-tips.md` and `docs/50% off.txt`, because the TypeScript index listed every blob
-    // in the tree including the paths that can never have a static page. That is the bug fixed
-    // in the Go build and recorded in the changelog, and this test rediscovering it from the
-    // browser's side is the test working. Phase 9 repoints the harness at the Go binary and it
-    // goes green; making it green sooner would mean weakening it to accommodate an engine that
-    // is being deleted.
+    // This was red against the Astro engine, on exactly `docs/c#-tips.md` and
+    // `docs/50% off.txt`: the TypeScript index listed every blob in the tree, including paths
+    // that can never have a static page. That is the palette-404 bug fixed in the Go build and
+    // recorded in the changelog, and this test rediscovering it from the browser's side is the
+    // test working. It was left failing rather than weakened to accommodate an engine that was
+    // being deleted; Phase 9 deleted it, and there is only one engine now.
     //
     // The palette is how this site is navigated, so a result that 404s is worse than no result.
     // The Go build already excludes unservable paths from the index

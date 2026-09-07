@@ -2,11 +2,13 @@
 
 frznforge emits a fully static site, so "how long does it take" is really "how many pages are
 there", and the page count is arithmetic on the artifact. This document gives you that
-arithmetic, the numbers measured on a real multi-repo build, the knobs that move them, and the
-things we deliberately did not build.
+arithmetic, the numbers measured on real corpora, the knobs that move them, and the things we
+deliberately did not build.
 
-Everything here is reproducible with `scripts/measure-build.ts` — see
-[Reproducing the measurement](#reproducing-the-measurement).
+0.4.0 replaced the Astro/TypeScript build with a Go binary, so most of the tables below have a
+before column and an after column. The before numbers are kept rather than deleted: a rewrite
+with no "before" can only be argued about, and several of the *rejections* recorded here were
+argued on reasoning that survives the engine swap entirely.
 
 This document is about *cost*. For what the pipeline actually does — the order of the steps,
 where each cache is read and written, and what a run records about itself — see
@@ -16,14 +18,37 @@ where each cache is read and written, and what a run records about itself — se
 
 Almost every page belongs to one of three families, and one of them is multiplied.
 
+```mermaid
+flowchart LR
+  repo(["one repo"]) --> fixed["fixed: 5 pages<br/>overview, branches, tags,<br/>releases, insights"]
+  repo --> per["per item<br/>1/commit + 1 per 50 commits per branch<br/>+ 1/release + 1 zip/archived ref"]
+  repo --> refs{"browsable refs<br/>BrowsableRefs — routes.go:207"}
+
+  refs --> d["default branch<br/>always"]
+  refs --> b["+ min(other branches, ingest.branchTrees)"]
+  refs --> t["+ min(tags, ingest.tagTrees)"]
+  refs --> h["+ every hosted branch<br/>exempt from the cap"]
+
+  d & b & t & h --> mult["× every path in that ref"]
+  mult --> tree["tree pages<br/>1 + dirs"]
+  mult --> blob["blob pages<br/>files + symlinks"]
+  mult --> raw["raw files<br/>the stored ones"]
+
+  tree & blob & raw --> big["87-90% of every build measured<br/>— and the only families the pool<br/>parallelises WITHIN a repository"]
+```
+
+The shape is why the levers that matter are ref-count levers (`branchTrees`, `tagTrees`) rather
+than anything about pages, and why the worker pool bothers to descend below the repository level
+at all.
+
 **Per repo, once:** the overview, `/branches/`, `/tags/`, `/releases/`, and (schema v5)
-`/insights/` when `hasInsights(repo)`.
+`/insights/` when `routes.HasInsights(repo)` (`internal/routes/routes.go:260`).
 
 **Per repo, per item:** one page per commit in `repo.commits` (plus, schema v6, one per
-display-support commit in `repo.extraCommits` — nonzero only when the history-narrowing
-knobs are set or a tag points outside branch history), one paginated commit-list page
-per 50 commits *per branch* (every branch, capped or not), one page per release, one zip per
-archived ref.
+display-support commit in `repo.extraCommits` — nonzero only when the history-narrowing knobs are
+set or a tag points outside branch history), one paginated commit-list page per 50 commits *per
+branch* (`routes.CommitsPerPage`, `internal/routes/routes.go:26`), one page per release, one zip
+per archived ref.
 
 **Per repo, per browsable ref × per path** — this is the multiplier:
 
@@ -33,12 +58,14 @@ blob pages = Σ over browsable refs ( files + symlinks in that ref )
 raw files  = Σ over browsable refs ( files whose FileInfo.stored is true )
 ```
 
-A **browsable ref** is a ref that has a tree in the artifact:
+A **browsable ref** is a ref that has a tree in the artifact
+(`routes.BrowsableRefs`, `internal/routes/routes.go:207`):
 
 ```
 browsable refs = 1 (the default branch)
                + min(other branches, ingest.branchTrees)     # 'all' ⇒ no limit
                + min(tags,           ingest.tagTrees)        # minus name collisions
+               + any hosted branch, which is exempt from the branch cap
 ```
 
 So the whole repo comes out as:
@@ -59,31 +86,34 @@ browsable refs**, each with ~21 tree entries (4 dirs, 17 blobs, 17 of them store
 5 + (18 tree + 68 blob + 68 raw) + 2 commit-list pages + 49 commits + 2 releases + 3 zips = 215
 ```
 
-`npm run measure` (or `npx tsx scripts/measure-build.ts`) prints exactly this decomposition for
-any artifact, so you can predict a build before you run it.
+`Router.RepoRoutes` (`internal/routes/routes.go:504`) is the code that decides this, and
+`Router.AllRoutes` (`:581`) is the whole list — the same function the sync tests read, which is
+why "the artifact has a page for everything" is checkable without running a build.
 
-Two footnotes that matter when you compare numbers with the Astro build log:
+Two footnotes that matter when you compare numbers:
 
 - **Routes are not all `.html`.** `raw/*` routes write the file's bytes and archives write
-  `.zip`s. In the benchmark below, 21,869 routes produced 13,164 HTML pages and 8,715 other
-  files. When someone says "16k pages", check which they mean.
+  `.zip`s — two different route→file rules, documented in
+  [build-steps.md § Routes to files](./build-steps.md#routes-to-files-two-rules-not-one). In the
+  four-repo benchmark below, 21,869 routes produced 13,164 HTML pages and 8,715 other files. When
+  someone says "16k pages", check which they mean.
 - **The multiplier is the whole story.** Tree + blob + raw are 87–90% of every build we have
-  measured.
+  measured, which is why they are the families the worker pool parallelises *within* a repository
+  and not only across repositories.
 
 ## The 0.3.0 baseline — 0.4.0's reference point
 
-0.4.0 replaces the Astro build with a Go one ([the phase plan](./plans/version-0.4.0-phased.md)).
-Every claim that version makes about speed is measured against the numbers here, taken on the
-released 0.3.0 pipeline immediately before the rewrite began. They are recorded first, on
-purpose: a rewrite with no "before" column can only be argued about.
+Taken on the released 0.3.0 pipeline immediately before the rewrite began, and recorded first on
+purpose.
 
-**Machine.** Windows 11 Pro 26200, AMD Ryzen 9 7945HX (16 cores / 32 threads), 61.7 GB RAM,
-Node v24.6.0, git 2.50.1, Astro 7.2.9, Go 1.24.5. Measured **2026-09-06**, schema v8.
+**Machine** (every number in this document unless a section says otherwise). Windows 11 Pro
+26200, AMD Ryzen 9 7945HX (16 cores / 32 threads), 61.7 GB RAM, Node v24.6.0, git 2.50.1, Astro
+7.2.9, Go 1.24.5. Measured **2026-09-06**, schema v8.
 
-### Corpus 1 — this repository's own site
+### Corpus 1 — this repository's own site, as it stood at the baseline
 
-One repo, 5 notes, 1 organization; 2 browsable refs at 290 tree entries each. `npm run measure`
-decomposes it as **1,077 routes**, of which 1,018 (94.5%) are the tree + blob + raw multiplier.
+One repo, 5 notes, 1 organization; 2 browsable refs at 290 tree entries each — **1,077 routes**,
+of which 1,018 (94.5%) are the tree + blob + raw multiplier.
 
 | step | command | time |
 |---|---|---:|
@@ -93,118 +123,180 @@ decomposes it as **1,077 routes**, of which 1,018 (94.5%) are the tree + blob + 
 | render, warm | `npm run build -- --no-ingest` | 6.565 s |
 | **build, warm** | `npm run build` | **7.214 s** |
 
-The highlight memo is worth 12.2 s of an 18.7 s render — **65%** — which is the same story the
-0.2.0 measurement told in different units, now with the memo in place rather than proposed.
-That number is what Phase 5 of the 0.4.0 plan checks chroma against before deciding whether the
-memo is worth porting at all.
+Output: 1,187 files, 633 HTML pages, 65.6 MB.
 
-Output:
+The highlight memo was worth 12.2 s of that 18.7 s render — **65%**. That number is the bar
+Phase 5 held chroma to before deciding whether to port the cache at all; see
+[the verdict](#measured-then-deleted-the-highlight-memo).
 
-| | |
-|---|---:|
-| files in `dist/` | 1,187 |
-| HTML pages | 633 |
-| `dist/` on disk | 65,622,500 bytes (66 MB) |
+### Where the JavaScript went
 
-### Where the JavaScript actually goes
+`dist/_astro/` was **102 files, 3,495,584 bytes**, of which everything frznforge wrote was
+**79,924 bytes — 2.3%** (`Base.css` 59,682, `RepoListing.js` 10,681, `CommandPalette.js` 6,003,
+the mermaid island 3,196, `base.js` 362). The other **3.42 MB was mermaid and its dependency
+tree** across ~97 Vite chunks — cytoscape 435 KB, katex 259 KB, then a chunk per diagram type.
 
-`dist/_astro/` is **102 files, 3,495,584 bytes**. Of that, everything frznforge wrote is
-**79,924 bytes — 2.3%**:
+Two consequences the rewrite acted on:
 
-| file | bytes |
-|---|---:|
-| `Base.<hash>.css` | 59,682 |
-| `RepoListing.<hash>.js` | 10,681 |
-| `CommandPalette.<hash>.js` | 6,003 |
-| `MermaidRenderer…index_0_lang.<hash>.js` | 3,196 |
-| `base.<hash>.js` | 362 |
+- **Dropping Svelte is not what shrinks that directory.** The two islands plus the shell script
+  were 17 KB of 3.5 MB. The framework runtime is real and it went, but the headline number was
+  mermaid.
+- **Mermaid was the one dependency that genuinely needed a bundler**, and the plan forbade one.
+  It became a vendored, pre-built ESM asset in `web/vendor/`, copied verbatim like every other
+  file under the no-build rule.
 
-The other **3.42 MB is mermaid and its dependency tree**, split across ~97 Vite chunks —
-`chunk-FOHPRMQF` at 662 KB, `cytoscape.esm` at 435 KB, `katex` at 259 KB, then a chunk per
-diagram type (`architectureDiagram` 149 KB, `sequenceDiagram` 116 KB, `swimlanes` 111 KB, …).
-
-Two consequences for the rewrite, both worth knowing before Phase 2 rather than during it:
-
-- **Dropping Svelte is not what shrinks this directory.** The two islands plus the shell script
-  are 17 KB of the 3.5 MB. The framework runtime is real and it goes, but the headline number
-  in `_astro/` is mermaid.
-- **Mermaid is the one dependency that genuinely needs a bundler today**, and the 0.4.0 plan
-  forbids one. It has to become a vendored, pre-built ESM asset copied verbatim like every other
-  file under the no-build rule — not a package Vite splits into 97 chunks. That is a Phase 2
-  deliverable, not a Phase 4 surprise.
+After both: `dist/_astro/` went to **2 files / 64,281 bytes** — stylesheets only, zero JavaScript
+— and `dist/` fell from 65.6 MB to 62.0 MB across the same 633 pages.
 
 ### Corpus 2 — the four-repo remote corpus
 
-Not re-measured for this baseline: it needs the network and ~5 minutes, and nothing about it has
-changed since it was taken. Use the table in
-[Measured: `ingest.branchTrees`](#measured-ingestbranchtrees-before-and-after) — at the default
-caps, **21,869 routes / 13,164 HTML pages / 204.2 s render / 7.1 s warm ingest / 854.2 MB**. It
-is the corpus that matters for the streaming pipeline (0.4.0 Phase 7), because it is the only one
-where fetch time and render time are the same order of magnitude.
+Not re-measured for the baseline: it needs the network and ~5 minutes, and nothing about it had
+changed. At the default caps: **21,869 routes / 13,164 HTML pages / 204.2 s render / 7.1 s warm
+ingest / 854.2 MB** — see [Measured: `ingest.branchTrees`](#measured-ingestbranchtrees-before-and-after).
+It is the corpus where fetch time and render time are the same order of magnitude, which is why
+the plan pointed the streaming-pipeline question at it.
 
 ## Measured: the Go renderer (0.4.0)
 
-Same artifact, same machine, same day as the [0.3.0 baseline](#the-030-baseline--040s-reference-point)
-above. One repository, 1,205 emitted files, of which 1,022 are the tree/blob/raw multiplier.
+Same artifact, same machine, same day as the baseline. One repository, 1,205 emitted files, of
+which 1,022 are the tree/blob/raw multiplier.
 
 | build | time |
 |---|---:|
 | `astro build`, this artifact | 8.74 s |
 | 0.3.0 render, cold (no highlight memo) | 18.75 s |
 | 0.3.0 render, warm (memo hit) | 6.57 s |
-| **`frznforge build`, 1 worker** | **3.66 s** |
-| **`frznforge build`, default workers** | **1.84 s** |
+| **`frznforge build --no-ingest --serial`** | **3.66 s** |
+| **`frznforge build --no-ingest`** (default workers) | **1.84 s** |
 
-So the Go build with **no cache of any kind** is 3.6× faster than the TypeScript build *with* its
+The Go build with **no cache of any kind** is 3.6× faster than the TypeScript build *with* its
 highlight memo, and 10× faster than the same build cold.
-
-### The memo is not worth porting
-
-0.4.0's plan reserved judgement on `src/lib/highlight-cache.ts` until there were numbers: the memo
-existed because Shiki was 84% of the render, and the question was whether chroma left anything for
-it to save. It does not. A completely cold Go render is 1.84 s — well inside the 6.57 s the
-TypeScript build achieved *warm*. Porting a cross-run, content-addressed, fingerprint-invalidated
-cache to save a fraction of two seconds would be buying complexity with the one currency this
-rewrite is trying to spend less of.
-
-The cache also has an ongoing cost the numbers above do not show: it is documented as growing
-without bound, because tracking liveness across runs is exactly the invalidation problem it was
-designed to avoid. Deleting it removes that too.
 
 ### Where the parallelism actually is
 
 Per-**repo** parallelism is the obvious design and it is not enough. It is bounded by the
-repository count, and the count is frequently one — this project's own site is a single repository
-whose tree/blob/raw pages are 85% of its output. Measured at one repo, per-repo parallelism did
-nothing at all: 3.74 s at one worker, 3.92 s at thirty-two, the difference being pool overhead.
+repository count, and the count is frequently one — this project's own site was a single
+repository whose tree/blob/raw pages are 85% of its output. Measured at one repo, per-repo
+parallelism did nothing at all: 3.74 s at one worker, 3.92 s at thirty-two, the difference being
+pool overhead.
 
 The pool is therefore used at both levels — repositories concurrently, and the tree/blob/raw
 families concurrently *within* a repository — under one shared semaphore, so the two levels cannot
-multiply into N² goroutines. Scaling on the single-repo site:
+multiply into N² goroutines (`internal/build/parallel.go:31-45`). Scaling on the single-repo site:
 
 | workers | 1 | 2 | 4 | 8 | 32 |
 |---|---:|---:|---:|---:|---:|
 | time | 3.66 s | 2.78 s | 2.33 s | 1.87 s | 1.84 s |
 
-It flattens after 8, which is what a workload that is part CPU and part file-write should do.
+It flattens after 8, which is what a workload that is part CPU and part file-write should do. The
+default is `GOMAXPROCS-1` (`internal/build/parallel.go:278`), which lands on the flat part of that
+curve on any machine worth parallelising on.
 
-### The bug this found
+### Corpus 3 — 73 repositories, parallel against serial
+
+The single-repo site proves the *within-repo* half. The developer's own 73-repository corpus is
+where both levels are exercised at once, and it is the corpus that found the deadlock the pool
+was rewritten to prevent.
+
+| build | files | time |
+|---|---:|---:|
+| `frznforge build --no-ingest --serial` | 47,158 | **119 s** |
+| `frznforge build --no-ingest` (default workers) | 47,158 | **61 s** |
+
+**Byte-identical**, which is the acceptance bar rather than a bonus. Concurrency is the classic
+way to lose determinism, so serial and parallel output must match exactly or the speed is worth
+nothing. `TestSerialAndParallelAgree` (`internal/build/parallel_test.go:22`) holds it, under
+`-race`.
+
+Just under 2× on 32 threads is the honest shape of this workload rather than a disappointment.
+The build is part CPU (markdown, highlighting, template execution) and part synchronous file
+write, and the per-lexer lock below serialises tokenising *within* a language — so a corpus
+concentrated in one or two languages gets less than its core count suggests.
+
+### The bug parallelism found
 
 Building with pages in parallel produced spurious chroma **Error** tokens — single characters
-wrapped in an error span, at random positions, inside long lines of large files. A page that still
-renders, with one letter quietly turned red.
+wrapped in an error span, at random positions, inside long lines of large files. A page that
+still renders, with one letter quietly turned red.
 
 chroma's registry hands every caller the same lexer value. The corruption reproduced only under
 the race detector's scheduling, never in isolation, and the detector itself reported no race —
-which is the worst combination to leave in place. Tokenising is now serialised per lexer *name*,
-so different languages still run concurrently, and the lock covers draining the iterator as well
-as creating it because chroma's iterators are lazy: the work happens in `Tokens()`, not in
-`Tokenise()`.
+which is the worst combination to leave in place. Tokenising is now serialised per lexer *name*
+(`internal/highlight/highlight.go:260-289`), so different languages still run concurrently, and
+the lock covers draining the iterator as well as creating it because chroma's iterators are lazy:
+the work happens in `Tokens()`, not in `Tokenise()`.
 
-It costs about 0.7 s of the 1.8 s on this corpus, because a repository's files cluster into a few
-languages and therefore a few locks. `TestSerialAndParallelAgree` under `-race` is what holds it:
-serial and 32-worker builds must produce byte-identical trees, and before the fix they differed in
-15–21 files per run, a different set each time.
+It costs about 0.7 s of the 1.8 s on the single-repo corpus, because a repository's files cluster
+into a few languages and therefore a few locks. Before the fix, serial and 32-worker builds
+differed in 15–21 files per run, a different set each time.
+
+## Measured, then deleted: the highlight memo
+
+*This is the 0.4.0 verdict on the cache 0.2.0 built. The measurement that motivated the cache is
+kept below it, because it is why the cache existed and why deleting it needed numbers rather than
+a preference.*
+
+**0.4.0 ships no highlight memo at all** (`internal/highlight/highlight.go:15-18`).
+
+The plan reserved judgement on porting `src/lib/highlight-cache.ts` until there were numbers: the
+memo existed because Shiki was 84% of the render, and the question was whether chroma left
+anything for it to save. It does not. A completely cold Go render is **1.84 s** — well inside the
+**6.57 s** the TypeScript build achieved *warm*. Porting a cross-run, content-addressed,
+fingerprint-invalidated cache to save a fraction of two seconds would be buying complexity with
+the one currency the rewrite was trying to spend less of.
+
+The cache also had an ongoing cost the timings do not show: it was documented as growing without
+bound, because tracking liveness across runs is exactly the invalidation problem it was designed
+to avoid. Deleting it removes that too.
+
+*Migration:* `<cacheDir>/highlight/` is now dead. Nothing writes it, nothing reads it, deleting it
+is safe — it always was, and that was the intended way to reclaim it.
+
+### Why the memo existed (0.2.0)
+
+The 0.2.0 plan asked for the *rebuild* to get faster, and after `ingest.reuse` the remaining cost
+was all rendering. Instrumenting `highlightToHtml` on the self-build answered it in one line:
+
+```
+[hl] calls=429 ms=21404 bytes=3728368
+```
+
+**21.4 s of a 25.5 s static-route phase — 84% of the render — was Shiki**, tokenizing 3.7 MB of
+source. Everything else (611 pages of layout, markdown, listings, the search index, the Vite
+bundles) shared the other 16%. Memoizing a pure function cut a no-change rebuild by 66%
+(23.1 s → 7.9 s) for a 2.5 MB cache of 321 gzipped entries.
+
+Two findings from that work outlived the cache and are worth keeping:
+
+- **Key on the *effective* language, not the requested one.** A grammar load can fail for reasons
+  unrelated to the grammar existing, and the render then falls back to plain text. Had the key
+  still said `typescript`, that unhighlighted output would have been stored under the TypeScript
+  key and served forever. The Go highlighter has the same shape of hazard and answers it the same
+  way: a lexer that cannot be resolved, or that fails to tokenise, degrades to plain lines
+  (`internal/highlight/highlight.go:291-296`) rather than to a missing page.
+- **The language map has to be checked in both directions.** Shiki's table covered 51 of the 85
+  names ingest can emit and spelled one of them `'Ini'` where ingest emits `'INI'`, so `.cfg` and
+  `.conf` files rendered uncoloured and nobody noticed. `LanguageToChroma`
+  (`internal/highlight/highlight.go:46`) keys every name ingest can produce, and a missing key is
+  a test failure (`TestLanguageMapCoversIngest`) rather than an uncoloured file.
+
+### Why the memo was not skip-unchanged-pages
+
+Worth being precise about, because the objection to *that* idea is a correctness objection and it
+still stands under the Go renderer — see
+[Measured, then rejected again](#measured-then-rejected-again-skip-unchanged-pages).
+
+Skip-unchanged-pages proposes *not rendering a page* and copying last build's output forward.
+That requires a dependency graph from artifact fields to output pages, and a miss anywhere in it
+ships a stale page in a build that reports success.
+
+The memo memoized *one deterministic function call inside a render*. Every page was still
+rendered in full, from the artifact, on every build. That property was tested rather than
+asserted, and verified end to end by building the site twice — once with the memo, once with it
+disabled — and hashing all 1,153 output files: **not one of the 423 pages carrying highlighted
+markup differed**. Eleven files did differ, every one of them a page showing relative dates, and a
+control run with the memo disabled on *both* sides produced the same drift — which is what
+identified it as the clock rather than the cache.
 
 ## Measured: `ingest.branchTrees`, before and after
 
@@ -212,20 +304,21 @@ The problem the cap fixes: tree/blob/raw pages are generated per browsable ref, 
 bounded how many branches were browsable. Four real public repos with 27 + 22 + 8 + 2 branches
 made every one of them browsable.
 
-**Machine.** Windows 11 Pro 26200, AMD Ryzen 9 7945HX (32 threads), 62 GB RAM, Node v24.6.0,
-git 2.50.1, Astro 7.2.4. Measured **2026-08-24**, schema v5.
+*Measured on the Astro renderer (2026-08-24, schema v5, Astro 7.2.4). The **page counts** are a
+property of the artifact and are unchanged by 0.4.0 — `BrowsableRefs` applies the same cap. The
+**times** are Astro's and are superseded by the Go figures above; they are kept because the
+before/after ratio is what the section is about.*
 
-**Corpus.** `npm run smoke:remote` against its four public repos — GitHub `Descent098/sdu`,
-GitLab `gitlab-org/release-cli`, Gitea `gitea/tea`, Codeberg `dnkl/fuzzel` — with the smoke
-script's own caps (`maxCommits: 200`, `tagTrees: 3`) and a warm mirror cache. Both runs used
-the identical working tree; only `ingest.branchTrees` changed.
+**Corpus.** Four public repos — GitHub `Descent098/sdu`, GitLab `gitlab-org/release-cli`, Gitea
+`gitea/tea`, Codeberg `dnkl/fuzzel` — with `maxCommits: 200`, `tagTrees: 3` and a warm mirror
+cache. Both runs used the identical working tree; only `ingest.branchTrees` changed.
 
 | | `branchTrees: 'all'` | `branchTrees: 10` (default) | change |
 |---|---:|---:|---:|
 | browsable refs | 70 | 43 | −39% |
 | routes | 27,813 | 21,869 | −21% |
 | HTML pages | 16,388 | 13,164 | −20% |
-| `astro build` | 301.2 s (5m01) | 204.2 s (3m24) | **−32%** |
+| render (Astro) | 301.2 s (5m01) | 204.2 s (3m24) | **−32%** |
 | ingest (warm cache) | 9.1 s | 7.1 s | −22% |
 | `dist/` on disk | 1,245.5 MB | 854.2 MB | −31% |
 | files in `dist/` | 27,823 | 21,879 | −21% |
@@ -241,223 +334,135 @@ Per repo:
 
 ### Read this honestly
 
-The cap does what it claims — a third off the build, a third off the output — but it only
-helps repos that have more than ten branches. `tea` has eight, so the default never touches
-it, and `tea` alone is **63% of the capped build** (13,759 of 21,869 routes). Its cost is not
-branch count: it is 647 tree entries per ref (a Go repo that vendors its dependencies) times
-11 refs, three of which are tags.
+The cap does what it claims — a third off the build, a third off the output — but it only helps
+repos that have more than ten branches. `tea` has eight, so the default never touches it, and
+`tea` alone is **63% of the capped build** (13,759 of 21,869 routes). Its cost is not branch
+count: it is 647 tree entries per ref (a Go repo that vendors its dependencies) times 11 refs,
+three of which are tags.
 
 Two consequences:
 
 - For a vendored monorepo, `ingest.tagTrees` and a *low* `branchTrees` are the levers, not the
   default. `tea`'s eleven refs are wildly uneven: its default branch costs 704 pages, but its
   `release/v0.7` branch costs 3,812 and `release/v0.4` 2,185 — old branches that vendored more
-  than the current one does. At `branchTrees: 0, tagTrees: 0` the repo would be **~1,240
-  pages instead of 13,759**, an order of magnitude, from one line of config.
+  than the current one does. At `branchTrees: 0, tagTrees: 0` the repo would be **~1,240 pages
+  instead of 13,759**, an order of magnitude, from one line of config.
 - The default of 10 is a safety rail against pathological branch counts, not a tuning knob.
   Anyone with a big repo still has to think about it. That is why the cap warns
   (`branch-trees-capped`) instead of silently trimming.
 
-The plan's original measurement (15,988 pages in 5m23s) reproduces: the same corpus with `all`
-now yields 16,388 HTML pages in 5m01, the difference being branches and commits added upstream
-since, plus the four new insights pages.
+## Measured: cross-run ingest reuse (`ingest.reuse`, 0.2.0 — ported unchanged)
 
-## Measured: cross-run ingest reuse (`ingest.reuse`, 0.2.0)
+The 0.2.0 plan asked why "the rebuild time with a constructed cache is as slow as a build without
+one". The honest answer was that until 0.2.0 the caches saved **network only**: the mirror saved
+the clone, `.meta.json` saved the API calls, and every run still re-ran the full scan —
+`for-each-ref`, the whole `git log`, `ls-tree` per browsable ref, `cat-file --batch` of every
+stored blob, `git archive` per treed ref, the insights checkpoints. `ingest.reuse` (on by default)
+closes that: a repo whose refs, HEAD, metadata inputs and scan options are unchanged replays its
+recorded scan from `<cacheDir>/scan/<digest>.json`, and a remote source fetched fully-fresh within
+the last `maxAgeMinutes` (default 2) is not re-fetched at all.
 
-The 0.2.0 plan asked why "the rebuild time with a constructed cache is as slow as a build
-without one". The honest answer was that until 0.2.0 the caches saved **network only**: the
-mirror saved the clone, `.meta.json` saved the API calls, and every run still re-ran the
-full scan — `for-each-ref`, the whole `git log`, `ls-tree` per browsable ref,
-`cat-file --batch` of every stored blob, `git archive` per treed ref, the insights
-checkpoints. `ingest.reuse` (on by default) closes that: a repo whose refs, HEAD, metadata
-inputs and scan options are unchanged replays its recorded scan from
-`<cacheDir>/scan/<digest>.json`, and a remote source fetched fully-fresh within the last
-`maxAgeMinutes` (default 2) is not re-fetched at all. Reuse never changes artifact bytes —
-a hit replays exactly what the fresh scan produced, or quietly falls back to a real scan.
-0.3.0 added two more skips ahead of it — an opt-in cooldown and an opt-in same-commit
-`ls-remote` probe — plus misses-first ordering;
-[build-steps.md § The four skips](./build-steps.md#the-four-skips-and-why-each-is-safe) walks
-each one and the argument for why it cannot change a byte.
+Reuse never changes artifact bytes — a hit replays exactly what the fresh scan produced, or
+quietly falls back to a real scan. 0.3.0 added two more skips ahead of it (an opt-in cooldown and
+an opt-in same-commit `ls-remote` probe) plus misses-first ordering;
+[build-steps.md § The four skips](./build-steps.md#the-four-skips-and-why-each-is-safe) walks each
+one and the argument for why it cannot change a byte. All four ported to Go with their arguments
+intact.
 
-Measured on this repository's own site (1 repo, 18 commits, 219 files, 5 notes,
-2026-08-28, Windows 11 / warm mirror):
+Measured on this repository's own site (1 repo, 18 commits, 219 files, 5 notes, 2026-08-28,
+warm mirror):
 
-| run                                   | `npm run ingest` |
-| ------------------------------------- | ---------------- |
-| cold scan cache (first run)           | ≈ 2.0 s          |
-| warm (nothing changed)                | ≈ 0.22–0.24 s    |
+| run | ingest |
+|---|---|
+| cold scan cache (first run) | ≈ 2.0 s |
+| warm (nothing changed) | ≈ 0.22–0.24 s |
 
-−89% on the no-change re-ingest, which is exactly the `npm run build` inner loop while
-editing content or styles. Keep the proportions in mind: on the four-repo remote corpus
-above, warm-cache ingest was already 7.1 s against a 204 s render — ingest reuse makes the
-small half smaller and does nothing for the large half, which remains a page-count problem
-(see the cap, and "What we did not do"). `npm run ingest -- --no-cache` bypasses every
-cache for one run; `tests/unit/reuse.test.ts` is the correctness half (byte-identity,
-tamper-proof hit/invalidation cases, the degraded-repo retry rule, prune safety).
+−89% on the no-change re-ingest. Keep the proportions in mind: on the four-repo remote corpus,
+warm-cache ingest was 7.1 s against a 204 s render — ingest reuse makes the small half smaller.
+The large half was a page-count problem, and 0.4.0 attacked it with cores rather than with a
+cache. `frznforge ingest --no-cache` bypasses every ingest-side cache for one run;
+`internal/ingest/reuse_test.go` is the correctness half (byte-identity, tamper-proof
+hit/invalidation cases, the degraded-repo retry rule, prune safety).
 
-## Measured: astro render concurrency (0.2.0, adopted at 2)
+## History: Astro render concurrency (0.2.0, adopted at 2)
 
-The 0.2.0 plan's "concurrently build island-pages … one thread per repo" has no supported
-shape — Astro has no per-repo build unit and no multi-process partial build, and sharding
-was rejected above. What Astro does expose is `build.concurrency`: how many pages render at
-once inside the one process. Measured on the self-build (schema v6 artifact, ~600 pages,
-Windows 11, two runs per value, `Measure-Command { npx astro build }`, 2026-08-28):
+*Moot since 0.4.0 — Astro is gone, and `build.concurrency` with it. Kept because the shape of the
+measurement is the reason the Go pool looks the way it does.*
 
-| `build.concurrency` | runs           | median  |
-| ------------------- | -------------- | ------- |
+Astro exposed one knob: how many pages render at once inside its single process. Measured on the
+self-build (schema v6 artifact, ~600 pages, two runs per value, 2026-08-28):
+
+| `build.concurrency` | runs | median |
+|---|---|---|
 | 1 (Astro's default) | 19.2 s, 19.6 s | ≈19.4 s |
-| **2 (adopted)**     | 18.2 s, 17.6 s | ≈17.9 s |
-| 4                   | 21.8 s, 19.0 s | ≈20.4 s |
+| **2 (adopted)** | 18.2 s, 17.6 s | ≈17.9 s |
+| 4 | 21.8 s, 19.0 s | ≈20.4 s |
 
-2 is a small (~8%) but consistent win — both its runs beat every run at 1 and 4 — and 4 is
-measurably worse. That shape makes sense: the pages' blob reads are synchronous
-(`readFileSync` in frontmatter), so there is little I/O for concurrent renders to overlap
-and the render is CPU-bound. Adopted as a literal in `astro.config.ts`; re-measure by
-overriding it there if the page mix ever changes materially.
+2 was a small (~8%) but consistent win and 4 was measurably worse — because the pages' blob reads
+were synchronous, so there was little I/O for concurrent renders to overlap and the render was
+CPU-bound.
 
-## Measured: the highlight memo (0.2.0)
+**What carried over.** The diagnosis was right and the ceiling was Astro's: one process, one
+granularity, and no per-repo build unit to parallelise. Go's pool answers the same CPU-bound
+workload with real parallelism at two granularities and lands at ~8 workers instead of 2 — a
+2× improvement instead of an 8% one, on the same machine and the same artifact.
 
-The 0.2.0 plan asked for the *rebuild* to get faster, and after `ingest.reuse` the remaining
-cost was all rendering. So the first job was to find out what rendering actually spends its
-time on, rather than assume. Instrumenting `highlightToHtml` on the self-build answered it in
-one line:
+## Measured, then rejected again: skip-unchanged-pages
 
-```
-[hl] calls=429 ms=21404 bytes=3728368
-```
+*Rejected in 0.2.0, re-tested in 0.3.0, and the reasoning survives the engine swap in full — with
+one number in it now much smaller.*
 
-**21.4 s of a 25.5 s static-route phase — 84% of the render — is Shiki**, tokenizing 3.7 MB of
-source. Everything else in the build (611 pages of layout, markdown, listings, the search
-index, the Vite bundles) shares the other 16%.
+The wish was "if the most recent commit hash matches the one on the page, skip rebuilding it in
+`dist`". It was re-tested against a concrete case: backfilling metadata for 13 repos of 73 looks
+like it should only need those repos' overview pages re-rendered. It does not. A repo's
+description and license badge are drawn on **every** page of that repo (thousands of blob and tree
+pages), and its description and tags also feed the listing, the profile, the org pages and
+`search-index.json`. The set of pages a metadata change can touch is therefore most of the site.
 
-That work is also entirely repeated. `highlightToHtml` is a pure function — the same source, in
-the same language, with the same themes and the same line-id prefix, always yields the same
-HTML — and the artifact it reads from only changes when the repository does. So the result is
-now remembered between builds in `<ingest.cacheDir>/highlight/`, keyed by a hash of every input,
-gzipped (Shiki's markup runs ~10× the source and compresses ~15:1).
+What a route → input-hash manifest would still have to model before a single page could be
+skipped safely: `search-index.json` (any repo/note/org change), every listing page and the sidebar
+counts (any repo added/removed/renamed), the footer warning count on every page (any warning
+anywhere), the profile's contribution graph / activity feed / KPIs (any commit anywhere), org
+overview aggregates (any member change), and — under Astro — `_astro/*` hashed asset names, since
+any CSS/JS change relinked every page. A miss in any of these is a silently wrong page in a build
+that reports success.
 
-Two things fall out of the same change: the same file highlighted once per browsable ref is now
-computed once per *build* as well as once per *lifetime*, and a cache hit skips loading the
-Shiki grammar entirely.
+**0.4.0 makes the answer easier, not harder.** Two of the arguments moved:
 
-Measured on the self-build (612 HTML pages, 423 of them carrying Shiki markup; Windows 11,
-Node 24; medians of repeated runs):
-
-| run                                                | `npm run build` | `astro build` alone |
-| -------------------------------------------------- | --------------- | ------------------- |
-| no memo (`FRZNFORGE_NO_HL_CACHE=1`)                | 23.1 s          | 22.0 s              |
-| memo, cold (first run — computes *and* writes)     | 19.8 s          | 19.5 s              |
-| **memo, warm (nothing changed)**                   | **7.9 s**       | **7.2 s**           |
-| improvement on a no-change rebuild                 | **−66% (2.9×)** | −67% (3.1×)         |
-
-The cold run is *faster* than no memo at all, not slower: writing 321 gzipped entries costs
-about 120 ms, and coalescing the concurrent duplicate renders (the same file highlighted for
-two refs at once) saves more than that on the same run.
-
-The cache is 2.5 MB / 321 entries for this site, and scales with distinct highlighted content
-rather than page count — a file browsable under five refs is one entry. It is **cumulative**:
-nothing prunes it, so an edited file leaves its predecessor behind and a Shiki upgrade orphans
-every entry at once. That is deliberate — tracking liveness across runs is the cross-run
-bookkeeping this design exists to avoid — and the directory is safe to delete at any time,
-which is the intended way to reclaim it.
-
-### Why this is not skip-unchanged-pages
-
-It looks adjacent to the idea rejected below, and it is worth being precise about the
-difference, because the objection to that idea is a correctness objection and it still stands.
-
-Skip-unchanged-pages proposes *not rendering a page* and copying last build's output forward.
-That requires a dependency graph from artifact fields to output pages, and a miss anywhere in it
-ships a stale page in a build that reports success.
-
-This memoizes *one deterministic function call inside a render*. Every page is still rendered in
-full, from the artifact, on every build. A hit returns bytes identical to what a miss computes,
-because the key covers every input to the function: change the source, the language, the line-id
-prefix, the themes, or Shiki itself and the key changes with it. The last of those is the one a
-naive content hash would miss, so the key folds in Shiki's package version *and* a hash of a
-canary render — a dependency upgrade or a theme edit invalidates the whole cache rather than
-serving the previous version's colours. A corrupt or truncated entry is treated as a miss.
-
-That property is tested, not asserted: `tests/unit/highlight-cache.test.ts` pins hit ≡ miss,
-the invalidation rules, the corrupt-entry fallback, and — with a planted entry no render could
-produce — that a disk hit genuinely happens rather than the suite passing on a re-render.
-
-It was also verified end to end by building the site twice, once with the memo and once with
-`FRZNFORGE_NO_HL_CACHE=1` (which disables the memo *entirely*, disk and in-process, so the
-control is a genuinely uncached build), then hashing all 1,153 output files: **not one of the
-423 pages carrying Shiki markup differed**. Eleven files did differ — every one of them a page
-showing relative dates ("2 hours ago"), none containing highlighted code — and a control run of
-two builds that *both* had the memo disabled produced the same drift, which is what identifies
-it as the clock rather than the cache.
-
-Two failure modes found by an adversarial review of this design, and closed, because they are
-the ones worth knowing about:
-
-- **Keying on the requested language rather than the effective one.** A grammar load can fail
-  for reasons unrelated to the grammar existing (a dynamic import hitting EMFILE mid-build).
-  The render then falls back to plain text — and had the key still said `typescript`, that
-  unhighlighted output would have been written under the TypeScript key and served forever.
-  The key uses the language actually handed to Shiki, so a fallback is stored as the `text`
-  render it is, and the next build highlights properly.
-- **A canary that could not see what it claimed to.** Rendered through `text`, the canary
-  carried only each theme's foreground and background, so a theme edit changing a keyword or
-  comment colour would not have moved the fingerprint. It now renders through a real grammar
-  with a keyword, a string and a comment in it.
-
-## Measured, then rejected again: skip-unchanged-pages (0.2.0)
-
-The 0.2.0 wish list re-floated "if the most recent commit hash matches the one on the page,
-skip rebuilding it in dist". The standing rejection above holds — and it was re-tested in
-0.3.0 against a concrete case. Backfilling metadata for 13 repos of 73 looks like it should
-only need those repos' overview pages re-rendered; it does not. A repo's description and
-license badge are drawn by `RepoHeader.astro` on **every** page of that repo (thousands of
-blob and tree pages), and its description and tags also feed the listing, the profile, the
-org pages and `search-index.json`. The set of pages a metadata change can touch is therefore
-most of the site, and the measured cost of just re-rendering everything is **2 minutes** for
-27,060 pages with the highlight memo warm — far too little to justify a copy-forward manifest
-that can be silently wrong. Owner decision, 2026-09-03: leave it. What changed in 0.2.0 is that
-the *goal* behind the request — a faster rebuild — was met without taking the risk: the
-highlight memo above cut a no-change rebuild by 66% by memoizing a pure function, leaving every
-page rendered and every byte verified. That is the cheap 84% of the problem; skipping pages
-would be chasing the remaining 16% with a mechanism that can be silently wrong.
-
-Concretely, what a route → input-hash manifest would still have to model
-before a single page could be skipped safely: `search-index.json` (any repo/note/org
-change), every listing page and the sidebar counts (any repo added/removed/renamed), the
-footer warning count on every page (any warning anywhere), the profile's contribution
-graph/activity feed/KPIs (any commit anywhere), org overview aggregates (any member
-change), and `_astro/*` hashed asset names (any CSS/JS change relinks every page). A miss
-in any of these is a silently wrong page in a build that reports success. Still no.
+- The hashed-asset term is gone. Assets are copied verbatim with no content hash
+  (`internal/build/build.go:448`), so a CSS edit no longer relinks anything.
+- The cost side collapsed. In 0.3.0 the measured price of just re-rendering everything was
+  **2 minutes** for 27,060 pages with the highlight memo warm. On the Go renderer the 73-repo
+  corpus is **61 s for 47,158 files, cold, with no cache of any kind**. Owner decision, 2026-09-03:
+  leave it. Nothing since has made a copy-forward manifest that can be silently wrong look like a
+  better trade.
 
 ## Measured, then rejected: sqlite for blobs + cache (0.2.0)
 
-The 0.2.0 wish list asked whether storing blobs and cache data in sqlite "can help make
-things faster instead of storing it all as files and having to eat the cost of
-reading+writing them all the time". Measured, that cost is a rounding error. On the
-self-build artifact (295 blobs, 2.8 MB), timed through the two functions a backend swap
-would replace (`readBlobBuffer` / `writeArtifact`):
+The 0.2.0 wish list asked whether storing blobs and cache data in sqlite "can help make things
+faster instead of storing it all as files". Measured, that cost is a rounding error. On the
+self-build artifact (295 blobs, 2.8 MB), timed through the two functions a backend swap would
+replace:
 
-| operation                                   | measured |
-| ------------------------------------------- | -------- |
-| read every blob in the store                | 45 ms    |
-| `writeArtifact`, cold (every byte written)  | 188 ms   |
-| `writeArtifact`, warm (stat-and-skip pass)  | 25 ms    |
+| operation | measured |
+|---|---|
+| read every blob in the store | 45 ms |
+| write the artifact, cold (every byte written) | 188 ms |
+| write the artifact, warm (stat-and-skip pass) | 25 ms |
 
-Against a ≈2.3 s cold ingest and a ≈18 s render, a storage backend that cost literally
-zero would win a few hundred milliseconds — and on the four-repo remote corpus, warm-cache
-ingest (7.1 s) is dominated by git subprocess work, not blob I/O, with the 0.2.0 scan
-cache already skipping the repeated reads that motivated the idea (the full set of caches,
-and which one each read hits, is tabulated in
-[build-steps.md § Where each cache lives](./build-steps.md#where-each-cache-lives)). The costs of adopting
-it are real and the wins are not: reads must stay synchronous inside Astro frontmatter,
-which means `node:sqlite`'s `DatabaseSync` — still printing an `ExperimentalWarning` on
-Node 24 and flag-gated at this project's Node floor (`engines: >=22.12.0`) — or
-`better-sqlite3`, a native build dependency in a project that keeps its production
-dependency set deliberately tiny; sqlite file locking would need its own Windows
-verification; and the
-content-addressed `blobs/` directory is what makes the scan cache's rehydration and
-`writeArtifact`'s prune trivially correct today. Rejected. Revisit only with a measured
-corpus where blob-store I/O, not git or rendering, dominates the build.
+Against a ≈2.3 s cold ingest and — now — a 1.84 s render, a storage backend that cost literally
+zero would win a few hundred milliseconds. On the four-repo remote corpus, warm-cache ingest
+(7.1 s) is dominated by git subprocess work, not blob I/O.
+
+*The 0.4.0 note:* the strongest half of the original objection was Node-specific and has expired —
+reads had to stay synchronous inside Astro frontmatter, which meant `node:sqlite` (experimental,
+flag-gated at the project's Node floor) or `better-sqlite3` (a native build dependency). Neither
+constraint exists in Go, and there is a decent pure-Go driver. The rejection stands anyway on the
+half that did not expire: the numbers are a rounding error, adopting it costs a third dependency
+in a project with two, and the content-addressed `blobs/` directory is what makes the scan
+cache's rehydration and `WriteArtifact`'s prune trivially correct today
+(`internal/ingest/assemble.go:293`). Revisit only with a measured corpus where blob-store I/O,
+not git or rendering, dominates the build.
 
 ## The knobs
 
@@ -467,33 +472,40 @@ corpus where blob-store I/O, not git or rendering, dominates the build.
 | `ingest.tagTrees` | `25` | same multiplier, per tag; also one zip archive each | older tags are listed and still have release pages, but you cannot browse the code at that tag |
 | `ingest.maxCommits` | `null` (all) | one page per commit, plus one list page per 50 per branch, plus ingest time reading them | history is truncated to the newest N per branch; the contribution graph, contributors and insights all see only that window |
 | `ingest.maxBlobBytes` | `512 kB` | blob store size and `dist/` size; a big file's page is also the heaviest HTML you will ship | oversized files are listed with a size but have no content, no highlighting and no raw route |
+| `ingest.concurrency` | `4` | parallel network + git work at ingest; a rate limit arrives sooner | a serial-ish scan on a many-repo config |
 | `ingest.insights.samples` | `24` | one `ls-tree` (+ bounded `cat-file`) per checkpoint at ingest; no extra pages | a coarser code-size line; the commits/contributors series is exact regardless |
-| `ingest.insights.maxBytesPerSample` | `20 MB` | ingest time reading blob content to count lines | checkpoints past the budget report `lines: null`, the series is flagged `approximate`, and that checkpoint's `bytes` loses its binary filter — the blobs past the budget are never read, so they cannot be classified and their size is counted whatever they are. The page and the `insights-approximate` warning both say so |
+| `ingest.insights.maxBytesPerSample` | `20 MB` | ingest time reading blob content to count lines | checkpoints past the budget report `lines: null`, the series is flagged `approximate`, and that checkpoint's `bytes` loses its binary filter |
 | `ingest.archives` | `true` | one `git archive` per default branch + treed tag, and those bytes in `dist/` | no download-zip buttons |
+| `--workers=N` / `--serial` | `GOMAXPROCS-1` | nothing — it is a render-side knob with no effect on output bytes | `--serial` roughly doubles the render; it exists to be compared against, not to be used |
 
-Insights are cheap on the page-count side: they add exactly one page per non-empty repo.
+Defaults live in `internal/config/config.go:433-457`. Insights are cheap on the page-count side:
+they add exactly one page per non-empty repo.
 
 ## Asset budget
 
-Measured on the `branchTrees: 10` build above. "gzip" is level 9 — a stand-in for what a
-static host actually transfers; neither Astro nor frznforge precompresses.
+*Measured on the Astro `branchTrees: 10` build. Page weights are markup and are close to
+unchanged; the shared-asset table is the half 0.4.0 rewrote, and both versions are shown.*
+"gzip" is level 9 — a stand-in for what a static host actually transfers; frznforge does not
+precompress, and the postprocess hook is where you would add it.
 
-**Shared assets, fetched once and cached for the whole site** (121.3 kB raw / 35.0 kB gzip):
+**Shared assets, fetched once and cached for the whole site.** The framework runtime is gone and
+the bundler with it, so the files are now the ones in `web/`, served verbatim under their own
+names:
 
-| asset | raw | gzip | on which pages |
-|---|---:|---:|---|
-| `Base.css` | 58.9 kB | 10.5 kB | every page |
-| `client.js` (Svelte runtime) | 40.5 kB | 15.6 kB | every page (pulled in by the palette island) |
-| `CommandPalette.js` | 5.8 kB | 2.8 kB | every page |
-| `client.svelte.js` | 0.9 kB | 0.5 kB | every page |
-| `RepoListing.js` | 10.6 kB | 4.2 kB | `/repos/` and `/orgs/*/repos/` only |
-| `notes.css` | 4.5 kB | 1.2 kB | note pages only |
-| `search-index.json` | 65.9 kB | 6.1 kB | fetched by the command palette on first open |
+| asset | 0.3.0 (bundled) | 0.4.0 (verbatim) | on which pages |
+|---|---|---|---|
+| the site stylesheet | `Base.css` 58.9 kB / 10.5 kB gz | `css/global.css` | every page |
+| the palette | `CommandPalette.js` 5.8 kB + `client.js` (Svelte runtime) 40.5 kB | `js/hf-command-palette.js` + `js/search.js` — **no runtime** | every page |
+| the listing | `RepoListing.js` 10.6 kB | `js/hf-repo-listing.js` + `js/listing.js` + `js/format.js` | `/repos/` and `/orgs/*/repos/` |
+| section styles | `notes.css` 4.5 kB | `css/notes.css`, `css/repo.css`, `css/insights.css`, `css/orgs.css` | the pages that ask for them (`.ExtraStyles`) |
+| `search-index.json` | 65.9 kB / 6.1 kB gz | unchanged shape (`internal/build/search_index.go:56`) | fetched by the palette on first open |
 
-So the shared cost of any page after the first is **~29 kB gzip**, and the HTML below is what
-each additional navigation transfers.
+The 0.3.0 shared cost was ~29 kB gzip per page after the first, of which 15.6 kB was the Svelte
+runtime alone. That line is gone: `dist/_astro/` went from 102 files / 3,495,584 bytes to 2 files
+/ 64,281 bytes, and mermaid moved from ~97 bundler chunks to one vendored ESM tree that only a
+page holding a diagram ever fetches.
 
-**Page weight by type** (n = pages of that type in this build):
+**Page weight by type** (n = pages of that type in the four-repo build):
 
 | page type | n | median | median gzip | p90 | p99 | max |
 |---|---:|---:|---:|---:|---:|---:|
@@ -508,86 +520,113 @@ each additional navigation transfers.
 
 Budget, stated as a rule rather than a wish:
 
-- **Typical page: under 15 kB gzip of HTML** plus the ~29 kB of shared assets. Everything but
-  blob pages clears this comfortably at the median.
-- **Blob pages are the outlier and always will be.** The weight is Shiki's output: one `<span>`
-  per token, so a 300 kB machine-generated Go table becomes a 2.8 MB HTML page. It gzips to
-  62 kB — a ratio of 46:1, because the markup is enormously repetitive — so the *transfer* is
-  fine and the *disk* is not: those pages are why `dist/` is 854 MB. `ingest.maxBlobBytes` is
-  the control; the current 512 kB default already excludes anything larger from the store.
-- **Insights added no measurable weight**: 9.3 kB gzip median, inline SVG, no client JS, no
-  chart library.
-- **No page loads a third-party asset**, so there is no budget line for fonts or CDNs.
-- **Mermaid (0.2.0) is the one deliberate exception to "no heavy JS", and it is fenced
-  off.** Rendering ```` ```mermaid ```` fences client-side puts ~3.3 MB of code-split
-  mermaid chunks *on disk* in `_astro/` — but a page loads them only if it actually holds a
-  diagram, and only once one nears the viewport (`MermaidRenderer.astro` is included
-  per-page on a `containsMermaid()` check, and the import is behind an
-  IntersectionObserver). Measured on the e2e fixture site (local server, no compression):
-  a diagram-free page still transfers exactly the ~48 kB raw JS it did before, asserted by
-  `tests/e2e/mermaid.spec.ts`; the page with a flowchart + a sequence diagram transferred
-  ~943 kB raw JS total (mermaid core + the two diagram-type chunks; gzip would cut that
-  roughly 3×). The fences themselves cost nothing at build time — the static HTML carries
-  only the escaped diagram source, which is also the no-JS fallback.
+- **Typical page: under 15 kB gzip of HTML.** Everything but blob pages clears this comfortably at
+  the median.
+- **Blob pages are the outlier and always will be** — one `<span>` per token, so a 300 kB
+  machine-generated table becomes a multi-MB HTML page. It gzips ~46:1 because the markup is
+  enormously repetitive, so the *transfer* is fine and the *disk* is not: those pages are why a
+  large `dist/` is measured in gigabytes. `ingest.maxBlobBytes` is the control.
+  **0.4.0 made these smaller**: chroma emits a class per token where Shiki emitted two CSS custom
+  properties inline on every span, and the themes moved into `web/css/repo.css`
+  (`internal/highlight/highlight.go:4-9`).
+- **No page loads a third-party asset**, so there is no budget line for fonts or CDNs. Avatars are
+  `public/`-relative paths rather than URLs, which is what keeps that true.
+- **Mermaid is the one deliberate exception to "no heavy JS", and it is fenced off twice.** A page
+  links `/js/mermaid.js` only when its markdown actually holds a diagram
+  (`markdown.ContainsMermaid`, `internal/markdown/markdown.go:88`, decides; see
+  `internal/build/pages_profile.go:183` for a caller), and that file loads the 3.4 MB vendored
+  build only once a diagram nears the viewport (`web/js/mermaid.js:48`, behind the
+  `IntersectionObserver` at `:70`). A diagram-free page fetches none of it, asserted by
+  `tests/e2e/mermaid.spec.ts`. The fences cost nothing at build time — the static HTML carries only
+  the escaped diagram source, which is also the no-JS fallback.
 
 ## Reproducing the measurement
 
-```sh
-# 1. build a real multi-repo artifact (live network, four public repos)
-npx tsx scripts/smoke-remote.ts --branch-trees=all
-npx tsx scripts/measure-build.ts --data=tests/.tmp/smoke/data --build --out=tests/.tmp/perf/dist-all
+`scripts/measure-build.ts` and `npm run measure` are gone with the rest of the Node build path.
+Four instruments replace them, and between them they cover more than the script did:
 
-# 2. the same corpus at the default cap, reusing the mirrors so only the cap differs
-npx tsx scripts/smoke-remote.ts --keep-cache --branch-trees=10
-npx tsx scripts/measure-build.ts --data=tests/.tmp/smoke/data --build --out=tests/.tmp/perf/dist-10
+```sh
+# 1. wall clock and the file count, on any artifact
+frznforge build --no-ingest                 # the summary line prints files, MB and elapsed
+frznforge build --no-ingest --serial        # the control the parallel run must match byte for byte
+frznforge build --no-ingest --workers=8
+
+# 2. where the time went INSIDE the build — per family, per repo, per ref
+frzndebugger                                # reads data/frznforge-timings.jsonl
+frzndebugger --plain                        # same three sections, pipeable
+
+# 3. the worker-count sweep, against whatever artifact FRZNFORGE_OUT_DIR names
+FRZNFORGE_MEASURE=1 go test ./internal/build/ -run MeasureWorkers -v -count=1
+
+# 4. the gates, over the fixture AND the local corpus
+FRZNFORGE_FULL_CORPUS=1 go test ./internal/build/ -timeout 40m
 ```
 
-`measure-build.ts` takes `--data=<dir>` (default `./data`), never writes into the artifact, and
-without `--build` runs nothing at all — safe against a live `./data` mid-session. `--json`
-emits the same report as machine-readable data; `--ingest-ms=<n>` folds an ingest duration into
-the table (the artifact cannot record its own build time without breaking determinism, so both
-`npm run ingest` and the smoke script print it for you to pass in).
+The timings file is the real replacement for the page-count decomposition. Every family records
+its own `pages` and `bytes` counts (`internal/build/build.go:286`), nested under the repository
+and the run, so "which repo, which ref, which family" is a grouping rather than an arithmetic
+exercise — and because the file is appended rather than truncated, today's run can be compared
+with yesterday's (`internal/timings/timings.go:1-36`).
 
-`tests/unit/branch-cap.test.ts` is the correctness half: it drives the real scanner against
-fixture repos and asserts that the cap keeps the right refs, warns with the right counts,
-tie-breaks deterministically, and actually shrinks `repoRoutes()`.
+Two things worth knowing before you trust a number from it:
+
+- **A replayed scan is marked as one** (`internal/ingest/ingest.go:490`). A scan cache hit and a
+  real scan are the same step with wildly different costs, and without the marker a cached run
+  reads as a fast scanner.
+- **The instrumentation is proven free of the output.** `TestFingerprintAndMeasure`
+  (`internal/build/fingerprint_measure_test.go:31`) builds the site twice — once with the run log
+  and timings file actually being written, once with everything discarded — and hashes every
+  emitted file. The times may differ; the hash may not.
+
+`--workers=N` and `--serial` change no output byte, so any of these can be run against a live
+artifact without disturbing it. Rendering into a scratch directory is still the safe habit:
+`frznforge build --no-ingest --out=_dist` (the Go tool ignores directories starting with `_`,
+which is also what keeps `go test ./...` usable — see [AGENTS.md](../../AGENTS.md#testing)).
 
 ## What we did not do, and why
 
-The Phase 7 plan floated more than the cap. These were considered and rejected; the reasoning
-is here so it does not have to be re-litigated.
+Considered and rejected; the reasoning is here so it does not have to be re-litigated. Two of
+these were argued against *Astro* and are marked where the argument changed.
 
 **Incremental build caching between runs.** The tempting version — remember which pages were
-rendered last time and skip the unchanged ones — needs a dependency graph from artifact fields
-to output pages, and it needs to be *right*, because a stale page is a silently wrong site.
-Astro has no supported partial-output mode, so we would own both the graph and the
-invalidation. Meanwhile the caching that pays for itself already exists: mirror clones are
-cached (`ingest.cacheDir`), the blob store is content-addressed so identical content across
-refs is stored once, and the artifact itself is the boundary between "read git" and "render
-pages". What remains is Astro's per-page render at ~15 ms, which is not a caching problem, it
-is a page-count problem — and page count is what the cap addresses. Revisit only with a
-measured build where ingest, not rendering, dominates.
+rendered last time and skip the unchanged ones — needs a dependency graph from artifact fields to
+output pages, and it needs to be *right*, because a stale page is a silently wrong site. That
+argument is unchanged by the rewrite; what changed is that the thing it would save now costs 61 s
+on a 47,000-file corpus. The caching that pays for itself already exists on the other side of the
+artifact: mirror clones, the provider metadata cache, the content-addressed blob store, and the
+scan replay.
 
 **A client-side file viewer instead of static blob pages.** Generating blob pages only for the
 default branch and fetching the rest from the existing `raw/` routes would delete most of the
 build. It would also mean no-JS users cannot read code, deep links resolve through JavaScript
-rather than the filesystem, syntax highlighting moves into the browser (Shiki's grammars are
-megabytes), and every accessibility guarantee we hold today would need re-testing against a
-dynamic view. A frozen forge whose main feature needs JavaScript is a different product.
+rather than the filesystem, syntax highlighting moves into the browser, and every accessibility
+guarantee would need re-testing against a dynamic view. A frozen forge whose main feature needs
+JavaScript is a different product.
 
-**Dropping `raw/` routes for non-default refs.** Halves the file count, breaks "every file you
-can see, you can download", and saves little wall clock — raw routes are a file copy, not a
-render.
+**Dropping `raw/` routes for non-default refs.** Halves the file count, breaks "every file you can
+see, you can download", and saves little wall clock — raw routes are a file copy, not a render.
 
 **Precompressing `dist/` (gzip/brotli on disk).** Every target host does this in the CDN layer,
-and doubling the file count to pre-bake it would make the build slower, not faster.
+and doubling the file count to pre-bake it would make the build slower, not faster. *This is now
+the user's call rather than ours:* the postprocess hook exists precisely so somebody who wants a
+Brotli pass can have one without frznforge growing an opinion
+(`internal/build/postprocess.go:3`).
 
-**Excluding vendored paths from blob pages.** This is the single biggest lever on the corpus
-above — `tea`'s `vendor/` is most of its 647 entries per ref. It is rejected because it changes
-what the site *shows*, not what it costs: a mirror that silently omits vendored code is
-lying about the repository. Vendored paths are already excluded from language stats and from
-insights' code-size series, where they distort a measurement rather than hide a file.
+**Excluding vendored paths from blob pages.** The single biggest lever on the four-repo corpus —
+`tea`'s `vendor/` is most of its 647 entries per ref. Rejected because it changes what the site
+*shows*, not what it costs: a mirror that silently omits vendored code is lying about the
+repository. Vendored paths are already excluded from language stats and from insights' code-size
+series, where they distort a measurement rather than hide a file.
 
-**Sharding or parallelising `astro build`.** Astro renders pages concurrently already, and
-splitting one site across processes means merging `dist/` and reconciling the shared asset
-hashes. No.
+**Sharding the build across processes.** *Rewritten for the Go build.* Under Astro this meant
+merging two `dist/` trees and reconciling hashed asset names, and was rejected on that. Under the
+Go renderer the objection is different and stronger: the build already saturates the cores it has
+with goroutines under one shared bound, and a second process would have to re-parse the artifact,
+re-read the blob store and duplicate the assets to gain nothing the pool does not already give.
+The measured curve flattens after 8 workers on this workload — that ceiling is the workload, not
+the process boundary.
+
+**Minifying, bundling or hashing anything.** The no-build rule is the point, not an omission: the
+browser gets the bytes that are on disk. `web/js/*.js` are loaded as written, which is what lets
+the cross-language goldens in `tests/fixtures/` check the file the browser actually runs. Anyone
+who wants a minifier has the postprocess hook.

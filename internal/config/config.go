@@ -13,6 +13,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -763,9 +765,23 @@ func resolveFrom(root, p string) string {
 	return filepath.Join(root, p)
 }
 
-// MirrorDirName is the cache subdirectory a remote source mirrors into. Derived from the
-// source's identity so two sources cannot collide, and stable across runs so the mirror is
-// reused.
+// MirrorDirName is the cache subdirectory a remote source mirrors into: a readable name plus a
+// digest of the source's exact identity, stable across runs so the mirror is reused.
+//
+// The digest is the part that makes the claim true. The readable half is deliberately lossy — it
+// folds case and maps everything outside [a-z0-9._-] to '-', because a cache directory has to be
+// a legal filename on Windows as well as a name a person can recognise in a listing. Lossy means
+// collidable, and two sources sharing one mirror is not a cosmetic problem: each is published
+// with whichever one fetched last, so a repository appears under another repository's name with
+// another repository's history.
+//
+// It is reachable rather than theoretical. GitLab identifies a project by a namespaced path, so
+// `group/sub/proj` and a project genuinely called `group-sub/proj` sanitise to the same string;
+// so do two Gitea repositories differing only in case, on a forge that treats them as distinct.
+//
+// The TypeScript engine appended a digest for exactly this reason. The Go port kept the
+// sanitising and dropped the digest, and the comment that replaced it asserted the property the
+// digest had been providing.
 func MirrorDirName(s RepoSourceConfig) string {
 	safe := func(v string) string {
 		return strings.Map(func(r rune) rune {
@@ -780,8 +796,23 @@ func MirrorDirName(s RepoSourceConfig) string {
 		}, v)
 	}
 	host := safe(strings.TrimPrefix(strings.TrimPrefix(s.Host, "https://"), "http://"))
+
+	readable := s.Type + "-" + host + "-" + safe(s.Owner) + "-" + safe(s.Repo)
+	// The identity, exactly as configured and separated by a byte that cannot occur in any of the
+	// fields — so ("a", "b-c") and ("a-b", "c") hash differently instead of both becoming "a-b-c".
+	identity := s.Type + "\x00" + s.Host + "\x00" + s.Owner + "\x00" + s.Repo
 	if s.Type == "gitlab" {
-		return s.Type + "-" + host + "-" + safe(s.Project)
+		readable = s.Type + "-" + host + "-" + safe(s.Project)
+		identity = s.Type + "\x00" + s.Host + "\x00" + s.Project
 	}
-	return s.Type + "-" + host + "-" + safe(s.Owner) + "-" + safe(s.Repo)
+
+	// Capped so a long namespaced path cannot push the mirror past a path limit on Windows, where
+	// the directory below this one already carries the user's cache path. The digest is outside
+	// the cap: truncating the readable half is why it has to be there.
+	const maxReadable = 48
+	if len(readable) > maxReadable {
+		readable = readable[:maxReadable]
+	}
+	sum := sha256.Sum256([]byte(identity))
+	return readable + "-" + hex.EncodeToString(sum[:4])
 }

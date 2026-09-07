@@ -957,33 +957,33 @@ checklist's container step, now with a Go image rather than `node:24`.
 
 ---
 
-## Phase 10 — Documentation, migration, release
+## Phase 10 — Documentation, migration, release ✅ *(done 2026-09-07)*
 
 The TODO asks for two specific things here: **mermaid diagrams and code references in the dev
 docs**, and a **migration guide in the changelog** whenever a change has a migration
 consequence. This version has the largest migration consequence the project has had.
 
 Ships
-- [ ] `docs/dev/architecture.md` (new): the Go layout, the streaming pipeline's three
+- [x] `docs/dev/architecture.md` (new): the Go layout, the streaming pipeline's three
       invariants, the no-build asset rule, and the test coverage map. Mermaid for the pipeline
       and the package graph; `file:line` references throughout, as the existing dev docs do.
-- [ ] `docs/dev/build-steps.md`: rewritten. Its top-level diagram is now the streaming
+- [x] `docs/dev/build-steps.md`: rewritten. Its top-level diagram is now the streaming
       pipeline, not `ingest && astro build`. The four skips survive and keep their arguments.
-- [ ] `docs/dev/performance.md`: before/after tables on both corpora; the highlight-memo
+- [x] `docs/dev/performance.md`: before/after tables on both corpora; the highlight-memo
       verdict from Phase 5; a rewritten "what we did not do" (the old entries about Astro's
       `build.concurrency` and page-skipping are now history and should be marked as such
       rather than deleted — the reasoning still applies to the Go renderer).
-- [ ] `docs/dev/data-model.md`: **schema v8, unchanged**, said loudly. That the artifact did
+- [x] `docs/dev/data-model.md`: **schema v8, unchanged**, said loudly. That the artifact did
       not move is the headline of the migration and the reason an existing `data/` directory
       keeps working.
-- [ ] `docs/dev/README.md`: the house rules change — no more "browser-safe `format.ts`", in its
+- [x] `docs/dev/README.md`: the house rules change — no more "browser-safe `format.ts`", in its
       place the two-language golden-fixture rule; no more `src/lib/data/schema.ts` as the
       boundary file, in its place `internal/model`.
-- [ ] `docs/user/*`: `go build` in quick-start; `migrating.md` gains the 0.3.0 → 0.4.0 section;
+- [x] `docs/user/*`: `go build` in quick-start; `migrating.md` gains the 0.3.0 → 0.4.0 section;
       `configuration.md` re-written for JSONC; `starting-a-site.md` and the scaffolded site's
       README lose their `astro.config.ts` references (the 0.3.0 release found that exact bug
       in that exact file — check it again the way a reader would).
-- [ ] **The migration guide**, in the changelog entry itself:
+- [x] **The migration guide**, in the changelog entry itself:
       1. `frznforge config migrate` converts `frznforge.config.ts` → `frznforge.config.jsonc`;
       2. Node is no longer required to build — Go and git are;
       3. `npm run <x>` becomes `frznforge <x>`, with a table;
@@ -991,21 +991,57 @@ Ships
          `<cacheDir>/highlight/`, which the new fingerprint invalidates; deleting it is
          optional and it is already documented as safe to delete;
       5. code block colours change, and why.
-- [ ] Changelog entries under **Features** / **Bug Fixes** / **Other**, 2–4 sentences each, at
+- [x] Changelog entries under **Features** / **Bug Fixes** / **Other**, 2–4 sentences each, at
       feature granularity (the TODO's rule: the web-components swap is one entry, not one per
       component). Release date stamped. `VERSION`, `package.json`, `package-lock.json` and the
       heading agree — four places.
-- [ ] The TODO's checkboxes all ticked, and its **For human** section carries whatever this
+- [x] The TODO's checkboxes all ticked, and its **For human** section carries whatever this
       version could not verify from inside the repository.
 
 Done when
-- [ ] `docs/dev/release-checklist.md` is walked end to end, including the blocking item the
+- [x] `docs/dev/release-checklist.md` is walked end to end, including the blocking item the
       last two releases both tripped on: **the release commit is actually pushed**, not merely
       that the repository exists.
 
 Tests
-- [ ] No new code. The doc sweep is the deliverable, and the standard it is held to is 0.3.0's:
+- [x] No new code. The doc sweep is the deliverable, and the standard it is held to is 0.3.0's:
       every claim checked against the code, not against the previous version of the doc.
+
+---
+
+*As built.* Every dev and user doc rewritten against the code rather than against its previous
+version, with mermaid diagrams and `file:line` references throughout; the verifier opened 173 of
+those references and ran every command it found, in a temp directory where it would be
+destructive.
+
+The doc sweep was worth more for what it found in the CODE than for the prose:
+
+- **`MirrorDirName` had silently dropped its collision digest** in the Go port, and the comment
+  that replaced it asserted the very property the digest had been providing. The readable name is
+  lossy by necessity — case-folded, everything outside `[a-z0-9._-]` mapped to `-` — so a GitLab
+  subgroup `group/sub/proj` and a project named `group-sub/proj` resolved to one mirror, and each
+  would be published with the other's git content. Restored, with six collision pairs tested.
+- **Five tests had stopped asserting anything.** Three parity tests shelled out to `tsx` and
+  imported `src/lib`, both deleted in Phase 9, so they skipped forever while telling the reader to
+  run `npm install`. Two were live gates that went quiet the same way:
+  `TestIngestIsDeterministic` called `requireTsx` only to get the module root and threw it away,
+  and `TestIngestLanguageListIsCurrent` parsed `languages.ts` to keep the highlighter's map honest
+  — the check that would have caught `.cfg`/`.conf` shipping uncoloured. Plus all three
+  `config migrate` tests, which read the repository's own deleted `.ts`. The parity tests are
+  deleted; the rest read Go now, or a frozen fixture.
+- **`frznforge dev` still erased the build log.** The fix that gave it its own file added a `name`
+  parameter and then ignored it, so every doc that described the behaviour was wrong. Fixed, and
+  pinned by a test that opens both files rather than trusting the signature.
+- The wrong-schema error told the reader to run `npm run build`; `config migrate` advised keeping
+  both config files "in step until the TypeScript build goes away".
+
+Two release-blocking facts the checklist run surfaced, both for the owner rather than the code:
+
+- **The release commit is still not pushed.** Remote `master` is `0f99315`; a shallow clone of the
+  documented URL yields the 0.3.0 tree — no `cmd/`, `VERSION` still `0.3.0`. That is the item the
+  last two releases tripped on, and it is the item again.
+- **`cmd/frzndebugger/` and `cmd/frznforge/diagnostics.go` are untracked**, so a clean clone of
+  HEAD cannot build the debugger and the binary it can build writes no diagnostics at all.
 
 ---
 

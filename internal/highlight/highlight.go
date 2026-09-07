@@ -19,10 +19,12 @@
 package highlight
 
 import (
+	"log/slog"
 	"path"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
@@ -267,8 +269,24 @@ func highlightLines(src, lexerName string) []string {
 	// concurrently, and it covers draining the iterator as well as creating it because chroma's
 	// iterators are lazy — the work happens in Tokens(), not in Tokenise().
 	mu := lexerLock(lexerName)
+	// Logged around the wait, not just after it. This lock serialises every page in one language,
+	// so a corpus that is 90% one language spends most of the render queued here — and "the build
+	// is slow" and "the build is stuck" look identical from outside unless something records the
+	// wait. The pair also bounds it: a "lock waiting" with no "lock held" is a build that stopped
+	// on this mutex.
+	//
+	// Both records are debug and carry no formatting work of their own, which matters because
+	// this is the hottest path in the build: with the default discard handler each is one
+	// comparison.
+	lockWait := time.Now()
+	slog.Debug("lock waiting", "lock", "highlight.lexer", "name", lexerName)
 	mu.Lock()
-	defer mu.Unlock()
+	waited := time.Since(lockWait)
+	slog.Debug("lock held", "lock", "highlight.lexer", "name", lexerName, "waitedMs", waited.Milliseconds())
+	defer func() {
+		mu.Unlock()
+		slog.Debug("lock released", "lock", "highlight.lexer", "name", lexerName)
+	}()
 
 	iterator, err := lexer.Tokenise(nil, src)
 	if err != nil {

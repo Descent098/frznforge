@@ -25,6 +25,7 @@
  * Nothing here touches the network either — that is the whole subject of the next comment.
  */
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -165,20 +166,31 @@ interface RemoteSource {
 }
 
 /**
- * The mirror directory a remote source resolves to, re-spelled from
- * `config.MirrorDirName` (internal/config/config.go): flat, lower-cased, no digest suffix,
- * `<type>-<host minus scheme>-<owner>-<repo>` with everything outside [a-z0-9._-] mapped to '-'.
+ * The mirror directory a remote source resolves to, re-spelled from `config.MirrorDirName`
+ * (internal/config/config.go): a readable `<type>-<host minus scheme>-<owner>-<repo>`,
+ * lower-cased with everything outside [a-z0-9._-] mapped to '-' and capped at 48 characters,
+ * then a dash and the first eight hex digits of the sha256 of the exact identity.
+ *
+ * The digest is not decoration. The readable half is lossy, so two different sources can
+ * sanitise to one name and then share a mirror — each published with the other's git content.
+ * The Go port dropped the digest for a while and this file was written against that version,
+ * which is why the shape is spelled out here rather than merely referenced.
  *
  * A two-place invariant, which the project's house rules dislike — but the alternative is
- * parsing JSONC in Node to recover the sources, and this cache layout is user-documented anyway
- * (docs/user/importing.md). The gate at the bottom is what makes the duplication safe: get this
- * name wrong and no cache is found, the replay branch does not fire, and the artifact fails the
- * post-condition rather than quietly reaching for the network.
+ * parsing JSONC in Node to recover the sources, and this cache layout is user-documented
+ * anyway (docs/user/importing.md). The gate at the bottom is what makes the duplication safe:
+ * get this name wrong and no cache is found, the replay branch does not fire, and the
+ * artifact fails the post-condition rather than quietly reaching for the network.
  */
 function mirrorDirName(source: RemoteSource): string {
   const safe = (v: string) => v.toLowerCase().replace(/[^a-z0-9._-]/g, '-');
   const host = safe(source.host.replace(/^https?:\/\//, ''));
-  return `${source.type}-${host}-${safe(source.owner)}-${safe(source.repo)}`;
+  let readable = `${source.type}-${host}-${safe(source.owner)}-${safe(source.repo)}`;
+  if (readable.length > 48) readable = readable.slice(0, 48);
+  // NUL-separated so ("a", "b-c") and ("a-b", "c") hash differently, exactly as the Go side does.
+  const identity = [source.type, source.host, source.owner, source.repo].join('\0');
+  const digest = createHash('sha256').update(identity).digest('hex').slice(0, 8);
+  return `${readable}-${digest}`;
 }
 
 /** The provider response cache file, from `ProviderCachePathFor` (internal/ingest/remote.go). */

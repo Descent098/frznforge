@@ -8,11 +8,18 @@ import (
 	"testing"
 )
 
+// repoTS is the TypeScript config the migration is checked against, frozen into testdata.
+//
+// It used to read ../../frznforge.config.ts, which Phase 9 deleted — so all three migration
+// tests skipped on every machine, forever, for a feature 0.3.0 users need in order to upgrade at
+// all. The frozen pair (this file and testdata/migrated-config.jsonc) is also the only honest
+// subject now: the claim is "converting THIS produces THAT", and both halves have to hold still
+// for that to mean anything.
 func repoTS(t *testing.T) []byte {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "..", TSFilename))
+	raw, err := os.ReadFile(filepath.Join("testdata", "migrated-config.ts"))
 	if err != nil {
-		t.Skipf("no %s in this checkout (it goes away in Phase 9): %v", TSFilename, err)
+		t.Fatalf("read the frozen TypeScript config: %v", err)
 	}
 	return raw
 }

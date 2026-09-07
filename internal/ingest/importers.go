@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"frznforge/internal/config"
+	"frznforge/internal/logging"
 	"frznforge/internal/model"
 )
 
@@ -175,9 +176,16 @@ func (e Env) Lookup(name string) string {
 
 // ResolveToken returns the first non-empty value among TokenEnvFor(source), trimmed, or "" when
 // none is set. Tokens live in the environment only — a token never comes from the config file.
+//
+// Every token that comes out of here is registered with internal/logging on the way, and this is
+// the one place that can do it: logging harvests the environment by variable NAME, and
+// `"tokenEnv": "MY_PAT"` lets a user call theirs anything at all, which no name-based scan can
+// recognise. Registering it here means a value that reached this process is scrubbed out of both
+// diagnostic files from the next record onwards, whatever call site later puts it in one.
 func ResolveToken(source config.RepoSourceConfig, env Env) string {
 	for _, name := range TokenEnvFor(source) {
 		if v := strings.TrimSpace(env.Lookup(name)); v != "" {
+			logging.Redact(v)
 			return v
 		}
 	}
