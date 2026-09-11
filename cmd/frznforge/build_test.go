@@ -26,7 +26,7 @@ func TestParseBuildArgsDefaultsToIngestThenRender(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if args.NoIngest || args.Ingest.NoCache || args.Ingest.BackfillMetadata {
+	if args.NoIngest || args.Ingest.NoCache || args.Ingest.BackfillMetadata || args.Ingest.RefreshMeta {
 		t.Errorf("a bare build is not a plain build: %+v", args)
 	}
 	if args.Root != "." || args.Build.Root != "." || args.OutDirSet {
@@ -54,6 +54,12 @@ func TestParseBuildArgsTakesItsOwnFlagsAndForwardsTheIngestOnes(t *testing.T) {
 		{[]string{"--backfill-metadata"}, func(a buildArgs) string {
 			if !a.Ingest.BackfillMetadata {
 				return "--backfill-metadata did not reach the ingest half"
+			}
+			return ""
+		}},
+		{[]string{"--refresh-meta"}, func(a buildArgs) string {
+			if !a.Ingest.RefreshMeta {
+				return "--refresh-meta did not reach the ingest half"
 			}
 			return ""
 		}},
@@ -115,7 +121,7 @@ func TestParseBuildArgsRejectsAnUnknownFlagRatherThanForwardingIt(t *testing.T) 
 func TestParseBuildArgsRefusesNoIngestTogetherWithAnIngestFlag(t *testing.T) {
 	// Asking for an ingest behaviour AND for no ingest means one of the two was a mistake.
 	// Silently dropping either would be guessing which, and the guess is invisible.
-	for _, flag := range []string{"--no-cache", "--backfill-metadata"} {
+	for _, flag := range []string{"--no-cache", "--backfill-metadata", "--refresh-meta"} {
 		_, err := parseBuildArgs([]string{"--no-ingest", flag})
 		if err == nil {
 			t.Errorf("--no-ingest %s was accepted", flag)
@@ -134,16 +140,41 @@ func TestParseBuildArgsRefusesNoIngestTogetherWithAnIngestFlag(t *testing.T) {
 func TestParseBuildArgsRefusesTheTwoIngestFlagsThatAreOpposites(t *testing.T) {
 	// --no-cache reads nothing from the provider cache, so every repo would look like a gap and
 	// a "backfill" would be a full refetch wearing the wrong name — and spend the whole quota.
-	_, err := parseBuildArgs([]string{"--no-cache", "--backfill-metadata"})
-	if err == nil {
-		t.Fatal("two opposite ingest flags were accepted")
+	// --refresh-meta conflicts with the backfill for the mirror-image reason: it asks for every
+	// repo's metadata to be re-requested, which is the spend the backfill exists to avoid.
+	for _, argv := range [][]string{
+		{"--no-cache", "--backfill-metadata"},
+		{"--refresh-meta", "--backfill-metadata"},
+	} {
+		err := mustFailBuildArgs(t, argv)
+		if err == nil {
+			continue
+		}
+		mustContain(t, err.Error(), "opposites", "the refusal does not say why they conflict")
 	}
-	mustContain(t, err.Error(), "opposites", "the refusal does not say why they conflict")
+	// --no-cache and --refresh-meta are redundant rather than contradictory: --no-cache already
+	// re-fetches everything, so asking for fresh metadata alongside it is not a mistake.
+	if _, err := parseBuildArgs([]string{"--no-cache", "--refresh-meta"}); err != nil {
+		t.Errorf("--no-cache --refresh-meta was refused: %v", err)
+	}
+}
+
+// mustFailBuildArgs is the "this combination is refused" half of the two tests above.
+func mustFailBuildArgs(t *testing.T, argv []string) error {
+	t.Helper()
+	_, err := parseBuildArgs(argv)
+	if err == nil {
+		t.Errorf("%v was accepted", argv)
+	}
+	return err
 }
 
 func TestParseBuildArgsAllowsEachFlagOnItsOwn(t *testing.T) {
 	// The counterpart to the two refusals above: neither may become a general ban on the flag.
-	for _, argv := range [][]string{{"--no-ingest"}, {"--no-cache"}, {"--backfill-metadata"}, {"--no-ingest", "-v"}, nil} {
+	for _, argv := range [][]string{
+		{"--no-ingest"}, {"--no-cache"}, {"--backfill-metadata"}, {"--refresh-meta"},
+		{"--no-ingest", "-v"}, nil,
+	} {
 		if _, err := parseBuildArgs(argv); err != nil {
 			t.Errorf("%v: %v", argv, err)
 		}

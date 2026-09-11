@@ -1113,6 +1113,7 @@ footer { color: var(--text-3); font-size: 12px; text-align: center; padding-top:
       { path: 'ingest.branchTrees', label: 'Browsable branches', kind: 'branchtrees', hint: "A number, or 'all'." },
       { path: 'ingest.archives', label: 'Produce zip archives', kind: 'check' },
       { path: 'ingest.failOnDegraded', label: 'Fail the build if any repo fell back to cached metadata', kind: 'check' },
+      { path: 'ingest.skipMetaRefetches', label: 'Reuse cached repo descriptions instead of re-asking the provider', kind: 'check' },
       { path: 'ingest.reuse.enabled', label: 'Reuse recent ingest work', kind: 'check' },
       { path: 'ingest.reuse.maxAgeMinutes', label: 'Reuse window (minutes)', kind: 'num' },
       { path: 'ingest.reuse.cooldownSeconds', label: 'Re-fetch cooldown (seconds)', kind: 'numnull', unset: true,

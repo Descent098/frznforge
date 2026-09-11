@@ -667,7 +667,9 @@ func TestPrepareRemoteFallsBackToCachedProviderDataWhenTheAPIFails(t *testing.T)
 		t.Errorf("provider layer drifted after a failed call")
 	}
 	wantSequence(t, "releases", tags(prepared.Releases), []string{"v1.0.0"})
-	if prepared.FetchStatus == nil || prepared.FetchStatus.Meta {
+	// An ATTEMPTED call that failed is a recorded false, never the nil that means "not attempted"
+	// — the run log carries a nil forward, which would leave metaOk true from the run before.
+	if prepared.FetchStatus == nil || prepared.FetchStatus.Meta == nil || *prepared.FetchStatus.Meta {
 		t.Errorf("a failed metadata fetch must not report metaOk: %+v", prepared.FetchStatus)
 	}
 }

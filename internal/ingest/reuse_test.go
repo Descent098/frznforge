@@ -20,7 +20,7 @@ import (
 /* ---- CLI ------------------------------------------------------------------ */
 
 func TestParseIngestArgs(t *testing.T) {
-	if got, err := ParseIngestArgs(nil); err != nil || got.NoCache || got.BackfillMetadata {
+	if got, err := ParseIngestArgs(nil); err != nil || got.NoCache || got.BackfillMetadata || got.RefreshMeta {
 		t.Fatalf("no flags: %+v err=%v", got, err)
 	}
 	if got, err := ParseIngestArgs([]string{"--no-cache"}); err != nil || !got.NoCache {
@@ -29,6 +29,9 @@ func TestParseIngestArgs(t *testing.T) {
 	if got, err := ParseIngestArgs([]string{"--backfill-metadata"}); err != nil || !got.BackfillMetadata {
 		t.Fatalf("--backfill-metadata: %+v err=%v", got, err)
 	}
+	if got, err := ParseIngestArgs([]string{"--refresh-meta"}); err != nil || !got.RefreshMeta {
+		t.Fatalf("--refresh-meta: %+v err=%v", got, err)
+	}
 	if _, err := ParseIngestArgs([]string{"--nope"}); err == nil {
 		t.Error("an unrecognised flag must be an error, not a silent no-op")
 	}
@@ -36,6 +39,15 @@ func TestParseIngestArgs(t *testing.T) {
 	// the run would be a full refetch wearing the wrong name.
 	if _, err := ParseIngestArgs([]string{"--no-cache", "--backfill-metadata"}); err == nil {
 		t.Error("the two opposite flags must be rejected together")
+	}
+	// Backfill spends the quota only on the repos that have nothing; --refresh-meta re-requests
+	// every repo. Together they are the full refetch the backfill was reached for to avoid.
+	if _, err := ParseIngestArgs([]string{"--refresh-meta", "--backfill-metadata"}); err == nil {
+		t.Error("--refresh-meta and --backfill-metadata must be rejected together")
+	}
+	// Redundant, not contradictory: --no-cache already re-fetches everything. Accepted in silence.
+	if got, err := ParseIngestArgs([]string{"--no-cache", "--refresh-meta"}); err != nil || !got.NoCache || !got.RefreshMeta {
+		t.Errorf("--no-cache --refresh-meta: %+v err=%v", got, err)
 	}
 }
 

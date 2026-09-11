@@ -43,8 +43,9 @@ import (
 const usage = `frznforge — static forge site generator
 
 Usage
-  frznforge build [--no-ingest] [--no-cache] [--backfill-metadata] [--root=<dir>]
-                  [--out=<dir>] [--workers=<n>] [--serial] [--postprocess=<cmd>] [-v]
+  frznforge build [--no-ingest] [--no-cache] [--backfill-metadata] [--refresh-meta]
+                  [--root=<dir>] [--out=<dir>] [--workers=<n>] [--serial]
+                  [--postprocess=<cmd>] [-v]
                                     Scan the configured repositories, then render the site into
                                     dist/. This is the whole build: nothing else has to be run
                                     first.
@@ -53,16 +54,17 @@ Usage
                                     --backfill-metadata run. It never creates an artifact, so it
                                     refuses when there is none rather than publishing an empty
                                     site over a good one.
-                                    --no-cache and --backfill-metadata configure the ingest
-                                    half; passing either with --no-ingest is a contradiction and
-                                    is refused.
+                                    --no-cache, --backfill-metadata and --refresh-meta configure
+                                    the ingest half; passing any of them with --no-ingest is a
+                                    contradiction and is refused.
                                     --serial renders one page at a time; it exists so the
                                     parallel build can be compared against it.
                                     --postprocess runs your own command over dist/ once the
                                     build has succeeded, overriding postprocess.command for this
                                     run. frznforge itself never minifies, bundles or hashes.
 
-  frznforge ingest [--no-cache] [--backfill-metadata] [--root=<dir>] [--out=<dir>]
+  frznforge ingest [--no-cache] [--backfill-metadata] [--refresh-meta] [--root=<dir>]
+                   [--out=<dir>]
                                     Scan the configured repositories into
                                     <ingest.outDir>/forge.json plus blobs/ and archives/, and
                                     render nothing. Use it when you want the artifact refreshed
@@ -70,6 +72,11 @@ Usage
                                     --no-cache ignores the provider, freshness and scan caches
                                     for this run; --backfill-metadata spends the provider quota
                                     only on repos that have no metadata yet.
+                                    --refresh-meta ignores ingest.skipMetaRefetches for this run
+                                    and re-asks every repo's provider for its metadata. It
+                                    overrides that setting and nothing else — the freshness
+                                    window and the cooldown are time-bounded and expire on their
+                                    own, so --no-cache is still the answer to those.
 
   frznforge dev [--port=<n>] [--dir=<dir>] [--base=<path>] [--host=<addr>] [--quiet]
                                     Serve the last build over HTTP. Renders nothing and watches
@@ -240,6 +247,9 @@ func parseBuildArgs(argv []string) (buildArgs, error) {
 		case a == "--backfill-metadata":
 			args.Ingest.BackfillMetadata = true
 			args.ingestGiven = append(args.ingestGiven, a)
+		case a == "--refresh-meta":
+			args.Ingest.RefreshMeta = true
+			args.ingestGiven = append(args.ingestGiven, a)
 		case a == "-v" || a == "--verbose":
 			args.Build.Verbose = true
 		case strings.HasPrefix(a, "--root="):
@@ -270,6 +280,12 @@ func parseBuildArgs(argv []string) (buildArgs, error) {
 		// --no-cache reads nothing from the provider cache, so every repo would look like a gap
 		// and the run would be a full refetch wearing the wrong name.
 		return args, errors.New("build: --no-cache and --backfill-metadata are opposites; pass only one")
+	}
+	if args.Ingest.RefreshMeta && args.Ingest.BackfillMetadata {
+		// Also mirrored from ParseIngestArgs: backfill spends the quota only on the repos that
+		// have nothing, and --refresh-meta asks for every repo to be re-requested. Together they
+		// exhaust the budget the backfill was reached for.
+		return args, errors.New("build: --refresh-meta and --backfill-metadata are opposites; pass only one")
 	}
 	// --no-ingest with ingest flags is a contradiction worth refusing: the caller has asked for
 	// an ingest behaviour AND asked for no ingest, so one of the two was a mistake and silently

@@ -116,6 +116,11 @@ func TestMatchesTypeScriptDefaults(t *testing.T) {
 		{name: "ingest.cacheDir", got: got.Ingest.CacheDir, want: want.Ingest.CacheDir, unstated: true},
 		{name: "ingest.fetch", got: got.Ingest.Fetch, want: want.Ingest.Fetch, unstated: true},
 		{name: "ingest.failOnDegraded", got: got.Ingest.FailOnDegraded, want: want.Ingest.FailOnDegraded, unstated: true},
+		// A 0.4.x key with no zod counterpart, so the TypeScript dump cannot state it either. That
+		// is not a hole in the comparison the way postprocess is: both sides default to false, and
+		// false is Go's zero value AND what a missing key decodes to, so the two really do agree
+		// here for the same reason every other unstated boolean does.
+		{name: "ingest.skipMetaRefetches", got: got.Ingest.SkipMetaRefetches, want: want.Ingest.SkipMetaRefetches, unstated: true},
 		{name: "ingest.reuse.enabled", got: got.Ingest.Reuse.Enabled, want: want.Ingest.Reuse.Enabled, unstated: true},
 		{name: "ingest.reuse.maxAgeMinutes", got: got.Ingest.Reuse.MaxAgeMinutes, want: want.Ingest.Reuse.MaxAgeMinutes, unstated: true},
 		{name: "ingest.reuse.skipUnchanged", got: got.Ingest.Reuse.SkipUnchanged, want: want.Ingest.Reuse.SkipUnchanged, unstated: true},
@@ -242,6 +247,22 @@ func TestJSONCDialect(t *testing.T) {
 			want: func(t *testing.T, c *Config) {
 				if c.Owner.Name != "K" {
 					t.Errorf("name: %q", c.Owner.Name)
+				}
+			},
+		},
+		{
+			// The one thing a boolean whose default is false needs proving: that writing it down
+			// actually reaches the struct. It has no applyDefaults entry precisely because the
+			// default and the zero value coincide, so a typo'd JSON tag would look like the
+			// default and nothing else in the loader would notice.
+			name: "ingest.skipMetaRefetches loads as written",
+			src: `{
+  "owner": { "name": "K", "handle": "kieran" },
+  "ingest": { "skipMetaRefetches": true }
+}`,
+			want: func(t *testing.T, c *Config) {
+				if !c.Ingest.SkipMetaRefetches {
+					t.Error("ingest.skipMetaRefetches was written as true but did not load")
 				}
 			},
 		},

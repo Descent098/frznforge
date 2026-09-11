@@ -131,6 +131,19 @@ type RunLogEntry struct {
 	// alone cannot tell the halves apart.
 	GitOk  bool `json:"gitOk"`
 	MetaOk bool `json:"metaOk"`
+	// MetaFetchedAt is when FetchMeta last actually ran and returned, carried forward untouched
+	// across runs that served the cached record under ingest.skipMetaRefetches. FetchedAt cannot
+	// answer that: git still runs on those runs, so it advances every time.
+	//
+	// It exists for the console — "oldest fetched 2026-06-14" is the only place a skipped run
+	// admits its age — and never for a decision. Making the skip depend on it would be a
+	// maxMetaAgeDays, which would make the artifact a function of the wall clock and of when this
+	// particular machine last built.
+	//
+	// An empty value reads as "unknown", which is what every entry written before this field
+	// existed says, and what the console must handle anyway on the first run after the flag is
+	// turned on. That is why runLogVersion is not bumped for it.
+	MetaFetchedAt string `json:"metaFetchedAt"`
 	// Heads are the mirror's refs (refs/heads/* and refs/tags/* → object id) as they stood at the
 	// end of this run, or nil when they could not be read. This is the baseline the
 	// same-commit-hash skip compares a `git ls-remote` against: all refs equal means the mirror
@@ -564,6 +577,15 @@ type IngestArgs struct {
 	// budget before it reaches the ones that never got any — leaving the same tail blank every
 	// time. This spends the whole budget on the gaps.
 	BackfillMetadata bool
+	// RefreshMeta is --refresh-meta: ignore ingest.skipMetaRefetches for this run and re-ask the
+	// provider for every repo's metadata.
+	//
+	// It exists because --no-cache was the only way to do that, and it is a sledgehammer: it also
+	// forces `fetch: "always"` on every mirror and throws away the scan cache, so "I want fresh
+	// descriptions" cost a full re-fetch of every repository. This overrides the config flag and
+	// NOTHING else — not the freshness window, not the cooldown, which are time-bounded and expire
+	// on their own; --no-cache is still the answer when one of those is what is in the way.
+	RefreshMeta bool
 }
 
 // ParseIngestArgs parses the ingest flags, rejecting anything unrecognised.
@@ -575,9 +597,11 @@ func ParseIngestArgs(argv []string) (IngestArgs, error) {
 			args.NoCache = true
 		case "--backfill-metadata":
 			args.BackfillMetadata = true
+		case "--refresh-meta":
+			args.RefreshMeta = true
 		default:
 			return IngestArgs{}, fmt.Errorf(
-				"unknown flag: %s (usage: frznforge ingest [--no-cache | --backfill-metadata])", a)
+				"unknown flag: %s (usage: frznforge ingest [--no-cache | --backfill-metadata | --refresh-meta])", a)
 		}
 	}
 	if args.NoCache && args.BackfillMetadata {
@@ -585,5 +609,13 @@ func ParseIngestArgs(argv []string) (IngestArgs, error) {
 		// and the run would be a full refetch wearing the wrong name.
 		return IngestArgs{}, errors.New("--no-cache and --backfill-metadata are opposites; pass only one")
 	}
+	if args.RefreshMeta && args.BackfillMetadata {
+		// Backfill's whole point is to spend the quota ONLY on the repos that have no metadata;
+		// --refresh-meta asks for every repo's metadata to be re-requested. Together they are a
+		// full refetch that would exhaust the quota the backfill was called in to conserve.
+		return IngestArgs{}, errors.New("--refresh-meta and --backfill-metadata are opposites; pass only one")
+	}
+	// --refresh-meta with --no-cache is redundant rather than contradictory (--no-cache already
+	// refetches everything), so it is accepted in silence.
 	return args, nil
 }

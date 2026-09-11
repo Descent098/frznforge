@@ -213,9 +213,18 @@ type IngestConfig struct {
 	// Fetch is the network policy for remote sources: auto, never, or always.
 	Fetch string `json:"fetch"`
 	// FailOnDegraded makes a run that published from cached provider data exit non-zero.
-	FailOnDegraded bool           `json:"failOnDegraded"`
-	Reuse          ReuseConfig    `json:"reuse"`
-	Insights       InsightsConfig `json:"insights"`
+	FailOnDegraded bool `json:"failOnDegraded"`
+	// SkipMetaRefetches serves a repo's cached provider metadata record (name, description,
+	// topics, links, license) instead of re-requesting it, for as long as the cached record is a
+	// complete provider answer. Releases are still fetched and git is still fetched — this is a
+	// lever on API quota only, not on freshness of content.
+	//
+	// A fetch policy rather than a member of Reuse: every knob in that block is time-bounded and
+	// dies with reuse.enabled: false, while this one is unbounded and keys off the provider
+	// .meta.json, which is read whether or not the run log is usable.
+	SkipMetaRefetches bool           `json:"skipMetaRefetches"`
+	Reuse             ReuseConfig    `json:"reuse"`
+	Insights          InsightsConfig `json:"insights"`
 }
 
 // BranchTreesLimit returns the configured cap and whether it is unlimited ("all").

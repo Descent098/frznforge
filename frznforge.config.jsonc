@@ -143,6 +143,14 @@
     "outDir": "./data",
     /** Text files larger than this are listed but their content is not stored. */
     "maxBlobBytes": 524288, // 512 * 1024
+    /**
+     * Serve a repo's cached description/topics record instead of re-asking the provider for it,
+     * whenever the cache holds a complete answer. Saves one API request per repo per build,
+     * which on a large account is the difference between fitting inside a quota and not.
+     * Releases and git are still fetched. Off by default; `--refresh-meta` overrides it for one
+     * run. See docs/user/configuration.md — a stale record persists until you refresh it.
+     */
+    "skipMetaRefetches": false,
     /** Cap on commits stored per repo (null = all). Keeps huge histories bounded. */
     "maxCommits": null,
     /** How many repos to scan concurrently. */

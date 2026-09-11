@@ -129,6 +129,7 @@ default and must be supplied.
     "cacheDir": "./.frznforge-cache",          // mirror clones of remote repos (gitignored)
     "fetch": "auto",                           // "auto" | "never" (offline) | "always"
     "failOnDegraded": false,                   // true = exit non-zero if any repo fell back to cache
+    "skipMetaRefetches": false,                // true = serve cached provider metadata; releases + git still fetched
     "reuse": {
       "enabled": true,
       "maxAgeMinutes": 2,                      // don't re-fetch a remote fetched this recently
@@ -313,8 +314,9 @@ mirror cache and offline builds.
   The render is not partial: a repo's description and license appear in the header of *every*
   one of its pages, and in the listing, the profile, the org pages and the search index, so
   there is no small set of pages to redo. `--no-cache` and `--backfill-metadata` are opposites
-  and passing both is refused; so is passing either alongside `--no-ingest`, which would skip
-  the ingest they configure.
+  and passing both is refused, as is `--refresh-meta` with `--backfill-metadata` (it asks for
+  every repo's metadata, which is the spend the backfill exists to avoid); so is passing any of
+  the three alongside `--no-ingest`, which would skip the ingest they configure.
 - **`reuse.skipUnchanged` and `reuse.cooldownSeconds` are the two opt-in refetch controls**,
   both off by default because they trade a guarantee of freshness for speed:
   - `"skipUnchanged": true` runs one `git ls-remote` per remote repo and skips
@@ -328,6 +330,87 @@ mirror cache and offline builds.
     one is for hours). "Successful" means both halves — git *and* provider metadata — so a repo
     whose metadata was rate-limited is never held back. Skipped repos are reported during the
     run as `⚠️ <repo>: this repo is on cooldown`.
+- **`"skipMetaRefetches": true`** (default `false`) stops re-requesting each repo's provider
+  **metadata record** — the single call that returns its name, description, topics, links and
+  license — and serves the copy already in `<cacheDir>/mirrors/<name>.meta.json` instead. That is
+  one API request per repo per build that no longer happens, which on a large account is the
+  difference between a build that fits inside an anonymous quota and one that runs out partway
+  down the list. Reach for it when metadata requests, not the network, are what is failing.
+
+  **Releases are still fetched, and so is git.** New commits and new releases still appear; only
+  the description-and-topics record is frozen. A new release is content a visitor came for, where
+  a changed description is cosmetic — and if release calls are what costs you, the lever for that
+  is per-source and already there: `"releases": "tags"` on the repo entry — or `"releaseMode":
+  "tags"` in the repo's own `.frznforge.json`, which spells the same idea differently — makes the
+  call disappear entirely.
+
+  It only ever serves a record a successful call actually produced — one carrying a name, a web
+  URL and a clone URL. A cache file that is absent, empty (`"meta": {}`), truncated or
+  hand-written does not satisfy it, so *"I asked once and got nothing"* never turns into *"never
+  ask again"*; a repo with no cached metadata is always fetched, and is fetched first. A blank
+  `description` is fine and does **not** disqualify a record: plenty of repositories have none,
+  and requiring one would create a permanent class of repos that re-fetch on every build forever.
+
+  It applies under `"fetch": "auto"` only, and there are three ways to override it:
+
+  ```bash
+  frznforge ingest --refresh-meta     # ignore the setting for this run, and change nothing else
+  frznforge ingest --no-cache         # refetch everything: metadata, mirrors, scan cache
+  ```
+
+  …plus `"fetch": "always"`, which overrides it permanently. Deleting a repo's `.meta.json`
+  works too. `--refresh-meta` overrides **this key and nothing else** — the freshness window and
+  the cooldown above are time-bounded and expire on their own, so `--no-cache` is still the
+  answer when one of those is in the way. It cannot be combined with `--backfill-metadata`, whose
+  whole point is to fetch only the gaps.
+
+  The three neighbours are easy to confuse, so:
+
+  | | What it saves | Bounded by |
+  |---|---|---|
+  | `ingest.reuse` (window, cooldown, `skipUnchanged`) | git *and* API traffic | time — minutes or hours, then everything refreshes |
+  | `--backfill-metadata` | one run's API quota, spent only on repos with no metadata | that run; it is a flag, not a setting |
+  | `skipMetaRefetches` | one API request per repo, on every build | nothing — the record is served until you refresh it |
+
+  That last row is the cost, and it is worth stating plainly: **the cached record is an input, and
+  this key lets a stale input persist without limit.** Two machines whose caches are different
+  ages publish different bytes for as long as the caches differ, where today that divergence heals
+  itself within `maxAgeMinutes`. Every run says what it served:
+
+  ```
+    skipMetaRefetches: 71 repo(s) served cached provider metadata (0 metadata requests). Pass --refresh-meta to re-ask; releases and git were fetched as usual.
+  ```
+
+  Once a metadata fetch has actually happened *since you turned the key on*, the line gains the
+  age of the oldest record it served:
+
+  ```
+    skipMetaRefetches: 71 repo(s) served cached provider metadata (0 metadata requests); oldest fetched 2026-06-14. Pass --refresh-meta to re-ask; releases and git were fetched as usual.
+  ```
+
+  It is missing at first, and that is honest rather than broken: the timestamp records when
+  `FetchMeta` last ran, and adding this key to your config changes the config hash, which discards
+  the run log that would have carried an older stamp forward. Until the next real fetch — a
+  `--refresh-meta` run, a new repo, or a cache you deleted — frznforge genuinely does not know how
+  old the record on disk is, and says nothing rather than guessing.
+
+  It raises **no warning**, deliberately. Warnings are part of `forge.json` and are rendered in
+  every page's footer, so a warning here would make the published file depend on how warm the
+  building machine's cache happened to be — the same reasoning the freshness window's silence
+  rests on. The console line and `--refresh-meta` are where the staleness surfaces instead.
+
+  Two consequences to know before turning it on:
+
+  - **`failOnDegraded` stops saying anything about the age of your metadata.** A deliberate skip
+    is not a degraded run, so it raises no warning and never trips the exit code. A CI job that
+    would rather fail than publish stale metadata should leave this key off, or pass
+    `--refresh-meta`.
+  - A repo **renamed on the provider** keeps being published under its old name, with its old
+    web and clone URLs, until you refresh it — those come from the cached record like everything
+    else the key freezes. Fetching is unaffected: an existing mirror updates with
+    `git remote update --prune`, which uses the remote the mirror itself stores rather than
+    anything the cache says, and a repo with no mirror yet has no cached record to skip on either.
+    So this is a wrong name on a page, not a failed build. `--refresh-meta` clears it.
 - **Rate limits back off per origin.** A 429 (or GitHub's 403-with-no-quota-left) is retried
   with exponential backoff keyed to the *host*, so all the repos being ingested in parallel from
   one forge wait behind a single timer instead of each hammering the window, while a different
@@ -340,7 +423,8 @@ mirror cache and offline builds.
   published from cached or missing provider data (a `remote-fetch-failed`, `remote-rate-limited`,
   `remote-auth-missing` or `remote-cache-stale` warning). The artifact is still written and the
   warnings still print — only the exit code changes. For CI that would rather fail than quietly
-  publish stale metadata after a rate limit.
+  publish stale metadata after a rate limit. Note that `skipMetaRefetches` above raises no
+  warning, so with that key on this check no longer covers metadata age at all.
 - `insights` controls the `/repos/<slug>/insights/` page. Monthly commits and contributors are
   exact — they come from the commit list already in the artifact. Code size over time is
   **sampled**: at most `samples` monthly checkpoints (always including the first and last), each

@@ -39,7 +39,7 @@ var setPaths = map[string]bool{
 	"ingest.outDir":        true, "ingest.maxBlobBytes": true, "ingest.maxCommits": true,
 	"ingest.maxCommitAgeDays": true, "ingest.concurrency": true, "ingest.tagTrees": true,
 	"ingest.branchTrees": true, "ingest.archives": true, "ingest.cacheDir": true,
-	"ingest.fetch": true, "ingest.failOnDegraded": true,
+	"ingest.fetch": true, "ingest.failOnDegraded": true, "ingest.skipMetaRefetches": true,
 	"ingest.reuse.enabled": true, "ingest.reuse.maxAgeMinutes": true,
 	"ingest.reuse.skipUnchanged": true, "ingest.reuse.cooldownSeconds": true,
 	"ingest.insights.enabled": true, "ingest.insights.samples": true,

@@ -904,6 +904,8 @@ func TestTheAllowListCoversEverySettingTheSchemaAdded(t *testing.T) {
 		"site.base", "hosting.maxFileBytes", "markdown.mermaid",
 		// 0.3.0
 		"owner.avatar", "ingest.failOnDegraded", "ingest.reuse.skipUnchanged", "ingest.reuse.cooldownSeconds",
+		// 0.4.0
+		"ingest.skipMetaRefetches",
 	} {
 		if !setPaths[key] {
 			t.Errorf("%s should be editable by the wizard", key)

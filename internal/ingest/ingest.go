@@ -68,6 +68,13 @@ type RemoteStatus struct {
 	// opposed to the freshness window, which produces the same "reused" action. The build prints
 	// them differently so a deliberately fast run is never mistaken for a broken one.
 	Cooldown bool
+	// MetaSkipped is true when ingest.skipMetaRefetches served this repo's cached provider
+	// metadata instead of re-requesting it, and MetaFetchedAt is when that record was actually
+	// fetched (empty when the run log does not know — an entry written before the field existed,
+	// or a source with no previous run). The pair exists so the console can say how old the
+	// served metadata is; the skip raises no warning, so this is the ONLY place it surfaces.
+	MetaSkipped   bool
+	MetaFetchedAt string
 }
 
 // Hooks are the progress callbacks the CLI prints from. All optional.
@@ -90,6 +97,9 @@ type Options struct {
 	// BackfillMetadata is --backfill-metadata: only repos with no cached provider metadata talk
 	// to the network, and nothing talks to git. See PrepareRemoteOptions.BackfillMetadata.
 	BackfillMetadata bool
+	// RefreshMeta is --refresh-meta: ignore ingest.skipMetaRefetches for this run, so every repo
+	// re-asks the provider for its metadata. It overrides that key and nothing else.
+	RefreshMeta bool
 	// Step is the timings step this scan's steps hang under, so `frznforge build` records the
 	// scan and the render as two halves of one run. nil opens a top-level step instead, which is
 	// what `frznforge ingest` and a test both want. internal/timings has no ambient parent by
@@ -264,8 +274,24 @@ func Ingest(ctx context.Context, cfg *config.Resolved, hooks Hooks, options Opti
 			case hasPrev:
 				entry.GitOk = prev.GitOk
 			}
-			if run.fetchStatus != nil {
-				entry.MetaOk = run.fetchStatus.Meta
+			// The metadata half follows the same rule as the git half, and for a sharper reason: a
+			// nil Meta means ingest.skipMetaRefetches suppressed the call, and writing a plain
+			// false here would tell WithinCooldown the provider half had failed. The cooldown
+			// refuses to skip a repo whose last fetch was not fully successful, so every repo
+			// would lose ingest.reuse.cooldownSeconds permanently the day the flag was switched on.
+			switch {
+			case run.fetchStatus != nil && run.fetchStatus.Meta != nil:
+				entry.MetaOk = *run.fetchStatus.Meta
+			case hasPrev:
+				entry.MetaOk = prev.MetaOk
+			}
+			// Stamped only by a call that actually ran; otherwise the previous stamp is carried
+			// forward unchanged, so it ages while FetchedAt keeps advancing with git.
+			switch {
+			case run.fetchStatus != nil && run.fetchStatus.MetaFresh:
+				entry.MetaFetchedAt = entry.FetchedAt
+			case hasPrev:
+				entry.MetaFetchedAt = prev.MetaFetchedAt
 			}
 			// Heads describe the mirror as it now stands. When they could not be read, keep the
 			// previous baseline rather than erasing it: a forgotten baseline costs one un-skipped
@@ -387,6 +413,13 @@ func ingestOne(
 			// only when reuse reads are on at all (--no-cache means fetch everything).
 			SkipUnchanged:    reuseReads && reuse.SkipUnchanged,
 			BackfillMetadata: options.BackfillMetadata,
+			// ingest.skipMetaRefetches, under the same fetch-mode rule as the two time skips
+			// above: "always" is an explicit ask to fetch, and "never" must keep emitting its
+			// stale-cache warning rather than have it silently suppressed. Note this reads
+			// remoteCfg, so --no-cache — which rewrites Fetch to "always" — turns the skip off
+			// here as well as nilling the cached record inside PrepareRemote.
+			SkipMetaRefetches: remoteCfg.Ingest.SkipMetaRefetches &&
+				!options.RefreshMeta && remoteCfg.Ingest.Fetch == "auto",
 		}
 		if reuseReads && prevEntry != nil {
 			prepOpts.KnownHeads = prevEntry.Heads
@@ -405,11 +438,17 @@ func ingestOne(
 			// suspiciously fast network.
 			fetchStep.Add("skipped", 1)
 		}
+		if prepared.FetchStatus != nil && prepared.FetchStatus.MetaSkipped {
+			// The metadata request this repo did not make. Counted rather than warned, for the
+			// same reason as everything else about this flag: a counter is a timings record, and a
+			// warning would be artifact bytes.
+			fetchStep.Add("metaSkipped", 1)
+		}
 		fetchStep.Fail(err).Done()
 		if err != nil {
 			out.remote = &RemoteStatus{Slug: slug, Provider: src.Type, Action: MirrorMissing, Skipped: true}
 			failed := false
-			out.fetchStatus = &FetchStatus{Git: &failed, Meta: false}
+			out.fetchStatus = &FetchStatus{Git: &failed, Meta: &failed}
 			if hooks.OnRemote != nil {
 				hooks.OnRemote(*out.remote)
 			}
@@ -427,6 +466,14 @@ func ingestOne(
 		out.remote = &RemoteStatus{
 			Slug: slug, Provider: src.Type, Action: prepared.Action,
 			Skipped: !prepared.Ready, Cooldown: inCooldown,
+		}
+		if prepared.FetchStatus != nil && prepared.FetchStatus.MetaSkipped {
+			out.remote.MetaSkipped = true
+			// The age of what was served, straight from the previous run's stamp: the skip does
+			// not refresh it, which is the whole point of recording it separately from FetchedAt.
+			if prevEntry != nil {
+				out.remote.MetaFetchedAt = prevEntry.MetaFetchedAt
+			}
 		}
 		out.fetchStatus = prepared.FetchStatus
 		if hooks.OnRemote != nil {

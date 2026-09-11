@@ -94,6 +94,12 @@ func runIngest(root, outDir string, args ingest.IngestArgs, io *Io, step *timing
 		// results are still recorded (under the real config's hash) for the next ordinary run.
 		io.log("  --no-cache: fetching everything; provider/scan caches ignored for this run")
 	}
+	if args.RefreshMeta && !args.NoCache {
+		// Said only when it changes something: with --no-cache the metadata is being re-fetched
+		// anyway, and two lines claiming the same thing invite the reader to look for a difference.
+		io.log("  --refresh-meta: ignoring ingest.skipMetaRefetches for this run; the freshness " +
+			"window and the cooldown are unaffected.")
+	}
 
 	io.logf("frznforge ingest → %s", cfg.OutDir)
 	if len(cfg.Sources) == 0 {
@@ -131,7 +137,12 @@ func runIngest(root, outDir string, args ingest.IngestArgs, io *Io, step *timing
 			io.logf("    ✓ %s: %d commits, %d branches, %d tags, %d files%s",
 				repo.Slug, repo.CommitCount, len(repo.Branches), len(repo.GitTags), len(repo.Files), empty)
 		},
-	}, ingest.Options{NoCache: args.NoCache, BackfillMetadata: args.BackfillMetadata, Step: step})
+	}, ingest.Options{
+		NoCache:          args.NoCache,
+		BackfillMetadata: args.BackfillMetadata,
+		RefreshMeta:      args.RefreshMeta,
+		Step:             step,
+	})
 	if err != nil {
 		return err
 	}
@@ -195,6 +206,33 @@ func runIngest(root, outDir string, args ingest.IngestArgs, io *Io, step *timing
 			io.logf("    ⚠️ still missing: %s", strings.Join(stillMissing, ", "))
 			io.log("      Run it again later — the quota resets, and each run only spends it on these.")
 		}
+	}
+
+	// ingest.skipMetaRefetches raises no warning, deliberately: a warning is artifact bytes, and
+	// one here would make forge.json depend on how warm THIS machine's cache is. This line is the
+	// only place a skipped run admits it, so it has to carry both halves of the trade — how many
+	// requests were not made, and how old the oldest thing served is.
+	metaSkipped := 0
+	oldest := ""
+	for _, r := range res.Remotes {
+		if !r.MetaSkipped {
+			continue
+		}
+		metaSkipped++
+		// The stamps are ISO 8601 UTC, which sorts lexicographically. An empty one means the run
+		// log has no record of when that metadata was fetched (an entry written before the field
+		// existed, or a first run) — unknown, not "the beginning of time", so it must not win.
+		if r.MetaFetchedAt != "" && (oldest == "" || r.MetaFetchedAt < oldest) {
+			oldest = r.MetaFetchedAt
+		}
+	}
+	if metaSkipped > 0 {
+		age := ""
+		if len(oldest) >= len("2006-01-02") {
+			age = fmt.Sprintf("; oldest fetched %s", oldest[:len("2006-01-02")])
+		}
+		io.logf("  skipMetaRefetches: %d repo(s) served cached provider metadata (0 metadata requests)%s. "+
+			"Pass --refresh-meta to re-ask; releases and git were fetched as usual.", metaSkipped, age)
 	}
 
 	// Remote trouble is a warning, never an error — say so plainly so a stale build is obvious.

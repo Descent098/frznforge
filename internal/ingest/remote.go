@@ -607,14 +607,29 @@ type PrepareRemoteDeps struct {
 	Backoff *OriginBackoff
 }
 
-// FetchStatus records how each half of a remote fetch went, for the run log.
+// FetchStatus records how each half of a remote fetch went, for the run log and the console. No
+// field here reaches the artifact.
 type FetchStatus struct {
 	// Git is nil when git was not attempted at all (backfill mode), so the caller carries the
 	// previous run's answer forward rather than recording a failure that never happened.
 	Git *bool
 	// Meta is true only when every provider call this run wanted actually succeeded — a releases
 	// failure that fell back to cache is still a failed metadata fetch.
-	Meta bool
+	//
+	// nil means the provider half was not attempted: ingest.skipMetaRefetches suppressed the
+	// metadata call and nothing else the run asked for failed. As with Git, the caller carries the
+	// previous run's answer forward. Recording a plain false here would be the flag's worst bug —
+	// WithinCooldown refuses to skip a repo whose MetaOk is false, so every repo would lose
+	// ingest.reuse.cooldownSeconds for good the moment the flag was turned on.
+	Meta *bool
+	// MetaFresh is true only when FetchMeta actually ran and returned. It stamps the run log's
+	// metaFetchedAt, which is what the console line ages; Meta cannot be used for that, because it
+	// also folds in the releases call.
+	MetaFresh bool
+	// MetaSkipped is true when ingest.skipMetaRefetches is why FetchMeta was not called. Console
+	// only — it deliberately raises no warning, because a warning is artifact bytes and would make
+	// the published file depend on how warm this machine's cache is.
+	MetaSkipped bool
 }
 
 // PrepareRemoteResult is one resolved remote source.
@@ -670,6 +685,19 @@ type PrepareRemoteOptions struct {
 	// answer is used with no warning — the same reasoning as the freshness window: it is exactly
 	// what a fetch would have returned), so the whole budget goes to the repos that have nothing.
 	BackfillMetadata bool
+	// SkipMetaRefetches is ingest.skipMetaRefetches: when the cached provider record is a complete
+	// answer (providerMetaUsable), do not call FetchMeta at all and serve that record.
+	//
+	// It is a lever on the METADATA REQUEST and nothing else. Releases are still fetched — a new
+	// release is content a visitor came for, where a changed description is cosmetic, and the
+	// per-source lever for release cost is already `"releases": "tags"`. Git is untouched: unlike
+	// BackfillMetadata this does not take the early-return replay path and does not force the
+	// mirror's fetch mode, so new commits still arrive on every run.
+	//
+	// The caller decides it, the way it decides SkipUnchanged: it is gated to fetch "auto" and to
+	// the absence of --refresh-meta in internal/ingest/ingest.go, so "always" and "never" keep
+	// meaning exactly what they mean today.
+	SkipMetaRefetches bool
 }
 
 func warn(code, message string) model.Warning {
@@ -886,6 +914,29 @@ func readProviderCache(file string) *providerCache {
 	return out
 }
 
+// providerMetaUsable reports whether a cached record is a COMPLETED provider answer rather than a
+// hollow one — the bar ingest.skipMetaRefetches has to clear before it suppresses a fetch.
+//
+// These three fields are the signature of a FetchMeta that ran: github.go, gitlab.go and gitea.go
+// all set name, webUrl and cloneUrl unconditionally on success, falling back to config-derived
+// values when the payload omits them. A record missing any of them was never produced by a
+// successful call — it is hand-seeded, truncated, or written by something else — and "I asked once
+// and got nothing" must not be what stops the asking. `"meta": null` leaves Meta nil here;
+// `"meta": {}` leaves Name nil. Both still fetch.
+//
+// Description is deliberately NOT required, though it is the field people picture when they think
+// of provider metadata: plenty of real repositories have none, and NullIfEmpty stores that as
+// null — indistinguishable from "never asked". Requiring it would create a permanent class of
+// repos that re-fetch on every build forever, which is the tail-that-never-fills pathology
+// --backfill-metadata exists to fix. The same argument rules out topics, license, homepage and
+// issuesUrl (legitimately empty), and defaultBranch/archived (which no artifact field consumes).
+func providerMetaUsable(m *ImportedRepoMeta) bool {
+	return m != nil &&
+		m.Name != nil && *m.Name != "" &&
+		isHTTPURL(&m.WebURL) &&
+		isHTTPURL(&m.CloneURL)
+}
+
 var isoDateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`)
 
 // releaseIsValid is the Release schema's own check: the shape came out of encoding/json, so only
@@ -973,6 +1024,11 @@ func PrepareRemote(
 	// they fired, and both mean "the cache is exactly what a fetch would return".
 	backfillSatisfied := opts.BackfillMetadata && cached != nil
 
+	// ingest.skipMetaRefetches. Deliberately NOT folded into backfillSatisfied above: that branch
+	// returns before EnsureMirror and would freeze the mirror too, which is exactly what this flag
+	// must not do. It only ever suppresses the FetchMeta call below.
+	skipMeta := opts.SkipMetaRefetches && cached != nil && providerMetaUsable(cached.Meta)
+
 	if (opts.SkipFetch || backfillSatisfied) && cached != nil {
 		mirrorReady, err := IsGitRepo(ctx, cachePath)
 		if err != nil {
@@ -1022,11 +1078,17 @@ func PrepareRemote(
 		}
 		warnings = append(warnings, warn("remote-cache-stale", message))
 	} else if importer != nil {
-		if meta, err := importer.FetchMeta(ctx); err != nil {
-			warnings = append(warnings, importerWarning(err, "provider metadata", source.RepoSourceConfig, token))
-		} else {
-			providerMeta = &meta
-			freshMeta = true
+		// The one request ingest.skipMetaRefetches buys back. freshMeta stays false and
+		// providerMeta stays nil, so the cache fallback below picks the record up on the ordinary
+		// path — the same values, through the same metaLayer/validateLayer/providerURLs code a
+		// fetch flows through, which is what makes the two byte-identical.
+		if !skipMeta {
+			if meta, err := importer.FetchMeta(ctx); err != nil {
+				warnings = append(warnings, importerWarning(err, "provider metadata", source.RepoSourceConfig, token))
+			} else {
+				providerMeta = &meta
+				freshMeta = true
+			}
 		}
 		if wantProviderReleases {
 			if imported, err := importer.FetchReleases(ctx); err != nil {
@@ -1048,7 +1110,14 @@ func PrepareRemote(
 	usedCache := []string{}
 	if !freshMeta && cached != nil && cached.Meta != nil {
 		providerMeta = cached.Meta
-		usedCache = append(usedCache, "metadata")
+		// A deliberate skip is not staleness to report. remote-cache-stale is a model.Warning, and
+		// warnings are artifact bytes: raising one here would make forge.json depend on whether
+		// THIS machine happens to hold a warm cache, so a cold clone and the owner's laptop would
+		// publish different files from the same commits. Same reasoning as the freshness window's
+		// silence. The console line in `frznforge ingest` is where a skipped run says so instead.
+		if !skipMeta {
+			usedCache = append(usedCache, "metadata")
+		}
 	}
 	if wantProviderReleases && !freshReleases && cached != nil && len(cached.Releases) > 0 {
 		releases = cached.Releases
@@ -1117,8 +1186,37 @@ func PrepareRemote(
 		// nil = not attempted, which only happens in backfill mode. It is NOT false: the caller
 		// carries the previous run's answer forward rather than recording a failure that never
 		// happened, so a backfill cannot downgrade what the run log knows about git.
-		Git:  &gitOK,
-		Meta: freshMeta && (!wantProviderReleases || freshReleases),
+		Git:         &gitOK,
+		MetaFresh:   freshMeta,
+		MetaSkipped: skipMeta,
+	}
+	switch {
+	case !skipMeta:
+		metaOK := freshMeta && (!wantProviderReleases || freshReleases)
+		status.Meta = &metaOK
+	case wantProviderReleases && !freshReleases:
+		// The metadata call was skipped, but the releases call was made and failed. That is a real
+		// degraded provider half and must be recorded as one.
+		failed := false
+		status.Meta = &failed
+	default:
+		// Nothing the run asked the provider for failed, and the one thing it did not ask for is
+		// the one this flag suppressed. Record that as SUCCESS, not as "not attempted".
+		//
+		// Carrying the previous answer forward was the first shape of this, by analogy with Git
+		// in backfill mode, and it was wrong in a way that only shows up on the upgrade path:
+		// adding the config key changes ConfigHashFor, which discards the run log, so the FIRST
+		// flag-on run has no previous answer to carry. MetaOk then stayed at its zero value,
+		// false — and because the skip keeps firing on every later run, nothing ever set it back.
+		// WithinCooldown refuses to skip a repo whose metadata half last failed, so
+		// ingest.reuse.cooldownSeconds was disabled permanently the day the flag was switched on.
+		//
+		// True is also the honest answer, which is why this is a fix rather than a workaround. The
+		// two cases are not alike: backfill skips git without knowing anything about the mirror,
+		// whereas this skip fires ONLY when providerMetaUsable has just confirmed the cached
+		// record is complete. "We have good metadata" is a fact here, not an assumption.
+		ok := true
+		status.Meta = &ok
 	}
 	if opts.BackfillMetadata && result.Action != MirrorMissing {
 		status.Git = nil
